@@ -22,67 +22,71 @@ object Automata extends ComputePositionsInString { automataobject =>
   
   //type Label = EdgeLabel[Char]
   
-  trait Label[Self <: Label[Self]] extends {
+  trait Label[Self <: Label[Self, Alphabet], Alphabet] extends {
     def ||(other: Self): Self
     def &&(other: Self): Self
     def unary_! : Self
+    def accept(s: Alphabet): Boolean
   }
   
-  case class CharLabel(val e: EdgeLabel[Char]) extends Label[CharLabel] {
+  case class CharLabel(val e: EdgeLabel[Char]) extends Label[CharLabel, Char] {
     def ||(other: CharLabel): CharLabel = new CharLabel(automataobject.union(e, other.e))
     def &&(other: CharLabel): CharLabel = new CharLabel(automataobject.inter(e, other.e))
     def unary_! : CharLabel = new CharLabel(automataobject.not(e))
+    def accept(s: Char): Boolean = e exists { tuple => tuple._1 <= s && s <= tuple._2 }
   }
-  implicit def toCharLabel(e: EdgeLabel[Char]) = CharLabel(e)
+  implicit def toCharLabel(e: List[(Char, Char)]) = CharLabel(e)
   implicit def fromCharLabel(c: CharLabel): EdgeLabel[Char] = c.e
   
-  /*case class SingleAcceptor(c: Char) extends Label {
-    def apply(s: Char): Boolean = s == c
-  }
-  case class SingleNotAcceptor(c: Char) extends Label {
-    def apply(s: Char): Boolean = s != c
-  }
-  case class MultipleAcceptor(c: String) extends Label {
-    def apply(s: Char): Boolean = c.contains(s)
-  }
-  case class MultipleNotAcceptor(c: String) extends Label {
-    def apply(s: Char): Boolean = !c.contains(s)
-  }*/
-  
   object DFA {
-    def makeEdgesSeq[Node, Alphabet, T <: Label[_]](i: Seq[(Node, T, Node)]): Map[Node, List[(T, Node)]] = {
+    def makeEdgesSeq[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: Seq[(Node, T, Node)]): Map[Node, List[(T, Node)]] = {
       Map[Node, List[(T, Node)]]() ++ (i.groupBy(tuple => tuple._1) map {
         case (e, l) => e -> (l map { case (e, f, t) => (f, t) }).toList })
     }
-    def makeEdges[Node, Alphabet, T <: Label[_]](i: (Node, T, Node)*): Map[Node, List[(T, Node)]] = makeEdgesSeq(i.toSeq)
+    def makeEdges[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: (Node, T, Node)*): Map[Node, List[(T, Node)]] = makeEdgesSeq[Node, T](i.toSeq)
   }
   
   /**
    * Deterministic finite-state automaton
    */
-  case class DFA[Node, Alphabet, T <: Label[_]](nodes: Set[Node], edges: Map[Node, List[(T, Node)]], start: Node, ending: Set[Node], trap: Option[Node]) {
+  case class DFA[Node, Alphabet, T <: Label[T, Alphabet]](nodes: Set[Node], edges: Map[Node, List[(T, Node)]], start: Node, ending: Set[Node], trap: Option[Node]) {
     def addEdge(e: Node, f: T, t: Node): DFA[Node, Alphabet, T] = {
       this.copy(edges = edges + (e-> ((f, t)::edges.getOrElse(e, List[(T, Node)]()))))
     }
-    
-    def recordFinalStates(s: Seq[Char]): List[Int] = ???
+    def recordFinalStates(s: Seq[Alphabet]): List[Int] = {
+      var i = 0
+      var res = List[Int]()
+      if(ending contains start) res = i::res
+      val (finalStates, f, lastState) = ((res, i, start) /: s) { case ((res, i, current), s) =>
+        if(trap.exists(_ == current)) (res, i+1, current) else
+        edges(current) find { case (label, next) => label.accept(s) } match {
+          case Some((label, next)) => 
+            if(ending contains next) (i::res, i+1, next) else (res, i+1, next)
+          case None => (res, i+1, trap.get)
+        }
+      }
+      finalStates.reverse
+    }
   }
   
   object NDFA {
     /**
      * Transforms a set of edges into a mapping.
      */
-    def makeEdgesSeq[Node, Alphabet, T <: Label[_]](i: Seq[(Node, T, Node)]): Map[Node, Map[T, List[Node]]] = {
+    def makeEdgesSeq[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: Seq[(Node, T, Node)]): Map[Node, Map[T, List[Node]]] = {
       Map[Node, Map[T, List[Node]]]() ++ (i.groupBy(tuple => tuple._1) map {
         case (e, l) => e -> (l.groupBy(tuple => tuple._2) map
               { case (f, l) => f -> (l map { tuple => tuple._3 }).toList }).toMap
         })
     }
-    def makeEdges[Node, Alphabet, T <: Label[_]](i: (Node, T, Node)*): Map[Node, Map[T, List[Node]]] = makeEdgesSeq(i.toSeq)
+    def makeEdges[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: (Node, T, Node)*): Map[Node, Map[T, List[Node]]] = makeEdgesSeq[Node, T](i.toSeq)
+    def apply[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](nodes: Set[Node], edges: Map[Node, Map[T, List[Node]]], start: Node, ending: Set[Node]) = {
+      
+    }
   }
   
-  case class NDFA[Node, Alphabet, T <: Label[_]](nodes: Set[Node], edges: Map[Node, Map[T, List[Node]]], start: Node, ending: Set[Node], trap: Option[Node]) {
-    def addEdge(e: Node, f: T, t: Node): NDFA[Node, Alphabet, T] = {
+  case class NDFA[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](nodes: Set[Node], edges: Map[Node, Map[T, List[Node]]], start: Node, ending: Set[Node], trap: Option[Node]) {
+    def addEdge(e: Node, f: T, t: Node): NDFA[Node, T] = {
       val imageE = edges.getOrElse(e, Map[T, List[Node]]())
       val imageE2 = t::imageE.getOrElse(f, Nil)
       this.copy(edges = edges + (e->(imageE + (f -> imageE2))))
@@ -90,15 +94,99 @@ object Automata extends ComputePositionsInString { automataobject =>
     def edgesLabels = (edges flatMap { case (n, m) => m.keys }).toSet
   }
   
-  def determinize[Node, Alphabet](d: NDFA[Node, Alphabet, CharLabel]): DFA[Node, Alphabet, Label[_]] = ???
+  /**
+   * Determinize a NFA.
+   */
+  def toDFA[Node, Alphabet, T <: Label[T, Alphabet]](d: NDFA[Node, T]): DFA[Int, Alphabet, T] = {
+    var visitedNodes = Set[Set[Node]]()
+    var current = Set(d.start)
+    
+    def successors(nodeSet: Set[Node]) = ((nodeSet map d.edges) flatMap { m =>
+      m flatMap {
+        case (t, l) => l map { case n => (t, n) }
+      }
+    }).groupBy(tuple => tuple._1).mapValues(set => set.map(tuple => tuple._2))
+    
+    var edges = List[(Int, T, Int)]()
+    
+    var mapping = Map[Set[Node], Int]()
+    var currentIndex = -1
+    var nodes = Set[Int]()
+    var ending = Set[Int]()
+    def getFor(s: Set[Node]): Int = mapping.getOrElse(s, {currentIndex = currentIndex + 1; mapping = mapping + (s -> currentIndex);
+      nodes += currentIndex;
+      if(!(s intersect d.ending).isEmpty) ending += currentIndex
+      currentIndex})
+      
+    val start = Set(d.start)
+    var queue = List(start)
+    
+    while(! queue.isEmpty) {
+      val c = queue.head
+      visitedNodes += c
+      queue = queue.tail
+      successors(c) foreach {
+        case (edge, nodeSet) =>
+          if(!(visitedNodes contains nodeSet) && !(queue contains nodeSet)) queue = nodeSet :: queue
+          edges = (getFor(c), edge, getFor(nodeSet))::edges
+      }
+    }
+    
+    DFA[Int, Alphabet, T](
+        nodes = nodes,
+        edges = DFA.makeEdgesSeq(edges),
+        trap = None,
+        start = getFor(start),
+        ending = ending
+    )
+  }
   
+  /**
+   * Undeterminize a DFA.
+   */
+  def toNDFA[Node, Alphabet, T <: Label[T, Alphabet]](d: DFA[Node, Alphabet, T]): NDFA[Node, T] = {
+    NDFA[Node, T](
+      nodes = d.nodes,
+      edges = d.edges.mapValues{ l => l.map{ case (t, n) => (t, List(n))}.toMap },
+      start = d.start,
+      ending = d.ending,
+      trap = d.trap
+    )
+  }
+  
+  
+  case object AllChars extends CharClass(allChars)
+  
+  /**
+   * Converts a RegExp into a deterministic automaton
+   * which recognizes if a string has a postfix ending with this regexp.
+   */
   import Programs._
   def convertRegExp(e: RegExp): DFA[Int, Char, CharLabel] = {
     e match {
-      case TokenSeq(t) =>
-        ???
-      case _ =>
-        ???
+      case TokenSeq(Seq()) =>
+        val dfa = DFA[Int, Char, CharLabel](
+            nodes = Set(0),
+            edges = DFA.makeEdges((0, allChars, 0)),
+            trap = None,
+            start = 0,
+            ending = Set(0)
+        )
+        dfa
+      case TokenSeq(l) =>
+        val dfas = if(l.head == StartTok) {
+          (l.tail map convertToken).toList
+        } else { // Do not necessarily start from the beginning
+          (RepeatedToken(AllChars)::l.toList) map convertToken
+        }
+        dfas match {
+          case Nil =>convertRegExp(TokenSeq(Seq()))
+          case a::Nil => a
+          case l => val ndfas = l.map(toNDFA)
+            val final_ndfa = (ndfas.head /: ndfas.tail) { case (a, b) => concatenateNDFA(a, b) }
+            toDFA(final_ndfa)
+        }
+      case _ => throw new Error(s"Impossible to get something different !!! $e")
     }
   }
   
@@ -152,43 +240,47 @@ object Automata extends ComputePositionsInString { automataobject =>
     t match {
       case RepeatedToken(c: CharClass) =>
         val dfa = DFA[Int, Char, CharLabel](
-            nodes = Set(0, 1),
+            nodes = Set(0, 1, 2),
             edges = DFA.makeEdges((0, not(c.f), 2),
                                   (0, c.f, 1),
                                   (1, c.f, 1),
-                                  (1, not(c.f), 2)),
-            trap = Some(2),
+                                  (1, not(c.f), 2),
+                                  (2, allChars, 2)
+                 ),
             start = 0,
-            ending = Set(1)
+            ending = Set(1),
+            trap = Some(2)
         )
         dfa
       case RepeatedNotToken(c: CharClass) =>
         val dfa = DFA[Int, Char, CharLabel](
-            nodes = Set(0, 1),
+            nodes = Set(0, 1, 2),
             edges = DFA.makeEdges((0, c.f, 2),
                                   (0, not(c.f), 1),
                                   (1, not(c.f), 1),
-                                  (1, c.f, 2)),
-            trap = Some(2),
+                                  (1, c.f, 2),
+                                  (2, allChars, 2)),
             start = 0,
-            ending = Set(1)
+            ending = Set(1),
+            trap = Some(2)
         )
         dfa
       case SpecialChar(c) =>
         val dfa = DFA[Int, Char, CharLabel](
-            nodes = Set(0, 1),
+            nodes = Set(0, 1, 2),
             edges = DFA.makeEdges((0, not(List((c, c))), 2),
                                   (0, List((c, c)), 1),
-                                  (1, allChars, 2)),
+                                  (1, allChars, 2),
+                                  (2, allChars, 2)),
             trap = Some(2),
             start = 0,
             ending = Set(1)
         )
         dfa
-      case StartTok => //???
+      case StartTok =>
         val dfa = DFA[Int, Char, CharLabel](
             nodes = Set(0, 1),
-            edges = DFA.makeEdges((0, allChars, 1)),
+            edges = DFA.makeEdges((0, allChars, 1), (1, allChars, 1)),
             trap = Some(1),
             start = 0,
             ending = Set(0)
@@ -216,13 +308,13 @@ object Automata extends ComputePositionsInString { automataobject =>
   
   /**
    * Concatenates two NDFA
-   * Requires nodes to be labelled 0...n
+   * Requires nodes to be labelled 0...a.nodes.size-1
    */
-  def concatenateNDFA[Char](a: NDFA[Int, Char, CharLabel], b: NDFA[Int, Char, CharLabel]): NDFA[Int, Char, CharLabel] = {
+  def concatenateNDFA[Char](a: NDFA[Int, CharLabel], b: NDFA[Int, CharLabel]): NDFA[Int, CharLabel] = {
     //val offsetB = a.nodes.max
     //val offsetA = 0
     val trap = Some(a.nodes.size + b.nodes.size)
-    val maxA = a.nodes.max
+    val maxA = a.nodes.size - (if(a.trap == None) 1 else 2) // We remove the trap
     def mapNodeB(n: Int): Int = if(b.trap.exists(i => i == n)) trap.get else n + maxA
     def mapNodeA(n: Int): Int = if(a.trap.exists(i => i == n)) trap.get else n + 0
     
@@ -284,7 +376,7 @@ object Automata extends ComputePositionsInString { automataobject =>
     
     val ending = (b.ending map mapNodeB) ++ (if(b.ending contains b.start) (a.ending map mapNodeA) else Set())
     
-    val res = NDFA[Int, Char, CharLabel](
+    val res = NDFA[Int, CharLabel](
       nodes = nodes,
       edges = edges,
       start = start,

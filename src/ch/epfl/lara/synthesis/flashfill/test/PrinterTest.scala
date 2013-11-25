@@ -142,4 +142,20 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     res(b) should equal (List(CharLabel(b)))
   }
   
+  "Automata" should "correctly convert simple tokens" in {
+    val d = convertToken(RepeatedToken(UpperTok))
+    d.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
+
+    convertToken(StartTok).recordFinalStates("UZEabOPQ") should equal (List(0))
+    convertToken(RepeatedToken(LowerTok)).recordFinalStates("abcdEFG") should equal (List(0, 1, 2, 3))
+  }
+
+  "Automata" should "correctly convert regexps" in {
+    val dfa = convertRegExp(TokenSeq(List(RepeatedToken(UpperTok))))
+    dfa.recordFinalStates("UZEabOPQ") should equal (List(0,1,2, 5, 6, 7))
+    
+    val dfa2 = convertRegExp(TokenSeq(List(StartTok, RepeatedToken(UpperTok))))
+    dfa2.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
+  }
+  
 }
