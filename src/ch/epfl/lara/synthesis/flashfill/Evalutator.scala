@@ -2,13 +2,18 @@ package ch.epfl.lara.synthesis.flashfill
 
 import Programs._
 
+trait ComputePositionsInString {
+  /**
+   * Computes the list of positions where there exists a word recognized by this regexp.
+   */
+  def computePositionsEndingWith(r: RegExp, s: String): List[Int]
+}
+
 object Evaluator {
   //import ctx.reporter._
-
-  def eval() {
-    
-  }
   
+  final val RegexpPositionsInString: ComputePositionsInString = Automata
+
   /**
    * Definitions of values
    */
@@ -116,8 +121,8 @@ object Evaluator {
     case Pos(r1, r2, c) => val s = input(0)
     // TODO : the position for regular expressions
     // TODO : Precompute automatas.
-    val res1 = computePositionsEndingWith(r1, s).map(_ + 1)
-    val res2 = computePositionsEndingWith(r2.reverse, s.reverse).reverse.map(s.length - _) // TODO : Check this
+    val res1 = RegexpPositionsInString.computePositionsEndingWith(r1, s).map(_ + 1)
+    val res2 = RegexpPositionsInString.computePositionsEndingWith(r2.reverse, s.reverse).reverse.map(s.length - _) // TODO : Check this
     val intersections = res1 intersect res2
     val IntValue(i) = evalProg(c)
     if(i >= 1 && intersections.length < i-1) {
@@ -127,14 +132,5 @@ object Evaluator {
     } else {
       BottomValue
     }
-    
-  }
-  
-  /**
-   * Computes the list of positions where there exists a word recognized by this regexp.
-   */
-  def computePositionsEndingWith(r: RegExp, s: String): List[Int] = {
-    val dfa = Automata.convertRegExp(r)
-    dfa.recordFinalStates(s)
   }
 }

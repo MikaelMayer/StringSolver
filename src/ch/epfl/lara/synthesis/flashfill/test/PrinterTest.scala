@@ -128,4 +128,18 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     nt(inter(nt(List(digit)), nt(List(up)))) should equal(List(digit, up))
     
   }
+  
+  "Automata" should "correctly compute sub-labels" in {
+    val digit = List('0' -> '9')
+    val up = List('A' -> 'Z')
+    val low = List('a' -> 'z')
+    val b = List('B' -> 'B')
+    
+    val res = createLabelSubsets(List(digit, up,  allChars && !digit && !up), List(b, !b))
+    println(res)
+    res(digit) should equal (List(CharLabel(digit)))
+    res(up) should equal (List(CharLabel(List(('B','B'))), CharLabel(List(('A','A'), ('C','Z')))))
+    res(b) should equal (List(CharLabel(b)))
+  }
+  
 }
