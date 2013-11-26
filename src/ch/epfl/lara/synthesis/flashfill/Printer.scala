@@ -36,15 +36,33 @@ object Printer {
         }
       case SubStr(v1, Pos(Epsilon, r1, c1), Pos(r2, Epsilon, c2)) if r1 == r2 && c1 == c2 =>
         t"the ${c1}th occurence of $r1 in $v1"
+      
+      case RepeatedToken(l) =>
+        t"${l}s"
+      case TokenSeq(l) =>
+        l match {
+          case Nil => "nothing"
+          case a::Nil => t"$a"
+          case _ => val ls = (l map apply)
+            def rec(l: Seq[String], res: String): String = l match { case a::b::Nil => res + a + " and " + b case a::l => rec(l, res + a + ", ")}
+            rec(ls, "")
+        }
+        
       case UpperTok =>
-        "uppercase letters"
+        "uppercase letter"
       case IntLiteral(k) => k.toString
       case Linear(k1, w, k2) =>
         val prefix = k1 match { case 1 => "" case -1 => "-" case k => k.toString + "*" }
         val suffix = k2 match { case 0 => "" case k if k<0=> k.toString case k => "+" + k.toString}
         prefix + w.value + suffix
       case InputString(v) =>
-        s"input $v"
+        v match {
+          case 0 => "first input"
+          case 1 => "second input"
+          case 2 => "third input"
+          case n => s"input n° ${n+1}"
+        }
+        
       case Identifier(v) =>
         v
       case _ =>

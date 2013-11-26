@@ -88,7 +88,7 @@ object Automata extends ComputePositionsInString { automataobject =>
     def recordFinalStates(s: Seq[Alphabet]): List[Int] = {
       var i = 0
       var res = List[Int]()
-      if(ending contains start) res = i::res
+      if(ending contains start) res = -1::res
       val (finalStates, f, lastState) = ((res, i, start) /: s) { case ((res, i, current), s) =>
         if(trap.exists(_ == current)) (res, i+1, current) else
         edges(current) find { case (label, next) => label.accept(s) } match {

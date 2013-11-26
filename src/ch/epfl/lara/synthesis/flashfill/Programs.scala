@@ -30,8 +30,8 @@ object Programs {
      Accented alphabets, Alphanumeric characters, Whitespace characters,
      All characters.
    */
-  trait Token extends Program
-  abstract class CharClass(val f: List[(Char, Char)]) extends RegExp { def reverse = this }
+  sealed trait Token extends Program
+  abstract class CharClass(val f: List[(Char, Char)]) extends Program { def reverse = this }
   case class RepeatedToken(c: CharClass) extends Token
   case class RepeatedNotToken(c: CharClass) extends Token
   

@@ -102,6 +102,7 @@ object Evaluator {
     case Loop(w, e) =>
       loopR(w, e, 1)
     case SubStr(v1, p1, p2) =>
+      if(v1.index >= input.length) return BottomValue
       val s = input(v1.index)
       val i1 = evalProg(p1)(IndexedSeq(s))
       val i2 = evalProg(p2)(IndexedSeq(s))

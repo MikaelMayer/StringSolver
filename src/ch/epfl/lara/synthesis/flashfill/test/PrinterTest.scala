@@ -25,8 +25,8 @@ class PrinterTest extends FlatSpec with ShouldMatchers  {
 
   "Printer" should "output correct program signification" in {
     
-    val p = Loop(Identifier("w"), Concatenate(List(SubStr2(InputString(1), UpperTok, Linear(1, Identifier("w"), 0)))))
-    Printer(p) should equal ("concatenates every occurence of uppercase letters in input 1")
+    val p = Loop(Identifier("w"), Concatenate(List(SubStr2(InputString(0), TokenSeq(List(RepeatedToken(UpperTok))), Linear(1, Identifier("w"), 0)))))
+    Printer(p) should equal ("concatenates every occurence of uppercase letters in first input")
   }
 }
 
@@ -71,6 +71,10 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
     val p = Concatenate(List(ConstStr(" + "), SubStr(InputString(0), Pos(TokenSeq(List(RepeatedToken(NumTok))), TokenSeq(List(RepeatedToken(AlphaTok))), IntLiteral(2)), CPos(-1))))
 
     evalProg(p)(Array("qsdf1234amlkj12345mlkj432  fkj ")) should equal (StringValue(" + mlkj432  fkj "))
+    
+    val p2 = Loop(Identifier("w"), Concatenate(List(SubStr2(InputString(0), TokenSeq(List(RepeatedToken(UpperTok))), Linear(1, Identifier("w"), 0)))))
+
+    evalProg(p2)(Array("My Taylor is Rich")) should equal (StringValue("MTR"))
   }
 }
 
@@ -164,7 +168,7 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     val d = convertToken(RepeatedToken(UpperTok))
     d.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
 
-    convertToken(StartTok).recordFinalStates("UZEabOPQ") should equal (List(0))
+    convertToken(StartTok).recordFinalStates("UZEabOPQ") should equal (List(-1))
     convertToken(RepeatedToken(LowerTok)).recordFinalStates("abcdEFG") should equal (List(0, 1, 2, 3))
   }
 
@@ -177,6 +181,9 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     
     val dfa3 = convertRegExp(TokenSeq(List(RepeatedToken(LowerTok), ForwardSlash)))
     dfa3.recordFinalStates("125abc/1/aa1/ab/") should equal (List(6,15))
+    
+    val dfa4 = convertRegExp(Epsilon)
+    dfa4.recordFinalStates("0/2/1") should equal (List(-1, 0, 1, 2, 3, 4))
   }
   
 }
