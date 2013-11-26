@@ -27,13 +27,45 @@ object Automata extends ComputePositionsInString { automataobject =>
     def &&(other: Self): Self
     def unary_! : Self
     def accept(s: Alphabet): Boolean
+    def isEmpty(): Boolean
+    def isEverything(): Boolean
+    def mostGeneralLabel: Self
   }
   
+  /**
+   * Assertion to check that labels are disjoint and/or complete.
+   */
+  def assertDisjoints[T <: Label[T, _]](labels : List[T]): Unit = {
+    for(i <- 0 until labels.size; j <-(i+1) until labels.size) {
+      assert((labels(i) && labels(j)).isEmpty)
+    }
+  }
+  def assertComplete[T <: Label[T, _]](labels: List[T]): Unit = {
+    assert(labels.reduce(_ || _).isEverything)
+  }
+  
+  def char2string(c: Char) = {
+    if(c >= 33 && c <= 127) {
+      "'" + c.toString + "'"
+    } else if (c == Char.MaxValue){
+      "Char.MaxValue"
+    } else c.toInt + ".toChar"
+  }
+  
+  object CharLabel {
+    def apply(input: (Char, Char)*): CharLabel = CharLabel(input.toList)
+  }
   case class CharLabel(val e: EdgeLabel[Char]) extends Label[CharLabel, Char] {
     def ||(other: CharLabel): CharLabel = new CharLabel(automataobject.union(e, other.e))
     def &&(other: CharLabel): CharLabel = new CharLabel(automataobject.inter(e, other.e))
     def unary_! : CharLabel = new CharLabel(automataobject.not(e))
     def accept(s: Char): Boolean = e exists { tuple => tuple._1 <= s && s <= tuple._2 }
+    def isEmpty = e.isEmpty
+    def isEverything = e != Nil && (e.head._1 == 0 && e.head._2 == Char.MaxValue)
+    override def toString = s"CharLabel(${e map { tuple => char2string(tuple._1) + "->" + char2string(tuple._2)} mkString ","})"
+    def mostGeneralLabel = CharLabel(allChars)
+    
+    if(e != Nil) assert((e.take(e.length - 1) zip e.tail) forall { case ((a, b), (c, d)) => b < c})
   }
   implicit def toCharLabel(e: List[(Char, Char)]) = CharLabel(e)
   implicit def fromCharLabel(c: CharLabel): EdgeLabel[Char] = c.e
@@ -67,6 +99,10 @@ object Automata extends ComputePositionsInString { automataobject =>
       }
       finalStates.reverse
     }
+    edges.values foreach { l =>
+      assertComplete[T](l.map(_._1))
+      assertDisjoints[T](l.map(_._1))
+    }
   }
   
   object NDFA {
@@ -76,7 +112,7 @@ object Automata extends ComputePositionsInString { automataobject =>
     def makeEdgesSeq[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: Seq[(Node, T, Node)]): Map[Node, Map[T, List[Node]]] = {
       Map[Node, Map[T, List[Node]]]() ++ (i.groupBy(tuple => tuple._1) map {
         case (e, l) => e -> (l.groupBy(tuple => tuple._2) map
-              { case (f, l) => f -> (l map { tuple => tuple._3 }).toList }).toMap
+              { case (f, l) => f -> (l.distinct map { tuple => tuple._3 }).toList }).toMap
         })
     }
     def makeEdges[Node, T <: Label[T, Alphabet] forSome {type Alphabet}](i: (Node, T, Node)*): Map[Node, Map[T, List[Node]]] = makeEdgesSeq[Node, T](i.toSeq)
@@ -92,6 +128,11 @@ object Automata extends ComputePositionsInString { automataobject =>
       this.copy(edges = edges + (e->(imageE + (f -> imageE2))))
     }
     def edgesLabels = (edges flatMap { case (n, m) => m.keys }).toSet
+    
+    edges.values foreach { e =>
+      assertComplete[T](e.keys.toList)
+      assertDisjoints[T](e.keys.toList)
+    }
   }
   
   /**
@@ -101,11 +142,23 @@ object Automata extends ComputePositionsInString { automataobject =>
     var visitedNodes = Set[Set[Node]]()
     var current = Set(d.start)
     
-    def successors(nodeSet: Set[Node]) = ((nodeSet map d.edges) flatMap { m =>
-      m flatMap {
-        case (t, l) => l map { case n => (t, n) }
+    def successors(nodeSet: Set[Node]): Map[T, Set[Node]] = {
+      val s = nodeSet map d.edges
+      val possibilities = s flatMap { m =>
+        val mapping = m map {
+          case (label, destNodes) => destNodes map {
+            case nodes => (label, nodes) }
+        }
+        mapping.flatten
       }
-    }).groupBy(tuple => tuple._1).mapValues(set => set.map(tuple => tuple._2))
+      val labels = possibilities.map{tuple => tuple._1}.toSeq
+      val mapping = createDisjointSets(labels)
+      val flattenedEdges = possibilities.flatMap{ case (edge, nodeDest) => mapping(edge) map { case newEdge => (newEdge, nodeDest)}}
+      // Now we need to be sure that labels are disjoint or group them
+      val res = flattenedEdges.groupBy(tuple => tuple._1)
+      val resMapped = res.mapValues(set => set.map(tuple => tuple._2))
+      resMapped
+    }
     
     var edges = List[(Int, T, Int)]()
     
@@ -174,12 +227,23 @@ object Automata extends ComputePositionsInString { automataobject =>
         )
         dfa
       case TokenSeq(l) =>
-        val dfas = if(l.head == StartTok) {
+        val dfas1 = if(l.head == StartTok) {
           (l.tail map convertToken).toList
         } else { // Do not necessarily start from the beginning
-          (RepeatedToken(AllChars)::l.toList) map convertToken
+          (l.toList) map convertToken
         }
-        dfas match {
+        val dfas2 = if(l.head == StartTok) {
+          dfas1
+        } else { // We add the possibility to parse everything
+          DFA[Int, Char, CharLabel](
+              nodes = Set(0),
+              edges = DFA.makeEdges((0, allChars, 0)),
+              trap = None,
+              start = 0,
+              ending = Set(0)
+          )::dfas1
+        }
+        dfas2 match {
           case Nil =>convertRegExp(TokenSeq(Seq()))
           case a::Nil => a
           case l => val ndfas = l.map(toNDFA)
@@ -228,6 +292,7 @@ object Automata extends ComputePositionsInString { automataobject =>
    * Takes the diff of two lists of chars
    */
   def union(f: List[(Char, Char)], g: List[(Char, Char)]): List[(Char, Char)] = not(inter(not(f), not(g)))
+  def union(f: List[List[(Char, Char)]]): List[(Char, Char)] = if(f == Nil) List() else if(f.length == 1) f.head else f.reduce(union(_, _))
   /**
    * Takes f without g
    */
@@ -295,16 +360,63 @@ object Automata extends ComputePositionsInString { automataobject =>
    * Split sets into subsets so that we can use the same labels for the automata combining a and b.
    */
   def createLabelSubsets(a: List[CharLabel], b: List[CharLabel]): Map[CharLabel, List[CharLabel]] = {
-    ((a map {t =>
+    //assertDisjoints(a)
+    assertComplete(a)
+    //assertDisjoints(b)
+    assertComplete(b)
+    val res = ((a map {t =>
       t -> b.flatMap{el_b => val res = el_b && t; if(isEmpty(res)) Nil else List(res)}
     }) ++ (
      b map {t =>
       t -> a.flatMap{el_a => val res = el_a && t; if(isEmpty(res)) Nil else List(res)}
     }
-    )) .toMap
+    )).toMap
+    
+    res.foreach { case (key, value) =>
+      key == union(value map (_.e)).e
+    }
+    res
   } // ensures { res => content(res.keys) == content(a) ++ content(b) &&
     //                  (a ++ b) forall ( la => content(la) == content(res(la) reduce (union (_,_))))
     // }
+  
+  /**
+   * Split sets into subsets so that there is no overlapping between values
+   */
+  def createDisjointSets[T <: Label[T, _]](a: Seq[T]): Map[T, List[T]] = {
+    //assertComplete(a)
+    if(a == Nil) return Map[T, List[T]]()
+
+    var chunks: Set[T] = Set(a.head.mostGeneralLabel)
+    var l = a
+    // Split existing such that we can build the remaining with those chunks
+    while(l != Nil) {
+      //assertDisjoints(chunks.toList map CharLabel.apply)
+      // Ensure that all chunks elements are disjoints
+      val elem: T = l.head
+      val (not_intersected: Set[T], intersected: Set[T]) = chunks.partition(set => (set && elem).isEmpty())
+      val union_intersected = if(intersected.size == 1) intersected else {
+        (intersected.head /: intersected.tail) { case (e, f) => e || f}
+      }
+      if(union_intersected == elem) {
+        // Nothing to do
+      } else { // need to cut intersected so that
+        chunks = (intersected flatMap {
+          case e => 
+            val i1 = e && elem
+            val i2 = e && !elem
+            List(i1, i2)
+        }) ++ not_intersected
+      }
+      l = l.tail
+    }
+    val images = a map { el =>
+      val (not_intersected, intersected) = chunks.partition(set => (set && el).isEmpty)
+      intersected.toList
+    }
+    (a zip images).toMap
+  }
+  
   
   /**
    * Concatenates two NDFA
@@ -313,8 +425,8 @@ object Automata extends ComputePositionsInString { automataobject =>
   def concatenateNDFA[Char](a: NDFA[Int, CharLabel], b: NDFA[Int, CharLabel]): NDFA[Int, CharLabel] = {
     //val offsetB = a.nodes.max
     //val offsetA = 0
-    val trap = Some(a.nodes.size + b.nodes.size)
-    val maxA = a.nodes.size - (if(a.trap == None) 1 else 2) // We remove the trap
+    val trap = Some(a.nodes.size + b.nodes.size - (if(a.trap != None) 1 else 0) - (if(b.trap != None) 1 else 0))
+    val maxA = a.nodes.size - (if(a.trap == None) 0 else 1) // We removed the trap
     def mapNodeB(n: Int): Int = if(b.trap.exists(i => i == n)) trap.get else n + maxA
     def mapNodeA(n: Int): Int = if(a.trap.exists(i => i == n)) trap.get else n + 0
     
@@ -332,26 +444,26 @@ object Automata extends ComputePositionsInString { automataobject =>
     val labelsB = b.edgesLabels
     
     // Maps any label to corresponding sub-labels.
-    val mappingEdges: Map[CharLabel, List[CharLabel]] = createLabelSubsets(labelsA.toList, labelsB.toList)
     
     // Maps all previous edges to new edges using the new labelling system.
-    val aedgesnew = a.edges.map {
+    // Do not count the ending edges now. We split them afterwards.
+    val aedgesnew = a.edges.flatMap {
       case (e, m) =>
-        (mapNodeA(e), m.flatMap{
-          case (label, l) =>
-            mappingEdges(label) map { newLabel =>
-              (newLabel, l map mapNodeA)
-            }}
-        )
+        if(a.ending contains e) Nil else {
+          val e_mapped = mapNodeA(e)
+          m.flatMap {
+            case (label, l) =>
+              l map { el => (e_mapped, label, mapNodeA(el))}
+          }
+        }
     }
-    val bedgesnew = b.edges.map {
+    val bedgesnew = b.edges.flatMap {
       case (e, m) =>
-        (mapNodeB(e), m.flatMap{
+        val e_mapped = mapNodeB(e)
+        m.flatMap {
           case (label, l) =>
-            mappingEdges(label) map { newLabel =>
-              (newLabel, l map mapNodeB)
-            }}
-        )
+            l map { el => (e_mapped, label, mapNodeB(el))}
+        }
     }
     
     // Keep all edges in A and B with the following transformations
@@ -361,18 +473,30 @@ object Automata extends ComputePositionsInString { automataobject =>
     // Adds new edges for final states of A to all reachable states from the start of B
     // Mark final states of A as final only if start of B is final.
     val newEdges = aedgesnew ++ bedgesnew
-    val edges = NDFA.makeEdgesSeq(a.ending.map(mapNodeA).toList flatMap {
-      case i => 
+    
+    val endingEdges = (a.ending.toList flatMap {
+      case endingNode => 
+        val endingNodeMapped = mapNodeA(endingNode)
+        val aEndingEdges = a.edges(endingNode)
         // Bind every finishing state of a to nodes after starting of b with same labels
-        val edgesStart = b.edges(b.start) flatMap {
-          case (t, l) => val l_mapped = l map { nodeB => (t, mapNodeB(nodeB)) }
-            val t_mapped = mappingEdges(t)
-            t_mapped map { case t => (t, l)}
+        val bStartEdges = b.edges(b.start)
+        val mappingEdges = createLabelSubsets(aEndingEdges.keys.toList, bStartEdges.keys.toList)
+        val res = (aEndingEdges flatMap { case (label, nodes) =>
+          nodes flatMap {
+            case node => mappingEdges(label).map {
+              newLabel => (endingNodeMapped, newLabel, mapNodeA(node))
+              }
           }
-        edgesStart flatMap { case (f, t) =>
-            t map { el => (i, f, el)}
-        }
+        }) ++
+        (bStartEdges flatMap { case (label, t) =>
+            (t flatMap { el => mappingEdges(label).map{ newLabel => (endingNodeMapped, newLabel, mapNodeB(el))}})  // Edges linking A and B
+            //(t flatMap { el =>mappingEdges(label).map{ newLabel => (mapNodeB(b.start), newLabel, mapNodeB(el))}})     // Edges remaining for state B
+        })
+        res
     })
+    
+    val edges = NDFA.makeEdgesSeq(newEdges.toSeq ++ endingEdges.toSeq)
+    
     
     val ending = (b.ending map mapNodeB) ++ (if(b.ending contains b.start) (a.ending map mapNodeA) else Set())
     

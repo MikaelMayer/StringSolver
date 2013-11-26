@@ -70,7 +70,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
   "Evaluator" should "correctly execute programs" in {
     val p = Concatenate(List(ConstStr(" + "), SubStr(InputString(0), Pos(TokenSeq(List(RepeatedToken(NumTok))), TokenSeq(List(RepeatedToken(AlphaTok))), IntLiteral(2)), CPos(-1))))
 
-    evalProg(p)(Array("qsdf1234amlkj12345mlkj432  fkj ")) should equal ("mlkj432  fkj ")
+    evalProg(p)(Array("qsdf1234amlkj12345mlkj432  fkj ")) should equal (StringValue(" + mlkj432  fkj "))
   }
 }
 
@@ -136,11 +136,29 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     val b = List('B' -> 'B')
     
     val res = createLabelSubsets(List(digit, up,  allChars && !digit && !up), List(b, !b))
-    println(res)
+    //println(res)
     res(digit) should equal (List(CharLabel(digit)))
     res(up) should equal (List(CharLabel(List(('B','B'))), CharLabel(List(('A','A'), ('C','Z')))))
     res(b) should equal (List(CharLabel(b)))
+    
+    val res2 = createLabelSubsets(List(digit, allChars && !digit), List(allChars))
+    
+    res2 should contain key (allChars)
+    //res(allChars) should equal (List(CharLabel(digit), up))
   }
+  
+  "Automata" should "correctly compute createDisjointSets" in {
+    val digit = List('0' -> '9')
+    val up = List('A' -> 'Z')
+    val low = List('a' -> 'z')
+    val b = List('B' -> 'B')
+    
+    val res = createDisjointSets(List(CharLabel(digit), CharLabel(nt(digit)), CharLabel(up), CharLabel(nt(up))))
+    res(digit) should equal (List(CharLabel(digit)))
+    res(up) should equal  (List(CharLabel(up)))
+    res(nt(digit)).toSet should equal (Set(CharLabel(inter(nt(digit), nt(up))), CharLabel(up)))
+  }
+  
   
   "Automata" should "correctly convert simple tokens" in {
     val d = convertToken(RepeatedToken(UpperTok))
@@ -156,6 +174,9 @@ class AutomataTest extends FlatSpec with ShouldMatchers  {
     
     val dfa2 = convertRegExp(TokenSeq(List(StartTok, RepeatedToken(UpperTok))))
     dfa2.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
+    
+    val dfa3 = convertRegExp(TokenSeq(List(RepeatedToken(LowerTok), ForwardSlash)))
+    dfa3.recordFinalStates("125abc/1/aa1/ab/") should equal (List(6,15))
   }
   
 }

@@ -38,8 +38,8 @@ object Programs {
   case object UpperTok extends CharClass(List(('A', 'Z')))
   case object NumTok extends CharClass(List(('0', '9')))
   case object LowerTok extends CharClass(List(('a', 'z')))
-  case object AlphaTok extends CharClass(List(('a', 'z'), ('A', 'Z')))
-  case object AlphaNumTok extends CharClass(List(('0', '9'), ('a', 'z'), ('A', 'Z')))
+  case object AlphaTok extends CharClass(List(('A', 'Z'), ('a', 'z')))
+  case object AlphaNumTok extends CharClass(List(('0', '9'), ('A', 'Z'), ('a', 'z')))
   // TODO : Add missing tokens.
   
   object SpecialChar { def unapply(s: SpecialChar): Option[Char] = Option(s.c)}
@@ -52,7 +52,7 @@ object Programs {
   case object Colon extends SpecialChar(':')
   case object Comma extends SpecialChar(',')
   case object Backslash extends SpecialChar('\\')
-  case object Forwardslash extends SpecialChar('/')
+  case object ForwardSlash extends SpecialChar('/')
   case object LeftParenthesis extends SpecialChar('(')
   case object RightParenthesis extends SpecialChar(')')
   case object LeftBracket  extends SpecialChar('[')

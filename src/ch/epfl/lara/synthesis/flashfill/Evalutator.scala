@@ -117,20 +117,21 @@ object Evaluator {
       
     case ConstStr(s) => StringValue(s)
     case CPos(k) if k >= 0 => IntValue(k)
-    case CPos(k) if k < 0 => IntValue(input(0).length + k)
+    case CPos(k) if k < 0 => IntValue(input(0).length + k + 1)
     case Pos(r1, r2, c) => val s = input(0)
     // TODO : the position for regular expressions
     // TODO : Precompute automatas.
     val res1 = RegexpPositionsInString.computePositionsEndingWith(r1, s).map(_ + 1)
-    val res2 = RegexpPositionsInString.computePositionsEndingWith(r2.reverse, s.reverse).reverse.map(s.length - _) // TODO : Check this
+    val res2 = RegexpPositionsInString.computePositionsEndingWith(r2.reverse, s.reverse).reverse.map(s.length-1 - _) // TODO : Check this
     val intersections = res1 intersect res2
     val IntValue(i) = evalProg(c)
-    if(i >= 1 && intersections.length < i-1) {
+    if(i >= 1 && intersections.length > i-1) {
       IntValue(intersections(i-1))
-    } else if(i <= -1 && intersections.length < -i+1) {
+    } else if(i <= -1 && intersections.length > -i+1) {
       IntValue(intersections(-i+1))
     } else {
       BottomValue
     }
+    case IntLiteral(i) => IntValue(i)
   }
 }
