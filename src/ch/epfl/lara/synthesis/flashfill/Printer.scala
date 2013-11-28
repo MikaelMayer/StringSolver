@@ -1,3 +1,17 @@
+/**
+ *    ____        _      __  ____          __  __ 
+ *   / __/_______(_)__  / /_/ __/_ _____  / /_/ / 
+ *  _\ \/ __/ __/ / _ \/ __/\ \/ // / _ \/ __/ _ \
+ * /___/\__/_/ /_/ .__/\__/___/\_, /_//_/\__/_//_/
+ *              /_/           /___/               
+ *              
+ *  File:   Printer.scala
+ *  Author: Mikaël Mayer
+ *  Date:   27.11.2013
+ *  Purpose:Extracts a program to transform it to a readable string.
+ */
+
+
 package ch.epfl.lara.synthesis.flashfill
 
 import scala.collection.mutable.ArrayBuffer

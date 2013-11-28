@@ -12,7 +12,7 @@ trait ComputePositionsInString {
 object Evaluator {
   //import ctx.reporter._
   
-  final val RegexpPositionsInString: ComputePositionsInString = Automata
+  final val RegexpPositionsInString: ComputePositionsInString = ScalaRegExp
 
   /**
    * Definitions of values
@@ -46,6 +46,7 @@ object Evaluator {
       case (_, _) => BottomValue
     }
   }
+  def concatenate(s: Value*): Value = concatenate(s.toList)
   
   /**
    * Replace routines
@@ -93,10 +94,12 @@ object Evaluator {
       BoolValue((true /: pis) { case (res, cj) => res && evalProg(cj).asBoolFalseIfBottom })
     case Match(v, r, k) =>
       val s = input(v.index)
-      ???
+      val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
+      BoolValue(res1.length >= k)
     case NotMatch(v, r, k) =>
       val s = input(v.index)
-      ???
+      val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
+      BoolValue(res1.length < k)
     case Concatenate(ls) =>
       concatenate(ls.toList map evalProg)
     case Loop(w, e) =>
@@ -128,8 +131,8 @@ object Evaluator {
     val IntValue(i) = evalProg(c)
     if(i >= 1 && intersections.length > i-1) {
       IntValue(intersections(i-1))
-    } else if(i <= -1 && intersections.length > -i+1) {
-      IntValue(intersections(-i+1))
+    } else if(i <= -1 && 0 <= intersections.length + i) {
+      IntValue(intersections(intersections.length + i))
     } else {
       BottomValue
     }
