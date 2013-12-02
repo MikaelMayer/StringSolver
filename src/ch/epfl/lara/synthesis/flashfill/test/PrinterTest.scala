@@ -45,7 +45,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
   
   "Evaluator" should "correctly concatenate strings" in {
     concatenate(StringValue("a"), StringValue("b"), StringValue("c")) should equal (StringValue("abc"))
-    concatenate(StringValue("a"), BottomValue, StringValue("c")) should equal (BottomValue)
+    concatenate(StringValue("a"), ⊥, StringValue("c")) should equal (⊥)
   }
   
   "Evaluator" should "correctly replace TraceExprs" in {
@@ -214,22 +214,6 @@ class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
   import ch.epfl.lara.synthesis.flashfill.Programs._
   import ch.epfl.lara.synthesis.flashfill.Printer
   import ch.epfl.lara.synthesis.flashfill.ScalaRegExp._
-  /*def contain[A](f: Function[A] => Boolean) = Matcher { (left: Iterator[Function[A]]) =>
-    MatchResult(
-        left.find(f) != None,
-        left + " did not contain the required function",
-        left + " contained the required function"   
-    )
-  }
-  def containFNMapping[A](input: List[List[Int]], output: List[A]) = Matcher { (left: Iterator[Function[A]]) =>
-    MatchResult(
-        left.find({ f => 
-          println(s"testing ${f.toReadableString}")
-          input.map{elem => f(elem)} == output }) != None,
-        left + s" did not contain the mapping from ${input} to ${output}",
-        left + s" contained the required function"   
-    )
-  }*/
   
   "ScalaRegExp" should "correctly convert regexps" in {
     val dfa = convertRegExp(UpperTok)
@@ -252,3 +236,6 @@ class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
   }
 }
 
+class FlashFillTest extends FlatSpec with ShouldMatchers {
+  
+}

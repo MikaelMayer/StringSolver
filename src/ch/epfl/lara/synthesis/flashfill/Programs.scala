@@ -21,6 +21,18 @@ package ch.epfl.lara.synthesis.flashfill
 object Programs {
   sealed trait Program {}
 
+  
+  object Switch { def apply(s: (Bool, TraceExpr)*): Switch = apply(s.toList) }
+  case class Switch(s: List[(Bool, TraceExpr)]) extends Program
+  case class Bool(ds: Seq[Conjunct]) extends Program         // Disjunction of these
+  case class Conjunct(pis: Seq[Predicate]) extends Program   // Conjunction of these
+  sealed trait Predicate extends Program
+  case class Match(v: StringVariable, r: RegExp, k: Int) extends Predicate
+  object Match { def apply(v: StringVariable, r: RegExp): Match = Match(v, r, 1) }
+  case class NotMatch(v: StringVariable, r: RegExp, k: Int) extends Predicate
+  object NotMatch { def apply(v: StringVariable, r: RegExp): NotMatch = NotMatch(v, r, 1) }
+  
+  
   sealed trait RegExp extends Program {
     def reverse: RegExp
   }
@@ -66,7 +78,6 @@ object Programs {
   val NonDotTok = RepeatedNotToken(new CharClass(List(('.', '.'))))
   val NonSpaceTok = RepeatedNotToken(new CharClass(List((' ', ' '))))
   val SpaceTok = RepeatedToken(new CharClass(List((' ', ' '))))
-  // TODO : Add missing tokens.
   
   object SpecialChar { def unapply(s: SpecialChar): Option[Char] = Option(s.c)}
   abstract class SpecialChar(val c: Char) extends Token
@@ -100,18 +111,6 @@ object Programs {
   
   sealed trait StringVariable extends Program { def index: Int }
   case class InputString(index: Int) extends StringVariable
-  
-  object Switch {
-    def apply(s: (Bool, TraceExpr)*): Switch = apply(s.toList)
-  }
-  case class Switch(s: List[(Bool, TraceExpr)]) extends Program
-  case class Bool(ds: Seq[Conjunct]) extends Program         // Disjunction of these
-  case class Conjunct(pis: Seq[Predicate]) extends Program   // Conjunction of these
-  sealed trait Predicate extends Program
-  case class Match(v: StringVariable, r: RegExp, k: Int) extends Predicate
-  object Match { def apply(v: StringVariable, r: RegExp): Match = Match(v, r, 1) }
-  case class NotMatch(v: StringVariable, r: RegExp, k: Int) extends Predicate
-  object NotMatch { def apply(v: StringVariable, r: RegExp): NotMatch = NotMatch(v, r, 1) }
   
   /**
    * A trace expression refers to the Concatenate(f1; ; fn) constructor,
@@ -166,7 +165,7 @@ object Programs {
    * matches some suffix of s[0 : t-1] and r2 matches some prefix of
    * s[t : `-1], where ` = Length(s). Furthermore, t is the cth such
    * match starting from the left side (or the right side) if c is positive
-   * (or negative). If not enough matches exist, then ? is returned.
+   * (or negative). If not enough matches exist, then Bottom is returned.
    */
   case class Pos(r1: RegExp, r2: RegExp, c: IntegerExpr) extends Position
   

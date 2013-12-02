@@ -33,7 +33,7 @@ object Evaluator {
   case class IntValue(n: Int) extends Value {
     override def asInt = n
   }
-  case object BottomValue extends Value {
+  case object ⊥ extends Value {
     override def isBottom = true
   }
   
@@ -43,7 +43,7 @@ object Evaluator {
   def concatenate(ls: List[Value]): Value = {
     ((StringValue(""): Value) /: ls) {
       case (StringValue(a), StringValue(b)) => StringValue(a + b)
-      case (_, _) => BottomValue
+      case (_, _) => ⊥
     }
   }
   def concatenate(s: Value*): Value = concatenate(s.toList)
@@ -71,9 +71,9 @@ object Evaluator {
   def loopR(w: Identifier, e: TraceExpr, k: Int)(implicit input: IndexedSeq[String]): Value = {
     val t = evalProg(replaceTraceExpr(e)(w, k))
     t match {
-      case BottomValue => StringValue("")
+      case ⊥ => StringValue("")
       case StringValue(s) => concatenate(List(t, loopR(w, e, k+1)))
-      case _ => BottomValue
+      case _ => ⊥
     }
   }
   
@@ -86,7 +86,7 @@ object Evaluator {
         case Some((b, expr)) =>
           evalProg(expr)
         case None =>
-          BottomValue
+          ⊥
       }
     case Bool(ds) =>
       BoolValue((false /: ds) { case (res, cj) => res || evalProg(cj).asBoolFalseIfBottom })
@@ -105,7 +105,7 @@ object Evaluator {
     case Loop(w, e) =>
       loopR(w, e, 1)
     case SubStr(v1, p1, p2) =>
-      if(v1.index >= input.length) return BottomValue
+      if(v1.index >= input.length) return ⊥
       val s = input(v1.index)
       val i1 = evalProg(p1)(IndexedSeq(s))
       val i2 = evalProg(p2)(IndexedSeq(s))
@@ -114,9 +114,9 @@ object Evaluator {
           i2 match {
             case IntValue(n2) =>
               StringValue(s.substring(n1, n2))
-            case _ => BottomValue
+            case _ => ⊥
           }
-        case _ => BottomValue
+        case _ => ⊥
       }
       
     case ConstStr(s) => StringValue(s)
@@ -134,7 +134,7 @@ object Evaluator {
     } else if(i <= -1 && 0 <= intersections.length + i) {
       IntValue(intersections(intersections.length + i))
     } else {
-      BottomValue
+       ⊥
     }
     case IntLiteral(i) => IntValue(i)
   }
