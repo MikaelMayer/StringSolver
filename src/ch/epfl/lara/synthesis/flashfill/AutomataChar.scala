@@ -3,10 +3,13 @@ package ch.epfl.lara.synthesis.flashfill
 import ch.epfl.lara.synthesis.flashfill.Programs._
 import scala.Char
 
-
 object AutomataChar extends ComputePositionsInString { automataObject =>
   import Automata._
+  import scala.language.implicitConversions
   type EdgeLabel[Alphabet] = List[(Alphabet, Alphabet)]
+  
+  def computePositionsOfToken(r: Token, s: String): List[(Int, Int)] = ???
+  def computePositionsStartingWith(r: RegExp, s: String): List[Int] = computePositionsEndingWith(r.reverse, s.reverse).reverse.map(s.length-1-_)
   
   def char2string(c: Char) = {
     if(c >= 33 && c <= 127) {

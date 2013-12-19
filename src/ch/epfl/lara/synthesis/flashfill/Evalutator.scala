@@ -7,10 +7,13 @@ trait ComputePositionsInString {
    * Computes the list of positions where there exists a word recognized by this regexp.
    */
   def computePositionsEndingWith(r: RegExp, s: String): List[Int]
+  def computePositionsStartingWith(r: RegExp, s: String): List[Int]
+  //def computePositionsOfToken(r: Token, s: String): List[(Int, Int)]
 }
 
 object Evaluator {
   //import ctx.reporter._
+  import Implicits._
   
   final val RegexpPositionsInString: ComputePositionsInString = ScalaRegExp
 
@@ -55,13 +58,18 @@ object Evaluator {
     case Concatenate(fs) =>    Concatenate(fs.toList map replaceAtomicExpr)
   }
   def replaceAtomicExpr(e: AtomicExpr)(implicit w: Identifier, k: Int): AtomicExpr = e match {
-    case SubStr(vi, p1, p2) => SubStr(vi, replacePosition(p1), replacePosition(p2))
+    case SubStr(vi, p1, p2) => SubStr(replaceIntegerExpr(vi), replacePosition(p1), replacePosition(p2))
     case ConstStr(s) => e
     case Loop(w2, _) if w2 == w => e
     case Loop(w2, e) => Loop(w2, replaceTraceExpr(e))
+    case Number(s, l, ostep) => Number(replaceAtomicExpr(s), l, ostep)
   }
   def replacePosition(e: Position)(implicit w: Identifier, k: Int): Position = e match {
-    case Pos(p1, p2, Linear(k1, v, k2)) if v.value == w.value => Pos(p1, p2, IntLiteral(k * k1 + k2))
+    case Pos(p1, p2, t) => Pos(p1, p2, replaceIntegerExpr(t))
+    case _ => e
+  }
+  def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier, k: Int): IntegerExpr = e match {
+    case Linear(k1, v, k2) if v.value == w.value => IntLiteral(k * k1 + k2)
     case _ => e
   }
     
@@ -72,7 +80,7 @@ object Evaluator {
     val t = evalProg(replaceTraceExpr(e)(w, k))
     t match {
       case ⊥ => StringValue("")
-      case StringValue(s) => concatenate(List(t, loopR(w, e, k+1)))
+      case StringValue(s) => concatenate(List(t, loopR(w, e, k+1))) // TODO : Correct the stack overflow error.
       case _ => ⊥
     }
   }
@@ -93,26 +101,27 @@ object Evaluator {
     case Conjunct(pis) =>
       BoolValue((true /: pis) { case (res, cj) => res && evalProg(cj).asBoolFalseIfBottom })
     case Match(v, r, k) =>
-      val s = input(v.index)
+      val s = input(evalProg(v).asInt)
       val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
       BoolValue(res1.length >= k)
     case NotMatch(v, r, k) =>
-      val s = input(v.index)
+      val s = input(evalProg(v).asInt)
       val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
       BoolValue(res1.length < k)
     case Concatenate(ls) =>
       concatenate(ls.toList map evalProg)
     case Loop(w, e) =>
-      loopR(w, e, 1)
+      loopR(w, e, 0)
     case SubStr(v1, p1, p2) =>
-      if(v1.index >= input.length) return ⊥
-      val s = input(v1.index)
+      val index = evalProg(v1).asInt
+      if(index >= input.length) return ⊥
+      val s = input(index)
       val i1 = evalProg(p1)(IndexedSeq(s))
       val i2 = evalProg(p2)(IndexedSeq(s))
       i1 match {
-        case IntValue(n1) =>
+        case IntValue(n1) if n1 >= 0 =>
           i2 match {
-            case IntValue(n2) =>
+            case IntValue(n2) if n2 <= s.length && n1 <= n2 =>
               StringValue(s.substring(n1, n2))
             case _ => ⊥
           }
@@ -123,10 +132,8 @@ object Evaluator {
     case CPos(k) if k >= 0 => IntValue(k)
     case CPos(k) if k < 0 => IntValue(input(0).length + k + 1)
     case Pos(r1, r2, c) => val s = input(0)
-    // TODO : the position for regular expressions
-    // TODO : Precompute automatas.
     val res1 = RegexpPositionsInString.computePositionsEndingWith(r1, s).map(_ + 1)
-    val res2 = RegexpPositionsInString.computePositionsEndingWith(r2.reverse, s.reverse).reverse.map(s.length-1 - _) // TODO : Check this
+    val res2 = RegexpPositionsInString.computePositionsStartingWith(r2, s)
     val intersections = res1 intersect res2
     val IntValue(i) = evalProg(c)
     if(i >= 1 && intersections.length > i-1) {
@@ -137,5 +144,24 @@ object Evaluator {
        ⊥
     }
     case IntLiteral(i) => IntValue(i)
+    case Number(a, size, (offset, step)) =>
+    val i = evalProg(size)
+    val o = IntValue(offset)
+    val s = IntValue(step)
+    (i, o, s) match { case (IntValue(ii), IntValue(oo), IntValue(ss)) =>
+            evalProg(a) match {
+              case StringValue(sv) =>
+                if(sv.isNumber) {
+                  val p = sv.toInt
+                  val ps = (p+ss).toString
+                  StringValue("0"*(ii - ps.size)+ps)
+                } else ⊥
+              case ⊥ => 
+                val ps = oo.toString
+                StringValue("0"*(ii - ps.size)+ps)
+              case _ => ⊥
+      }
+    case _ =>  ⊥
+    }
   }
 }

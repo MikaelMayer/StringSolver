@@ -19,7 +19,22 @@ package ch.epfl.lara.synthesis.flashfill
  */
 
 object Programs {
-  sealed trait Program {}
+  sealed trait Program {
+
+    /**
+     * Returns true if the identifier is used in this program.
+     */
+    def uses(w: Identifier): Boolean = this match {
+      case i@Identifier(_) => i == w
+      case p: Product => p.productIterator.toList exists {
+        case arg: Program => arg uses w
+        case arg: List[_] => arg exists { case p: Program => p uses w}
+        case arg: Set[_] => arg exists { case p: Program => p uses w}
+        case _ => false
+      }
+      case _ => false
+    }
+  }
 
   
   object Switch { def apply(s: (Bool, TraceExpr)*): Switch = apply(s.toList) }
@@ -64,54 +79,101 @@ object Programs {
   sealed trait Token extends Program
   class CharClass(val f: List[(Char, Char)]) extends Program { def reverse = this
     def unapply(c: Char): Option[Unit] = f find { case tuple => tuple._1 <= c && c <= tuple._2 } map {_ => ()}
+    override def toString = {
+      val res = this.getClass().getName().replace("ch.epfl.lara.synthesis.flashfill.Programs$","").replace("$", "")
+      if(res == "CharClass") {
+        "CharClass("+f.toString+")"
+      } else res
+    }
+    def unary_! = RepeatedNotToken(this)
   }
-  case class RepeatedToken(c: CharClass) extends Token
-  case class RepeatedNotToken(c: CharClass) extends Token
+  case class RepeatedToken(c: CharClass) extends Token {
+    override def toString = c.toString.replaceAll("class","Tok")
+  }
+  case class RepeatedNotToken(c: CharClass) extends Token {
+    override def toString = "Non" + c.toString.replaceAll("class","Tok")
+  }
   
   
-  case object UpperTok extends CharClass(List(('A', 'Z')))
-  case object NumTok extends CharClass(List(('0', '9')))
-  case object LowerTok extends CharClass(List(('a', 'z')))
-  case object AlphaTok extends CharClass(List(('A', 'Z'), ('a', 'z')))
+  case object UpperClass extends CharClass(List(('A', 'Z')))
+  val UpperTok = RepeatedToken(UpperClass)
+  val NonUpperTok = RepeatedNotToken(UpperClass)
+  case object NumClass extends CharClass(List(('0', '9')))
+  val NumTok = RepeatedToken(NumClass)
+  val NonNumTok = RepeatedNotToken(NumClass)
+  case object LowerClass extends CharClass(List(('a', 'z')))
+  val LowerTok = RepeatedToken(LowerClass)
+  val NonLowerTok = RepeatedNotToken(LowerClass)
+  case object AlphaClass extends CharClass(List(('A', 'Z'), ('a', 'z')))
+  val AlphaTok = RepeatedToken(AlphaClass)
   val AlphTok = AlphaTok
-  case object AlphaNumTok extends CharClass(List(('0', '9'), ('A', 'Z'), ('a', 'z')))
+  val NonAlphaTok = RepeatedNotToken(AlphaClass)
+  case object AlphaNumClass extends CharClass(List(('0', '9'), ('A', 'Z'), ('a', 'z')))
+  val AlphaNumTok = RepeatedToken(AlphaNumClass)
+  val NonAlphaNumTok = RepeatedNotToken(AlphaNumClass)
+  
   val NonDotTok = RepeatedNotToken(new CharClass(List(('.', '.'))))
+  
   val NonSpaceTok = RepeatedNotToken(new CharClass(List((' ', ' '))))
   val SpaceTok = RepeatedToken(new CharClass(List((' ', ' '))))
-  
-  object SpecialChar { def unapply(s: SpecialChar): Option[Char] = Option(s.c)}
-  abstract class SpecialChar(val c: Char) extends Token
   case object StartTok extends Token // Start of the string
   case object EndTok extends Token // End of the string
-  case object HyphenTok extends SpecialChar('-')
-  case object DotTok extends SpecialChar('.')
-  case object SemiColonTok extends SpecialChar(';')
-  case object ColoTokn extends SpecialChar(':')
-  case object CommaTok extends SpecialChar(',')
-  case object Backslash extends SpecialChar('\\')
-  case object SlashTok extends SpecialChar('/')
-  case object LeftParenTok extends SpecialChar('(')
-  case object RightParenTok extends SpecialChar(')')
-  case object LeftBracketTok  extends SpecialChar('[')
-  case object RightBracketTok extends SpecialChar(']')
-  case object LeftBraceTok  extends SpecialChar('{')
-  case object RightBraceTok extends SpecialChar('}')
-  case object PercentageTok extends SpecialChar('%')
-  case object HatTok        extends SpecialChar('^')
-  case object UnderscoreTok extends SpecialChar('_')
-  case object EqSignTok     extends SpecialChar('=')
-  case object PlusTok       extends SpecialChar('+')
-  case object StarTok       extends SpecialChar('*')
-  case object AndTok        extends SpecialChar('&')
-  case object AtTok         extends SpecialChar('@')
-  case object DollarTok     extends SpecialChar('$')
-  case object QuestionTok   extends SpecialChar('?')
+  
+  var listTokens: List[Token] = List(UpperTok,
+      NonUpperTok,
+      NumTok,
+      NonNumTok,
+      LowerTok,
+      NonLowerTok,
+      AlphaTok,
+      NonAlphaTok,
+      AlphaNumTok,
+      NonAlphaNumTok,
+      NonDotTok,
+      NonSpaceTok,
+      SpaceTok
+      )
+  
+  object SpecialChar { def unapply(s: SpecialChar): Option[Char] = Option(s.c)
+    def apply(s: Char): SpecialChar = {
+      val res =  new SpecialChar(s)
+      listTokens = res :: listTokens
+      res
+    }
+  }
+  class SpecialChar(val c: Char) extends Token { override def toString = s"SpecialChar('$c')"}
+  val HyphenTok = SpecialChar('-')
+  val DotTok = SpecialChar('.')
+  val SemiColonTok = SpecialChar(';')
+  val ColoTokn = SpecialChar(':')
+  val CommaTok = SpecialChar(',')
+  val Backslash = SpecialChar('\\')
+  val SlashTok = SpecialChar('/')
+  val LeftParenTok = SpecialChar('(')
+  val RightParenTok = SpecialChar(')')
+  val LeftBracketTok  = SpecialChar('[')
+  val RightBracketTok = SpecialChar(']')
+  val LeftBraceTok  = SpecialChar('{')
+  val RightBraceTok = SpecialChar('}')
+  val PercentageTok = SpecialChar('%')
+  val HatTok        = SpecialChar('^')
+  val UnderscoreTok = SpecialChar('_')
+  val EqSignTok     = SpecialChar('=')
+  val PlusTok       = SpecialChar('+')
+  val StarTok       = SpecialChar('*')
+  val AndTok        = SpecialChar('&')
+  val AtTok         = SpecialChar('@')
+  val DollarTok     = SpecialChar('$')
+  val QuestionTok   = SpecialChar('?')
   // TODO Missing #!"'<>~`
   
   
-  sealed trait StringVariable extends Program { def index: Int }
-  case class InputString(index: Int) extends StringVariable
   
+  type StringVariable = IntegerExpr
+  //extends Program { def index: IntegerExpr }
+  object InputString { 
+    def apply(index: Int) = IntLiteral(index)
+  } 
   /**
    * A trace expression refers to the Concatenate(f1; ; fn) constructor,
       which denotes the string obtained by concatenating the
@@ -145,10 +207,13 @@ object Programs {
   def SubStr2(vi: StringVariable, r: RegExp, c: IntegerExpr): SubStr = {
     SubStr(vi, Pos(Epsilon, r, c), Pos(r, Epsilon, c))
   }
-  
-  
   case class ConstStr(s: String) extends AtomicExpr
   case class Loop(w: Identifier, c: TraceExpr) extends AtomicExpr
+  // Offset is an integer which helps to compute the initial number if a evaluates to nothing
+  // Number("0001", 3, Linear(6, "w", 5)) == "007"
+  // Number("0001", 3, IntLiteral(6)) = "006"
+  
+  case class Number(a: AtomicExpr, length: IntegerExpr, offsetstep: (Int, Int)) extends AtomicExpr
   
   sealed trait Position extends Program
   /**
@@ -175,13 +240,15 @@ object Programs {
   
   case class Identifier(value: String) extends Program { self =>
     def *(k1: Int) = new { def +(k2: Int) = Linear(k1, self, k2) }
+    def +(k2: Int) = Linear(1, self, k2)
   }
-  
+  import scala.language._
+
   implicit def CharClassToRegExp(c: CharClass): RegExp = TokenSeq(RepeatedToken(c))
   implicit def CharClassToToken(c: CharClass): Token = RepeatedToken(c)
   implicit def SpecialCharToRegExp(s: SpecialChar): RegExp = TokenSeq(s)
   implicit def TokenToRegExp(s: Token): RegExp = TokenSeq(s)
-  implicit def IntToIntegerExpr(i: Int): IntegerExpr = IntLiteral(i)
+  implicit def IntToIntegerExpr(i: Int): IntLiteral = IntLiteral(i)
   implicit def IdentifiertoIntegerExpr(i: Identifier): IntegerExpr = Linear(1, i, 0)
   implicit def MatchToBool(i: Predicate): Bool = Bool(Seq(Conjunct(Seq(i))))
 }

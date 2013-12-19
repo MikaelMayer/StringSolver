@@ -10,13 +10,31 @@ object ScalaRegExp extends ComputePositionsInString {
    */
   implicit class AugmentedRegExp(dfa: Regex) {
     def recordFinalStates(s: String): List[Int] = {
-      dfa.findAllMatchIn(s).map(_.end(0)).toList.map(_ - 1)
+      val res = dfa.findAllMatchIn(s).map(_.end(0)).toList.map(_ - 1)
+      res
     }
+    def recordStartingStates(s: String): List[Int] = {
+      val res = dfa.findAllMatchIn(s).map(_.start(0)).toList
+      res
+    }
+  }
+  
+  def computePositionsStartingWith(r: RegExp, s: String): List[Int] = {
+    val dfa = convertRegExp(r)
+    dfa.recordStartingStates(s)
   }
   
   def computePositionsEndingWith(r: RegExp, s: String): List[Int] = {
     val dfa = convertRegExp(r)
     dfa.recordFinalStates(s)
+  }
+  def computePositionsOfToken(r: Token, s: String): List[(Int, Int)] = {
+    val dfa = convertToken(r).r
+    dfa.findAllMatchIn(s).map{ m => (m.start(0), m.end(0) - 1)}.toList
+  }
+  def computePositionsOfRegExp(r: RegExp, s: String): List[(Int, Int)] = {
+    val dfa = convertRegExp(r)
+    dfa.findAllMatchIn(s).map{ m => (m.start(0), m.end(0) - 1)}.toList
   }
   
   def convertRegExp(r: RegExp): Regex = {
@@ -41,6 +59,8 @@ object ScalaRegExp extends ComputePositionsInString {
       case PlusTok => """\+"""
       case StarTok => """\*"""
       case QuestionTok => """\?"""
+      case LeftBraceTok => """\{"""
+      case RightBraceTok => """\}"""
       case s: SpecialChar =>
         s.c.toString
       case RepeatedToken(c) =>
@@ -61,7 +81,7 @@ object ScalaRegExp extends ComputePositionsInString {
           case "." =>
             "[^.]+"
           case _ =>
-            s"""(?<=[^$cl]|^)[^$cl]+(?=[^$cl]|$$)"""
+            s"""(?<=[$cl]|^)[^$cl]+(?=[$cl]|$$)"""
         }
       case EndTok => "\\Z"
       case StartTok => "\\A"
