@@ -151,13 +151,18 @@ object ProgramsSet {
    * Returns the weight of a program.
    */
   def weight(p: Program): Int = p match {
+    case CPos(0) => 1
+    case CPos(-1) => 1
     case CPos(k) => 10
-    case Pos(r1, r2, c) => 1-weight(c)
+    case Pos(r1, r2, c) => weight(r1)+weight(r2)-weight(c)
     case Concatenate(l) => l.size
     case Loop(w, l) => weight(l) - 1
-    case Number(s, l, os) => weight(s) - 1
-    case ConstStr(s) => s.size*2
-    case SubStr(vi, p, pos) => 1
+    case Number(s, l, (o, step)) =>
+      weight(s) - 1 + (step-1) // if s is smaller, the better.
+    case ConstStr(s) => s.size*100
+    case SubStr(vi, Pos(r1, r2, i), Pos(p1, p2, j)) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 => weight(r2)
+    case SubStr(vi, p, pos) => weight(p) + weight(pos)
+    case TokenSeq(t) => t.length
     case _ => 1
   }
   
@@ -314,7 +319,7 @@ object ProgramsSet {
           val ξ12final = ξ12.filterNot(e => W12.getOrElse(e, Set.empty).isEmpty)
           val ñ = ñ1 x ñ2
           if(ξ12final.size != 0) {
-            val res = SDag[(Node1, Node2)](ñ, (n1s, n2s), (n1t, n2t), ξ12, W12).reduce
+            val res = SDag[(Node1, Node2)](ñ, (n1s, n2s), (n1t, n2t), ξ12final, W12).reduce
             if(sizeDag(res)(res.nt) == 0) SEmpty else res
           } else SEmpty
           // TODO : Optimize the structure of this DAG (remove unused nodes, unreachable nodes, edges with empty sets, etc.)

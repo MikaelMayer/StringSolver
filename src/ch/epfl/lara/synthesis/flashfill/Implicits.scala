@@ -14,7 +14,7 @@ object Implicits {
     def substringOf(source: String): Seq[Int] = { // TODO : Make it better.
       (0 to (source.length - s.length)).filter{ case pos => source.substring(pos, pos + s.length) == s }
     }
-    def isNumber: Boolean = s.length > 1 && (s forall (_.isDigit))
+    def isNumber: Boolean = s.length >= 1 && (s forall (_.isDigit))
     /** Returns a sequence of substrings which are numbers, with a certain number of digit and offset
      *  Returns the start and ending positions in string, and the increment from the given string.
      *  Returns only positions where the source is a token
@@ -36,6 +36,13 @@ object Implicits {
           Some(t - s.toInt)
         } else None
       } else None
+    }
+    
+    /**
+     * Returns the string where all numbers appearing in it appear together separated by spaces
+     */
+    def numbers: String = {
+      (s map {(c: Char) => if(c.isDigit) c else ' '}).mkString("")
     }
   }
 }

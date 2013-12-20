@@ -150,13 +150,13 @@ object Evaluator {
     val s = IntValue(step)
     (i, o, s) match { case (IntValue(ii), IntValue(oo), IntValue(ss)) =>
             evalProg(a) match {
-              case StringValue(sv) =>
+              case StringValue(sv) if sv != "" =>
                 if(sv.isNumber) {
                   val p = sv.toInt
                   val ps = (p+ss).toString
                   StringValue("0"*(ii - ps.size)+ps)
                 } else ⊥
-              case ⊥ => 
+              case ⊥ | StringValue("") => 
                 val ps = oo.toString
                 StringValue("0"*(ii - ps.size)+ps)
               case _ => ⊥

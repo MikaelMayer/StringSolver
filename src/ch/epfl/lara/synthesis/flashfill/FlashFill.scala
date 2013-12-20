@@ -1,39 +1,135 @@
 package ch.epfl.lara.synthesis.flashfill
 
 import scala.collection.mutable.{HashMap => MMap}
+import java.util.regex.Pattern
 
+/**FlashFill
+ * 
+ */
 object FlashFill {
   import Programs._  
   import ProgramsSet._
   import Evaluator._
   import Implicits._
   import scala.language._
+  final val debugActive = true
+  def debug(s: String) = if(debugActive) println(s)
+  
+  def apply(): FlashFillSolver = new FlashFillSolver()
+  
+  def apply(input: List[List[String]], output: List[String]): Option[Program] = {
+    val solver = apply()
+    (input zip output) foreach { case (i, o) =>
+      solver.add(i, o)
+    }
+    solver.solve()
+  }
+  
+  /**
+   * Instance solving the problem iteratively
+   */
+  class FlashFillSolver {
+    private var ff = new FlashFill()
+    
+    var inputList = List[List[String]]()
+    var outputList = List[String]()
+    var currentPrograms: STraceExpr = null
+    var previousOutput = ""
+      
+    /**
+     * Set dots option
+     */
+    def setUseDots(b: Boolean) = ff.useDots = b
+    
+    /**
+     * Set numbering option
+     */
+    def setUseNumbers(b: Boolean) = ff.numbering = b
+    
+    /**
+     * Set if use loops
+     */
+    def setLoopLevel(i: Int) = ff.DEFAULT_REC_LOOP_LEVEL = i
+      
+    /**Adds a new input/output example*/
+    def add(input: Seq[String], output: String): STraceExpr = {
+      val ii = if(ff.numbering)  (input.toList ++ List(previousOutput.numbers)) else input.toList
+      
+      inputList = inputList ++ List(ii)
+      outputList = outputList ++ List(output)
+      
+      
+      val iv: Array[String] = ii.toArray
+      val newProgramSet = ff.generateStr(iv, output, ff.DEFAULT_REC_LOOP_LEVEL)
+    
+      previousOutput = output
+      if(currentPrograms == null) {
+        currentPrograms = newProgramSet
+      } else {
+        val intersection = intersect(currentPrograms, newProgramSet) 
+        currentPrograms = intersection
+      }
+      verifyCurrentState()
+      newProgramSet
+    }
+    /** Returns the best solution to the problem */
+    def solve(): Option[Program] = if(currentPrograms != null) try {
+      val res = currentPrograms.takeBest
+      verifyCurrentState()
+      Some(res)
+    } catch {
+      case _: Exception => None
+    } else None
+    
+    def verifyCurrentState() = {
+      if(size(currentPrograms) != 0) {
+        val prog = currentPrograms.takeBest
+          for((inputs, output) <- (inputList zip outputList)) {
+            evalProg(prog)(inputs.toArray: Array[String]) match {
+              case StringValue(res) =>
+                if(ff.useDots) {
+                  val reg = output.split("\\Q...\\E").map(Pattern.quote(_)).mkString(".*").r.anchored
+                  assert(reg.findFirstIn(res) != None)
+                } else {
+                  assert(res == output)
+                }
+              case ⊥ => assert(⊥ == output)
+              case _ =>
+            }
+          }
+        }
+    }
+  }
+}
+
+class FlashFill {
+  import Programs._  
+  import ProgramsSet._
+  import Evaluator._
+  import Implicits._
+  import scala.language._
+  import FlashFill._
   
   // Parameter: Are we using dots to describe not finished loops.
   var useDots = true
-  var dots = "..."
-
-  final val debugActive = true
+  // Adds the last output as the last input for the next program.
+  var numbering = true
   
-  type σ = IndexedSeq[String]
-  type S = String
-  type Output_string = String
-  type Input_state = σ
-  type Regular_Expression = RegExp
-  type W[Node] = Map[(Node, Node), Set[SAtomicExpr]]
+  final val dots = "..."
   
-  final val DEFAULT_REC_LOOP_LEVEL = 1
   
-  def debug(s: String) = if(debugActive) println(s)
+  private type σ = IndexedSeq[String]
+  private type S = String
+  private type Output_string = String
+  private type Input_state = σ
+  private type Regular_Expression = RegExp
+  private type W[Node] = Map[(Node, Node), Set[SAtomicExpr]]
+  private type Start = Int
+  private type End = Int
+  private type Index = Int
   
-  /// Main function
-  // TODO : Call generateStringProgram
-  def apply(input: List[List[String]], output: List[String]): List[Program] = {
-    val programs = (input zip output) map { case (i, o) => 
-      val iv: Array[String] = i.toArray
-      generateStr(iv, o, DEFAULT_REC_LOOP_LEVEL) }
-    programs map (dag => (dag map ((t: Program) => t )).head)
-  }
+  var DEFAULT_REC_LOOP_LEVEL = 1
+ 
   
   /**synthesis algorithm*/
   def generateStringProgram(S: Set[(σ, S)]) = {
@@ -64,7 +160,7 @@ object FlashFill {
    */
   implicit val cacheGenerateStr = MMap[(Input_state, Output_string, Int), STraceExpr]()
   def generateStr = cached((σ: Input_state, s: Output_string, rec_loop_level: Int) => {
-    debug(s"generateStr on: $σ, $s and $rec_loop_level")
+    //debug(s"generateStr on: $σ, $s and $rec_loop_level")
     val ñ = (0 to s.length).toSet
     val ns = 0
     val nt = s.length
@@ -106,16 +202,20 @@ object FlashFill {
   var w_id = 1
   def generateLoop(σ: Input_state, s: Output_string, W: W[Int], rec_loop_level: Int): W[Int] = {
     if(rec_loop_level <= 0) return W
-    debug(s"Find loop for $σ => $s (knowing $W)")
+    debug(s"Find loop for $σ => $s")
     var Wp = W // Create a copy?
     val w = Identifier("w" + w_id); w_id += 1
     for(k1 <- 0 until s.length;
         k2 <- (k1+1) until s.length;
-        k3 <- (k2+1) until s.length) {
-      val e1 = generateStr(σ, s.substring(k1, k2), rec_loop_level - 1)
-      val e2 = generateStr(σ, s.substring(k2, k3), rec_loop_level - 1)
+        e1 <- Some(generateStr(σ, s.substring(k1, k2), rec_loop_level - 1));
+        k3 <- (k2+1) until s.length;
+        e2 <- Some(generateStr(σ, s.substring(k2, k3), rec_loop_level - 1))
+        ) {
+      //val e1 = generateStr(σ, s.substring(k1, k2), rec_loop_level - 1)
+      //val e2 = generateStr(σ, s.substring(k2, k3), rec_loop_level - 1)
+      //println(s"Unifying ${s.substring(k1, k2)} of size ${size(e1)} and ${s.substring(k2, k3)} of size ${size(e2)}...")
       val e = unify(e1, e2, w)  // If unify results only in constants
-      if(size(e) >= 1) {
+      if(size(e) != 0) {
         val bestLoop =  e.takeBest
         val prog = Loop(w, bestLoop)
         if(bestLoop.uses(w)) {
@@ -127,10 +227,10 @@ object FlashFill {
           resulting_strings.toList match {
             case List(res) =>
               val k4 = k1 + res.length
-              if(s.substring(k1, k4) == res) {
+              if(k4 <= s.length && s.substring(k1, k4) == res) {
                 Wp = Wp + (((k1, k4+1))->(Wp((k1, k4+1)) ++ Set(SLoop(w, e))))
               } else if(useDots) { // If we use dots '...' to match the remaining.
-                val positionNotMatch = (k1 until k4) find { k => s(k) != res(k-k1) }
+                val positionNotMatch = (k1 until k4) find { k => k<s.length && s(k) != res(k-k1) }
                 positionNotMatch match {
                   case Some(p) if s(p) == dots(0) =>
                     if(p + dots.length <= s.length && s.substring(p, p + dots.length) == dots) {
@@ -159,7 +259,16 @@ object FlashFill {
       for(k <- s substringOf σvi) {
         val Y1 = generatePosition(σvi, k)
         val Y2 = generatePosition(σvi, k + s.length)
-        result = result + SSubStr(InputString(vi), Y1, Y2)
+        
+        for(y1 <- Y1; y <- y1) {
+          assert(evalProg(y)(Array(σvi)) == IntValue(k))
+        }
+        for(y2 <- Y2; y <- y2) {
+          assert(evalProg(y)(Array(σvi)) == IntValue(k + s.length))
+        }
+
+        val newResult = SSubStr(InputString(vi), Y1, Y2)
+        result = result + newResult
       }
       // If σvi is empty or does not contain any number, it should generate all possible numbers expressions for various sizes.
       if(s.isNumber) {
@@ -182,9 +291,7 @@ object FlashFill {
   /**
    * Compute the set of all tokenseq between two given positions.
    */
-  type Start = Int
-  type End = Int
-  type Index = Int
+
   def computetokenSeq(s: String, listTokens: List[Token]): Map[(Start, End), Set[(TokenSeq, List[(Index, Index)])]] = {
     val finalstart = 0
     val finalend = s.length-1
@@ -302,16 +409,30 @@ object FlashFill {
     ScalaRegExp.computePositionsEndingWith(_for, in).length
   }
   
+  var cache_hit = 0
+  var cache_call = 0
+  
+  /**
+   * Initialize the statistics
+   */
+  def initStats() = { cache_hit = 0; cache_call = 0 }
+  
   /**
    * Generate the set of positions describing position k in string.
    */
   def cached[U, T](f: U => T)(implicit cache: MMap[U, T]): U => T = u => {
+    cache_call += 1
+    if(cache contains u) cache_hit += 1
     cache.getOrElseUpdate(u, f(u))
   }
   def cached[U, V, T](f: (U, V) => T)(implicit cache: MMap[(U, V), T]): (U, V) => T = (u, v) => {
+    cache_call += 1
+    if(cache contains (u, v)) cache_hit += 1
     cache.getOrElseUpdate((u, v), f(u, v))
   }
   def cached[U, V, W, T](f: (U, V, W) => T)(implicit cache: MMap[(U, V, W), T]): (U, V, W) => T = (u, v, w) => {
+    cache_call += 1
+    if(cache contains (u, v, w)) cache_hit += 1
     cache.getOrElseUpdate((u, v, w), f(u, v, w))
   }
   
@@ -332,9 +453,10 @@ object FlashFill {
           val cp = intersections.length
           //val cp = total_number_of_matches(_for=r12, in=s)
           assert(cp >= 1)
-          val r1p = generateRegex(r1, s)
+          val r1p = generateRegex(r1, s) // Expand all tokens.
           val r2p = generateRegex(r2, s)
-          result += SPos(r1p, r2p, Set(c + 1, -(cp-c)))
+          val res = SPos(r1p, r2p, Set(c + 1, -(cp-c)))
+          result += res
         }
     }
     result
@@ -364,4 +486,26 @@ object FlashFill {
   def Reps(s: String): List[Token] = IPart_s(s, Programs.listTokens)
     .values.toList
     .map(t => t.head)
+  
+    
+  def outputStats() = {
+    println("Number of elements in the cache 1:" + cacheIParts.size)
+    println("Number of elements in the cache 2:" + cacheGenerateStr.size)
+    println("Number of elements in the cache 3:" + cacheGenerateSubstring.size)
+    println("Number of elements in the cache 4:" + cache.size)
+    println("Number of cache reuse:" + cache_hit + "/" + cache_call)
+  }
+  
+  /**
+   * Empty the caches.
+   */
+  def emptyCaches() = {
+    cacheIParts.clear()
+    cacheGenerateStr.clear()
+    cacheGenerateSubstring.clear()
+    cache.clear()
+  }
+  
+  
+  
 }

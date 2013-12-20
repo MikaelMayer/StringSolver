@@ -30,7 +30,7 @@ class PrinterTest extends FlatSpec with ShouldMatchers  {
   "Printer" should "output correct program signification" in {
     
     val p = Loop(Identifier("w"), Concatenate(SubStr2(v1, UpperTok, w+1)))
-    Printer(p) should equal ("concatenates every occurence of uppercase letters in first input")
+    Printer(p) should equal ("concatenates every occurence of uppercase word in first input")
   }
 }
 
@@ -264,13 +264,46 @@ class ProgramSetTest extends FlatSpec with ShouldMatchers {
     
   "DAG" should "compute neighbors correctly" in {
     
-    c.neighbors(0, 0) should equal (Set((-2, ConstStr("a"), 1),(-4, ConstStr("ab"), 2),(-6, ConstStr("abc"), 3)))
+    c.neighbors(0, 0).map(_._3) should equal (Set(1, 2, 3))
   }
   
   it should "compute best paths" in {
     c.takeBest should equal (Concatenate(ConstStr("ab"), SubStr(0, CPos(1), CPos(2))))
   }
 }
+/*
+class BenchMarkTest extends FlatSpec with ShouldMatchers {
+  import ch.epfl.lara.synthesis.flashfill._
+  import Programs._
+  import ProgramsSet._
+  import ScalaRegExp._
+  import FlashFill._
+  import FlashFill._
+  import Implicits._
+  import Evaluator._
+  
+  "Problem: Renaming files" should "be solved" in {
+    val c = FlashFill()
+    c.setUseNumbers(true)
+    c.setUseDots(true)
+    c.add(List("AB1234.gif"), "AB-0111-1.gif")
+    val prog0 = c.solve()
+    println(Printer(prog0.get))
+    evalProg(prog0.get)(Array("AB1234.gif", "")).asString should equal ("AB-0111-1.gif")
+    
+    val solutions = c.add(List("B3245.gif"), "B-0111-2.gif")
+    println(Printer(solutions.takeBest))
+    //c.add(List("AB2541.gif"), "AB-0111-3.gif")
+    //c.add(List("AB11422.jpg"), "AB-0111-4.jpg")
+    val prog = c.solve()
+    prog should not be 'empty
+    println(Printer(prog.get))
+    evalProg(prog.get)(Array("AB1234.gif", "")).asString should equal ("AB-0111-1.gif")
+    evalProg(prog.get)(Array("B3245.gif", "   0111 1   ")).asString should equal ("B-0111-2.gif")
+    
+    evalProg(prog.get)(Array("B5678.gif", "   0111 4   ")) should equal (StringValue("B-0111-5.gif"))
+  }
+}*/
 
 class FlashFillTest extends FlatSpec with ShouldMatchers {
   import ch.epfl.lara.synthesis.flashfill._
@@ -282,7 +315,18 @@ class FlashFillTest extends FlatSpec with ShouldMatchers {
   import Implicits._
   import Evaluator._
   
-  "flashfill" should "correcly compute partitions of tokens" in {
+  val f = new FlashFill()
+  import f._
+  initStats()
+  
+  "flashfill" should "correcly compute positions" in {
+    val c = "AB12a45? #AB 18A. abc"
+    for(i <- 0 until c.length; spos <- f.generatePosition(c, i); pos <- spos) {
+      evalProg(pos)(Array(c)).asInt should equal(i)
+    }
+  }
+  
+  it should "correcly compute partitions of tokens" in {
     Reps("a     b") should equal(List(NonLowerTok, LowerTok, NonUpperTok, QuestionTok))
   }
   
@@ -305,12 +349,11 @@ class FlashFillTest extends FlatSpec with ShouldMatchers {
      val res = ("0011" subnumberOf "1 2 10 15").toList
      res should contain ((0, 0, 10))
      res should contain ((2, 2, 9))
-     res should contain ((4, 4, 10))
-     res should contain ((5, 5, 11))
      res should contain ((4, 5, 1))
-     res should contain ((7, 7, 10))
-     res should contain ((8, 8, 6))
-     res should not contain ((7, 8, -4))
+  }
+  
+  it should "correctly find numbers" in {
+     "I god 0011,2 on my 31".numbers should equal("      0011 2       31")
   }
   
   it should "compute atomic subexpressions" in {
@@ -343,14 +386,32 @@ class FlashFillTest extends FlatSpec with ShouldMatchers {
   
   it should "compute loops easily" in {
     val inputs = List("a", "b", "c", "d")
-    val prog = FlashFill(List(inputs), List("ab..."))
-     
-    evalProg(prog.head)(Array("a", "b","c", "d")) should equal (StringValue("abcd"))
+    val s = FlashFill()
+    s.add(inputs, "ab...")
+    val prog = s.solve()
+    prog should not be 'empty
+    evalProg(prog.get)(Array("a", "b","c", "d")) should equal (StringValue("abcd"))
   }
   
+  it should "compute loops medium" in {
+    val inputs = List("a", "b", "c", "d")
+    val s = FlashFill()
+    s.add(inputs, "a,a,b,b,...")
+    val prog = s.solve()
+    prog should not be 'empty
+    evalProg(prog.get)(Array("a", "b","c", "d")) should equal (StringValue("a,a,b,b,c,c,d,d,"))
+  }
+  /*
+  it should "compute loops hard" in {
+    val inputs = List("a", "b", "c", "d")
+    val prog = FlashFill(List(inputs), List("cp a a1;rm a;cp b b1;rm b;..."))
+    evalProg(prog.head)(Array("a", "b", "c", "d")) should equal (StringValue("cp a a1;rm a;cp b b1;rm b;cp c c1;rm c;cp d d1;rm d;"))
+  }
+  */
   it should "compute dag intersections with correct numbering" in {
-     val res1 = generateStr(Array(""), "001", 0)
-     val res2 = generateStr(Array("001"), "002", 0)
+     val f = new FlashFill()
+     val res1 = f.generateStr(Array(""), "001", 0)
+     val res2 = f.generateStr(Array("001"), "002", 0)
      val res3 = intersect(res1, res2)
      val program = res3.takeBest
      println(Printer(program))
@@ -358,20 +419,23 @@ class FlashFillTest extends FlatSpec with ShouldMatchers {
   }
   
   it should "compute dag intersections with correct numbering with constants" in {
-     val res1 = generateStr(Array(""), "001,100", 0)
-     val res2 = generateStr(Array("001,100"), "002,102", 0)
+     val f = new FlashFill()
+     val res1 = f.generateStr(Array(""), "001,100", 0)
+     val res2 = f.generateStr(Array("001,100"), "002,102", 0)
      val res3 = intersect(res1, res2)
      val program = res3.takeBest
      println(Printer(program))
      evalProg(program)(Array("002,102")) should equal (StringValue("003,104"))
   }
   
-  it should "compute dag intersections" in {
-     val res1 = generateStr(Array("Dr. Best is my favourite", ""), "Who is Best? #01", 0)
-     val res2 = generateStr(Array("Amazonia is not my favourite", "Who is Best? #01"), "Who is Amazonia? #02", 0)
-     val res3 = intersect(res1, res2)
-     val program = res3.takeBest
-     
-     evalProg(program)(Array("Mister Bean is great", "Who is Amazonia? #2")) should equal (StringValue("Who is Mister? #3"))
+  it should "Find words after the first dot" in {
+     val c = FlashFill()
+    c.setUseNumbers(true)
+    c.setUseDots(true)
+    c.setLoopLevel(0)
+    c.add(Array("Dr. Best is"), "Best")
+    c.add(Array("Th t. Amazonia is nt"), "Amazonia")
+     val program = c.solve()
+     evalProg(program.get)(Array("Dr. Best is")) should equal (StringValue("Best"))
   }
 }

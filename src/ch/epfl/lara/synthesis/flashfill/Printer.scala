@@ -89,17 +89,44 @@ object Printer {
           case (c, d) =>
             t"the substring between $c and $d in $sv1"
         }
+      case Pos(r1, r2, IntLiteral(i)) =>
+        t"the ${numeral(i)} $r2 after $r1"
+      case NonUpperTok =>
+        "token not containing A-Z"
       case UpperTok =>
-        "uppercase letters"
+        "uppercase word"
+      case LowerTok =>
+        "lowercase word"
+      case NonLowerTok =>
+        "token not containing a-z"
+      case AlphaTok =>
+        "word"
+      case NonAlphaTok =>
+        "token not containing a-zA-Z"
+      case AlphaNumTok =>
+        "identifier"
+      case NonAlphaNumTok =>
+        "token not containing 0-9a-zA-Z"
+      case StartTok =>
+        "the beginning"
+      case NumTok =>
+        "number"
+      case NonNumTok =>
+        "non-number"
+      case ConstStr(s) => s"the constant string '$s'"
+      case SpecialChar(a) => s"'$a'"
+      case t: CharClass if t.f.head._1 == t.f.head._2 => "'"+t.f.head._1+"'"
       case RepeatedToken(l) =>
         t"${l}s"
+      case RepeatedNotToken(l) =>
+        t"not ${l}s"
       case TokenSeq(l) =>
         l match {
           case Nil => "nothing"
           case a::Nil => t"$a"
           case _ => val ls = (l map apply)
             def rec(l: Seq[String], res: String): String = l match { case a::b::Nil => res + a + " and " + b case a::l => rec(l, res + a + ", ")}
-            rec(ls, "")
+            "(" + rec(ls, "") + ")"
         }
       case CPos(0) => "the beginning"
       case CPos(-1) => "the end"
@@ -115,7 +142,8 @@ object Printer {
       case Number(s, size, (offset, step)) =>
         val by = if(step == 1) "" else s" by $step"
         val from = if(false && offset == 1) "" else s" starting at $offset"
-        t"A $size-digit number incrementing$by$from continuing $s"
+        t"a $size-digit number incrementing$by$from continuing $s"
+
       case _ =>
         s"UNKNOWN : $p"
     }
