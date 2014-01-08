@@ -1,0 +1,5 @@
+/target/*
+/*.class
+/project/project/target/*
+/project/target/*
+.settings
