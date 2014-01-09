@@ -21,19 +21,19 @@ object FlashFill {
   final val debugActive = false
   
   private type PrevNumberString = String
-  private type Output_state = String //case class Output_state(value: String, position: Int)
-  private type S = String
+  type Output_state = String //case class Output_state(value: String, position: Int)
+  type S = String
   case class Input_state(inputs: IndexedSeq[String], prevNumberOutputs: IndexedSeq[String])
-  private type σ = Input_state
-  private type Regular_Expression = RegExp
-  private type W[Node] = Map[(Node, Node), Set[SAtomicExpr]]
-  private type Start = Int
-  private type End = Int
-  private type Index = Int
+  type σ = Input_state
+  type Regular_Expression = RegExp
+  type W[Node] = Map[(Node, Node), Set[SAtomicExpr]]
+  type Start = Int
+  type End = Int
+  type Index = Int
   
   //def debug(s: String) = if(debugActive) println(s)
   
-  def apply(): FlashFillSolver = new FlashFillSolver()
+  def apply(): FlashFill = new FlashFill()
   
   def apply(input: List[List[String]], output: List[String]): Option[Program] = {
     val solver = apply()
@@ -43,218 +43,225 @@ object FlashFill {
     solver.solve()
   }
   
-  /**
-   * Instance solving the problem iteratively
-   */
-  class FlashFillSolver {
-    private var ff = new FlashFill()
-    private var currentPrograms: IndexedSeq[STraceExpr] = null
-    private var singlePrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
-    private var previousOutputs: IndexedSeq[String] = Array[String]()
-
-    private var inputList = List[List[String]]()
-    private var outputList = List[List[String]]()
-      
-    /**
-     * Use dots option
-     */
-    def setUseDots(b: Boolean) = ff.useDots = b
-    
-    /**
-     * Use numbering option
-     */
-    def setUseNumbers(b: Boolean) = ff.numbering = b
-    
-    /**
-     * Set if use loops
-     */
-    def setLoopLevel(i: Int) = ff.DEFAULT_REC_LOOP_LEVEL = i
-    
-    def setTimeout(seconds: Int) = ff.TIMEOUT_SECONDS = seconds
-    
-    def setMaxSeparatorLength(length: Int) = ff.MAX_SEPARATOR_LENGTH = length
-    
-    def setOnlyInterestingPositions(b: Boolean) = ff.onlyInterestingPositions = b
-    
-    def setVerbose(b: Boolean) = ff.verbose = b
-    /**
-     * @returns an indexed seq with numbers derived from the previous output.
-     */
-    private def previousNumbers(str: IndexedSeq[String] = previousOutputs): IndexedSeq[String] = {
-      if(ff.numbering) {
-        str map { _.numbers }
-      } else {
-        IndexedSeq()
-      }
-    }
-    
-    def getStatistics(): String = ff.statistics()
-    
-    def setAdvancedStats(b: Boolean) = ff.advanced_stats = b
-    
-    /**Adds a new inputs/outputs example.
-     **/
-    def add(input: Seq[String], output: Seq[String]): Seq[STraceExpr] = {
-      if(!(output.exists(out => out.exists(_.isDigit)))) { // If not digit for output, we don't use numbers.
-        setUseNumbers(false)
-      }
-      val prevNumbers = previousNumbers()
-      
-      inputList = inputList ++ List(input.toList)
-      outputList = outputList ++ List(output.toList)
-      
-      val iv = input.toIndexedSeq
-      val ov = output.toIndexedSeq
-      
-      val fetchPrograms = future {
-        for(out <- ov) yield
-        ff.generateStr(Input_state(iv, prevNumbers), out, ff.DEFAULT_REC_LOOP_LEVEL)
-      }
-      var tmp = ff.DEFAULT_REC_LOOP_LEVEL
-      val newProgramSets : IndexedSeq[STraceExpr] = try {
-        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS/2).seconds)
-      } catch {
-        case e: TimeoutException  => 
-          ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time
-          ff.timeout = true
-          Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS*1/3).seconds)
-        case e: Throwable => throw e
-      }
-      ff.DEFAULT_REC_LOOP_LEVEL = tmp
-      ff.timeout = false
-      if(currentPrograms == null) {
-        currentPrograms = newProgramSets
-      } else {
-        if(ff.verbose) println("Computing intersection with previous programs...")
-        val intersectionsFuture = future {
-          for(i <-0 until currentPrograms.length) yield {
-            //println(s"Intersecting programs $i")
-            intersect(currentPrograms(i), newProgramSets(i))
-          }
-          //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
-        }
-        val intersections = try {
-          Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS/2).seconds)
-        } catch {
-          case e: TimeoutException  => 
-            if(ff.verbose) println("Intersection took too much time!")
-            throw e
-        }
-        currentPrograms = intersections
-      }
-      singlePrograms += newProgramSets
-      previousOutputs = output.toIndexedSeq
-      
-      if(debugActive) verifyCurrentState()
-      newProgramSets
-    }
-   
-    /**Adds a new input/output example.
-     * If the best program already matches the input/output example,
-     * it is not recomputed.
-     **/
-    def add(input: Seq[String], output: String): STraceExpr = {
-      val res = add(input, IndexedSeq(output))
-      res(0)
-    }
-    
-    /**
-     * Adds a new input/output example
-     */
-    def add(inputoutput: String): STraceExpr = {
-      val arrow = inputoutput.indexOf("->")
-      if(arrow != -1) {
-        val input = inputoutput.substring(0, arrow).trim()
-        val output = inputoutput.substring(arrow+2).trim()
-        add(List(input), output)
-      }else throw new Exception("No separator such as | or -> found")
-    }
-    /**
-     * Adds a new input/output example with |
-     * @param inputoutput the input/output, can be multiline, separated by |
-     * @param ninput number of inputs per line.
-     */
-    def add(inputoutput: String, ninputs: Int = 1): Seq[STraceExpr] = {
-      if(inputoutput contains '\n') {
-        inputoutput.split('\n').map{add(_, ninputs)}.last
-      } else {
-        val pipe = inputoutput.indexOf("|")
-        if(pipe != -1) {
-          val elems = inputoutput.split("\\|").map(_.trim()).toList
-          add(elems.take(ninputs), elems.drop(ninputs))
-        } else throw new Exception("No separator such as | or -> found")
-      }
-    }
-    
-    /**
-     * Solved a piped example. Returns a piped example.
-     * AB | CD | XY  => EF | GH
-     */
-    def solve(input: String): String = {
-      val elems = input.split("\\|").map(_.trim()).toList
-      solve(elems).mkString(" | ")
-    }
-    
-    /** Returns the best solution to the problem for the whole output */
-    def solve(nth: Int = 0): Option[Program] = if(currentPrograms != null) try {
-      val res = Some(currentPrograms(nth).takeBest)
-      if(debugActive) verifyCurrentState()
-      res
-    } catch {
-      case _: Exception => None
-    } else None
-    
-    def takeBest[T <: Program](s: ProgramSet[T]): Program = s.takeBest
-
-    /**
-     * Solves for a new instance of input.
-     */
-    def solve(input: Seq[String]): Seq[String] = {
-        val res = currentPrograms map (progSet => 
-          try {
-            val prog = progSet.takeBest
-            val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
-            r.asString
-          } catch {
-            case e: Exception => ""
-          }
-        )
-        previousOutputs = res.toIndexedSeq
-        res
-    }
-    
-    /**
-     * Verifies the current state so that the resulting program
-     * works for everybody.
-     */
-    private def verifyCurrentState() = {
-      var previousOutputsTmp = IndexedSeq[String]()
-      for((inputs, outputs) <- (inputList zip outputList);
-          (output, progs) <- (outputs zip currentPrograms);
-          prog = progs.takeBest
-      ) {
-        val pn = previousNumbers(previousOutputsTmp)
-        previousOutputsTmp = outputs.toIndexedSeq
-        evalProg(prog)(Input_state(inputs.toIndexedSeq, pn)) match {
-          case StringValue(res) =>
-            if(ff.useDots) {
-              val reg = output.split("\\Q...\\E").map(Pattern.quote(_)).mkString(".*").r.anchored
-              assert(reg.findFirstIn(res) != None)
-            } else {
-              assert(res == output)
-            }
-          case BottomValue => 
-            assert(false)
-          case _ =>
-        }
-      }
-    }
-  }
   
   implicit def indexedSeqToInputState(arr: IndexedSeq[String]) = Input_state(arr, IndexedSeq[String]())
 }
 
+/**
+ * Instance solving the problem iteratively
+ */
 class FlashFill {
+  import Programs._  
+  import ProgramsSet._
+  import Evaluator._
+  import Implicits._
+  import scala.language._
+  import FlashFill._
+  private var ff = new FlashFillSolver()
+  private var currentPrograms: IndexedSeq[STraceExpr] = null
+  private var singlePrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
+  private var previousOutputs: IndexedSeq[String] = Array[String]()
+
+  private var inputList = List[List[String]]()
+  private var outputList = List[List[String]]()
+    
+  /**
+   * Use dots option
+   */
+  def setUseDots(b: Boolean) = ff.useDots = b
+  
+  /**
+   * Use numbering option
+   */
+  def setUseNumbers(b: Boolean) = ff.numbering = b
+  
+  /**
+   * Set if use loops
+   */
+  def setLoopLevel(i: Int) = ff.DEFAULT_REC_LOOP_LEVEL = i
+  
+  def setTimeout(seconds: Int) = ff.TIMEOUT_SECONDS = seconds
+  
+  def setMaxSeparatorLength(length: Int) = ff.MAX_SEPARATOR_LENGTH = length
+  
+  def setOnlyInterestingPositions(b: Boolean) = ff.onlyInterestingPositions = b
+  
+  def setVerbose(b: Boolean) = ff.verbose = b
+  /**
+   * @returns an indexed seq with numbers derived from the previous output.
+   */
+  private def previousNumbers(str: IndexedSeq[String] = previousOutputs): IndexedSeq[String] = {
+    if(ff.numbering) {
+      str map { _.numbers }
+    } else {
+      IndexedSeq()
+    }
+  }
+  
+  def getStatistics(): String = ff.statistics()
+  
+  def setAdvancedStats(b: Boolean) = ff.advanced_stats = b
+  
+  /**Adds a new inputs/outputs example.
+   **/
+  def add(input: Seq[String], output: Seq[String]): Seq[STraceExpr] = {
+    if(!(output.exists(out => out.exists(_.isDigit)))) { // If not digit for output, we don't use numbers.
+      setUseNumbers(false)
+    }
+    val prevNumbers = previousNumbers()
+    
+    inputList = inputList ++ List(input.toList)
+    outputList = outputList ++ List(output.toList)
+    
+    val iv = input.toIndexedSeq
+    val ov = output.toIndexedSeq
+    
+    val fetchPrograms = future {
+      for(out <- ov) yield
+      ff.generateStr(Input_state(iv, prevNumbers), out, ff.DEFAULT_REC_LOOP_LEVEL)
+    }
+    var tmp = ff.DEFAULT_REC_LOOP_LEVEL
+    val newProgramSets : IndexedSeq[STraceExpr] = try {
+      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS/2).seconds)
+    } catch {
+      case e: TimeoutException  => 
+        ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time
+        ff.timeout = true
+        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS*1/3).seconds)
+      case e: Throwable => throw e
+    }
+    ff.DEFAULT_REC_LOOP_LEVEL = tmp
+    ff.timeout = false
+    if(currentPrograms == null) {
+      currentPrograms = newProgramSets
+    } else {
+      if(ff.verbose) println("Computing intersection with previous programs...")
+      val intersectionsFuture = future {
+        for(i <-0 until currentPrograms.length) yield {
+          //println(s"Intersecting programs $i")
+          intersect(currentPrograms(i), newProgramSets(i))
+        }
+        //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
+      }
+      val intersections = try {
+        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS/2).seconds)
+      } catch {
+        case e: TimeoutException  => 
+          if(ff.verbose) println("Intersection took too much time!")
+          throw e
+      }
+      currentPrograms = intersections
+    }
+    singlePrograms += newProgramSets
+    previousOutputs = output.toIndexedSeq
+    
+    if(debugActive) verifyCurrentState()
+    newProgramSets
+  }
+ 
+  /**Adds a new input/output example.
+   * If the best program already matches the input/output example,
+   * it is not recomputed.
+   **/
+  def add(input: Seq[String], output: String): STraceExpr = {
+    val res = add(input, IndexedSeq(output))
+    res(0)
+  }
+  
+  /**
+   * Adds a new input/output example
+   */
+  def add(inputoutput: String): STraceExpr = {
+    val arrow = inputoutput.indexOf("->")
+    if(arrow != -1) {
+      val input = inputoutput.substring(0, arrow).trim()
+      val output = inputoutput.substring(arrow+2).trim()
+      add(List(input), output)
+    }else throw new Exception("No separator such as | or -> found")
+  }
+  /**
+   * Adds a new input/output example with |
+   * @param inputoutput the input/output, can be multiline, separated by |
+   * @param ninput number of inputs per line.
+   */
+  def add(inputoutput: String, ninputs: Int = 1): Seq[STraceExpr] = {
+    if(inputoutput contains '\n') {
+      inputoutput.split('\n').map{add(_, ninputs)}.last
+    } else {
+      val pipe = inputoutput.indexOf("|")
+      if(pipe != -1) {
+        val elems = inputoutput.split("\\|").map(_.trim()).toList
+        add(elems.take(ninputs), elems.drop(ninputs))
+      } else throw new Exception("No separator such as | or -> found")
+    }
+  }
+  
+  /**
+   * Solved a piped example. Returns a piped example.
+   * AB | CD | XY  => EF | GH
+   */
+  def solve(input: String): String = {
+    val elems = input.split("\\|").map(_.trim()).toList
+    solve(elems).mkString(" | ")
+  }
+  
+  /** Returns the best solution to the problem for the whole output */
+  def solve(nth: Int = 0): Option[Program] = if(currentPrograms != null) try {
+    val res = Some(currentPrograms(nth).takeBest)
+    if(debugActive) verifyCurrentState()
+    res
+  } catch {
+    case _: Exception => None
+  } else None
+  
+  def takeBest[T <: Program](s: ProgramSet[T]): Program = s.takeBest
+
+  /**
+   * Solves for a new instance of input.
+   */
+  def solve(input: Seq[String]): Seq[String] = {
+      val res = currentPrograms map (progSet => 
+        try {
+          val prog = progSet.takeBest
+          val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
+          r.asString
+        } catch {
+          case e: Exception => ""
+        }
+      )
+      previousOutputs = res.toIndexedSeq
+      res
+  }
+  
+  /**
+   * Verifies the current state so that the resulting program
+   * works for everybody.
+   */
+  private def verifyCurrentState() = {
+    var previousOutputsTmp = IndexedSeq[String]()
+    for((inputs, outputs) <- (inputList zip outputList);
+        (output, progs) <- (outputs zip currentPrograms);
+        prog = progs.takeBest
+    ) {
+      val pn = previousNumbers(previousOutputsTmp)
+      previousOutputsTmp = outputs.toIndexedSeq
+      evalProg(prog)(Input_state(inputs.toIndexedSeq, pn)) match {
+        case StringValue(res) =>
+          if(ff.useDots) {
+            val reg = output.split("\\Q...\\E").map(Pattern.quote(_)).mkString(".*").r.anchored
+            assert(reg.findFirstIn(res) != None)
+          } else {
+            assert(res == output)
+          }
+        case BottomValue => 
+          assert(false)
+        case _ =>
+      }
+    }
+  }
+}
+
+class FlashFillSolver {
   import Programs._  
   import ProgramsSet._
   import Evaluator._
@@ -273,7 +280,17 @@ class FlashFill {
   var DEFAULT_REC_LOOP_LEVEL = 1
   var MAX_SEPARATOR_LENGTH = 1
  
-  var timeout = false
+
+  @volatile private var mTimeout = false
+  def timeout = mTimeout
+  def timeout_=(v: Boolean): Unit = {
+    mTimeout = v
+    if(v) {
+      ifTimeOut.success(SEmpty)
+      ifTimeOut = promise[STraceExpr]
+    }
+  }
+  private var ifTimeOut = promise[STraceExpr]
   
   var onlyInterestingPositions = false
   
@@ -320,18 +337,19 @@ class FlashFill {
       W += (i,j) -> (Set(SConstStr(s.e(i, j-1))))
     }
     if(verbose) println("Looking for longest substrings...")
+    val longestSizeFirst = (ij : (Int, Int)) => ij._1 - ij._2
     var interestingEdges1 = (for(
       i <- 0 until s.length;
-      j <- (i+1) until s.length;
+      j <- (i+1) to s.length;
       σvi <- σ.inputs
       if σvi.indexOf(s.substring(i, j)) >= 0) yield (i, j)).toSet
     val interestingEdges2 = interestingEdges1.toList filterNot {
       case (i, j) => (interestingEdges1 contains ((i, j+1))) ||
-                     (interestingEdges1 contains ((i-1, j)))} sortBy { case (i, j) => i-j }
+                     (interestingEdges1 contains ((i-1, j)))} sortBy(longestSizeFirst)
      
     if(verbose) println(s"found ${interestingEdges2.length} longest substrings:\n"+(interestingEdges2 map { case (i, j) => s.e(i, j-1)}))
-    for((i, j) <- interestingEdges2.toIterable ++
-         ξ.filter{ case (i,j ) => !interestingEdges2.contains((i, j))}.toIterable if !timeout) {
+    val remaining_edges = ξ.filter{ case (i,j ) => !interestingEdges2.contains((i, j)) }.toList.sortBy(longestSizeFirst)
+    for((i, j) <- interestingEdges2.toIterable ++ remaining_edges if !timeout) {
       W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j-1))))
     }
     if(timeout && verbose) println("exited loop of generateStr because timed out")
@@ -339,7 +357,7 @@ class FlashFill {
       generateSubString(σ, s.e(i, j-1)) ++ Set(SConstStr(s.e(i, j-1)))
     }*/
     val previous = SDag(ñ, ns, nt, ξ, W): STraceExpr
-    val Wp =  generateLoop(σ, s, W, rec_loop_level)(previous)
+    val Wp =  generateLoop(σ, s, W, rec_loop_level)(previous, preferredStart=interestingEdges2.map(_1).toSet, preferredEnd = interestingEdges2.map(_2).toSet)
     SDag(ñ, ns, nt, ξ, Wp): STraceExpr
   })
   
@@ -354,6 +372,20 @@ class FlashFill {
       def ok(i: Int): Boolean = k1 <= i && i <= k2
       def ok2(ij: (Int, Int)): Boolean = ok(ij._1) && ok(ij._2)
       SDag(nn.filter(ok), k1, k2, x.filter(ok2), aa.filterKeys(ok2))
+    case e => orElse
+  }
+  /**
+   * Specializes a DAG by removing all edges except the one between k1 and k2
+   */
+  def extractDag(dag: STraceExpr, k1: Int, k2: Int, orElse: => STraceExpr): STraceExpr = dag match {
+    case SDag(ñ, ns: Int, nt, ξ, a) =>
+      val x = ξ.asInstanceOf[Set[(Int, Int)]]
+      val nn = ñ.asInstanceOf[Set[Int]]
+      val aa = a.asInstanceOf[W[Int]]
+      def ok1(i: Int): Boolean = k1 == i
+      def ok2(i: Int): Boolean = i == k2
+      def ok3(ij: (Int, Int)): Boolean = ok1(ij._1) && ok2(ij._2)
+      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa.filterKeys(ok3))
     case e => orElse
   }
   
@@ -385,10 +417,14 @@ class FlashFill {
       by controlling the recursion depth.
    */
   var w_id = 1
-  def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)(current: STraceExpr): W[Int] = {
+  def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)(current: STraceExpr, preferredStart: Set[Int], preferredEnd: Set[Int]): W[Int] = {
     if(rec_loop_level <= 0) return W
     if(verbose) println(s"Find loop for $σ => $s")
-    var Wp = W // Create a copy?
+    //var WpLite = W // Create a copy?
+    var Wp = W // Do not create a copy
+    val LITE = 0
+    val FULL = 1
+    
     val w = Identifier("w" + w_id); w_id += 1
     val positionToCheck: Int => Boolean = if(onlyInterestingPositions) {
       new (Int => Boolean) {
@@ -401,36 +437,62 @@ class FlashFill {
       }
     } else {i => true}
     
-    def subDag(k1: Int, k2: Int) = {
-      if(rec_loop_level == 1) {
-        specializeDag(current, k1, k2, generateStr(σ, s.substring(k1, k2), rec_loop_level - 1))
+    
+    def subDag(k1: Int, k2: Int, liteOrFull: Int): STraceExpr = {
+      if(liteOrFull == LITE) {
+        current match {
+          case sd: SDag[_] =>
+            extractDag(current, k1, k2, SEmpty)
+          case _ =>
+            SEmpty
+        }
       } else {
-        generateStr(σ, s.substring(k1, k2), rec_loop_level - 1)
+        if(rec_loop_level == 1) {
+          specializeDag(current, k1, k2, generateStr(σ, s.substring(k1, k2), rec_loop_level - 1))
+        } else {
+          generateStr(σ, s.substring(k1, k2), rec_loop_level - 1)
+        }
       }
+    }
+    val preferedStartFirst: Iterable[Int] => Iterable[Int] = { (i: Iterable[Int]) =>
+      i.filter(preferredStart) ++ i.filterNot(preferredStart)
+    }
+    val preferedEndFirst: Iterable[Int] => Iterable[Int] = { (i: Iterable[Int]) =>
+      i.filter(preferredEnd) ++ i.filterNot(preferredEnd)
     }
     
     // Priority if dots found in string.
     val endingRange: Iterable[Int] = if(useDots) { s.indexOf("...") match {
         case -1 => Range(2, s.length-1) // Nothing can be done.
-        case k3 => k3 :: (Range(2, s.length-1).toList.filterNot(_ == k3))
+        case k3 => k3 :: preferedEndFirst((Range(2, s.length-1).toList.filterNot(_ == k3))).toList
       }
     } else Range(2, s.length-1)
-    
-    for(k3 <- endingRange if positionToCheck(k3);
-        ksep <- k3-1 to 1 by -1 if positionToCheck(ksep);
-        e2 = subDag(ksep, k3);
-        k2 <- ksep to (ksep - MAX_SEPARATOR_LENGTH) by -1 if positionToCheck(k2);
-        k1 <- k2-1 to 0 by -1 if positionToCheck(k1);
-        e1 = subDag(k1, k2)) {
+
+    // Two loops versions, one with lite loops (no more than 1 expression in the loop)
+    // the other allows more expressions.
+    for(liteOrFull <- LITE to FULL;
+        k3 <- endingRange if positionToCheck(k3);
+        ksep <- preferedStartFirst(k3-1 to 1 by -1) if positionToCheck(ksep);
+        e2 = subDag(ksep, k3, liteOrFull);
+        k2 <- preferedEndFirst(ksep to (ksep - MAX_SEPARATOR_LENGTH) by -1) if positionToCheck(k2);
+        optionSeparator = if(ksep > k2) Some(ConstStr(s.substring(k2, ksep))) else None;
+        if(k2 == ksep || ProgramsSet.isCommonSeparator(optionSeparator.get.s));
+        k1 <- preferedStartFirst(k2-1 to 0 by -1) if positionToCheck(k1);
+        e1 = subDag(k1, k2, liteOrFull)) {
       if(timeout) return Wp
       if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
-      val (e, time) = timedScope(unify(e1, e2, w))  // If unify results only in constants
+      val (e, time) = timedScope(if(liteOrFull == LITE) {
+        unify(e1, e2, w)  // If unify results only in constants
+      } else {
+        // If full, can take much more time per unification.
+        val res = future{unify(e1, e2, w)}
+        Await.result(first(res, ifTimeOut.future), 10.days) 
+      })
       stats_unifications += 1
       stats_time_unifications += time
       if(sizePrograms(e) != 0) {
         val bestLoop =  e.takeBest
-        val OptionSeparator = if(ksep > k2) Some(ConstStr(s.substring(k2, ksep))) else None
-        val prog = Loop(w, bestLoop, OptionSeparator)
+        val prog = Loop(w, bestLoop, optionSeparator)
         if(bestLoop.uses(w)) {
           val resulting_strings = 
             Evaluator.evalProg(prog)(σ) match {
@@ -441,10 +503,10 @@ class FlashFill {
             case List(res) =>
               val k4 = k1 + res.length
               if(k4 <= s.length && s.substring(k1, k4) == res) {
-                Wp = Wp + (((k1, k4))->(Wp((k1, k4)) ++ Set(SLoop(w, e, OptionSeparator))))
+                Wp = Wp + (((k1, k4))->(Wp((k1, k4)) ++ Set(SLoop(w, e, optionSeparator))))
                 if(useDots) {
                   if(k4 < s.length && s.substring(k4, Math.min(s.length, k4+dots.length)) == dots) {
-                    Wp = Wp + (((k1, k4+dots.length))->(Wp((k1, k4+dots.length)) ++ Set(SLoop(w, e, OptionSeparator))))
+                    Wp = Wp + (((k1, k4+dots.length))->(Wp((k1, k4+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
                   }
                 }
               } else if(useDots) { // If we use dots '...' to match the remaining.
@@ -452,7 +514,7 @@ class FlashFill {
                 positionNotMatch match {
                   case Some(p) if s(p) == dots(0) =>
                     if(p + dots.length <= s.length && s.substring(p, p + dots.length) == dots) {
-                      Wp = Wp + (((k1, p+dots.length))->(Wp((k1, p+dots.length)) ++ Set(SLoop(w, e, OptionSeparator))))
+                      Wp = Wp + (((k1, p+dots.length))->(Wp((k1, p+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
                       if(verbose) println(s"Found dotted loop: $s (returns $res)")
                     }
                   case _ =>
@@ -473,9 +535,9 @@ class FlashFill {
   def generateSubString = cached((σ: Input_state, s: String) => {
     var result = Set.empty[SAtomicExpr]
     if(verbose) println(s"Going to extract $s from $σ")
-    for(vi <- 0 until σ.inputs.length) {
+    for(vi <- 0 until σ.inputs.length if !timeout) {
       val σvi =  σ.inputs(vi)
-      for((k, m) <- s substringWithCaseOf σvi) {
+      for((k, m) <- s substringWithCaseOf σvi if !timeout) {
         val Y1 = generatePosition(σvi, k)
         val Y2 = generatePosition(σvi, k + s.length)
         
@@ -493,13 +555,14 @@ class FlashFill {
       }
       // If σvi is empty or does not contain any number, it should generate all possible numbers expressions for various sizes.
       if(s.isNumber) {
-        for((start, end, steps) <- s subnumberOf σvi) { // Numbers that can be obtained from σvi by incrementing by steps for example.
+        for((start, end, steps) <- s subnumberIncNegativeOf σvi) { // Numbers that can be obtained from σvi by changing by steps for example.
           val Y1 = generatePosition(σvi, start)
           val Y2 = generatePosition(σvi, end+1)
-          val possibleLengths = if(s(0) != '0') {// It means that the generated length might be lower.
+          val possibleLengths = (if(s(0) != '0') {// It means that the generated length might be lower.
             (1 to s.length).toSet
-          } else Set(s.length)
-          result = result + SNumber(SSubStr(InputString(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), Set(s.length), SAnyInt(0), SIntSet(Set(steps)))
+          } else Set(s.length))
+          if(!possibleLengths.isEmpty)
+          result = result + SNumber(SSubStr(InputString(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths.map(IntLiteral.apply), SAnyInt(0), SIntSet(Set(steps)))
         }
       }
     }
@@ -512,10 +575,20 @@ class FlashFill {
       } else {
         for(vi <- 0 until σ.prevNumberOutputs.length) {
           val σvi =  σ.prevNumberOutputs(vi)
-          for((start, end, steps) <- s subnumberOf σvi) { // Numbers that can be obtained from σvi by incrementing by steps for example.
+          for((start, end, steps) <- s addedNumberFrom σvi) { // Numbers that can be obtained from σvi by incrementing by steps for example.
             val Y1 = generatePosition(σvi, start)
             val Y2 = generatePosition(σvi, end+1)
-            result = result + SNumber(SSubStr(PrevStringNumber(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), Set(s.length), SAnyInt(0), SIntSet(Set(steps)))
+            val sourceLength = end+1 - start
+            val sourceLengthPossibilities = if(σvi(start) == '0') {
+              Set(sourceLength)
+            } else {
+              (1 to sourceLength).toSet
+            }
+            val possibleLengths = sourceLengthPossibilities intersect (if(s(0) != '0') {// It means that the generated length might be lower.
+            (1 to s.length).toSet
+          } else Set(s.length))
+            if(!possibleLengths.isEmpty)
+            result = result + SNumber(SSubStr(PrevStringNumber(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths.map(IntLiteral.apply), SAnyInt(0), SIntSet(Set(steps)))
           }
         }
       }

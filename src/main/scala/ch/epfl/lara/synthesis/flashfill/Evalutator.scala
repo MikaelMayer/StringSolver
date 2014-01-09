@@ -83,6 +83,9 @@ object Evaluator {
    */
   def loopR(w: Identifier, e: TraceExpr, k: Int, separator: StringValue, first: Boolean = true)(implicit input: Input_state): Value = {
     val t = evalProg(replaceTraceExpr(e)(w, k))
+    if(k > 50) {
+      println("Bug in loopR?")
+    }
     t match {
       case BottomValue => StringValue("")
       case StringValue(s) => 
@@ -212,8 +215,13 @@ object Evaluator {
                   StringValue("0"*(ii - ps.size)+ps)
                 } else BottomValue
               case BottomValue | StringValue("") => 
-                val ps = oo.toString
-                StringValue("0"*(ii - ps.size)+ps)
+                a match {
+                  case SubStr(InputString(v), _, _, _) => BottomValue
+                  case SubStr(PrevStringNumber(_), _, _, _) => 
+                    val ps = oo.toString
+                    StringValue("0"*(ii - ps.size)+ps)
+                }
+                
               case _ => BottomValue
       }
     case _ =>  BottomValue

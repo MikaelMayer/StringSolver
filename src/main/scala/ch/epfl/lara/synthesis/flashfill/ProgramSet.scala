@@ -4,6 +4,7 @@ import scala.collection.GenTraversableOnce
 import scala.collection.mutable.PriorityQueue
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.Queue
+import scala.collection.mutable.ListBuffer
 
 object ProgramsSet {
   import Programs._
@@ -242,6 +243,11 @@ object ProgramsSet {
     def takeBest = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head, methods.takeBest)//.withAlternative(this.toIterable)
   }
   
+  def isCommonSeparator(s: String) = s match {
+    case "," | " " | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" => true
+    case _ => false
+  }
+  
   /**
    * Returns the weight of a program.
    * 
@@ -263,13 +269,19 @@ object ProgramsSet {
       } else {
         2*weight(r1)+3*weight(r2)+weight(c)
       }
-    case Concatenate(l) => l.size
+    case Concatenate(l) => l.map(weight).sum
     
-    case Loop(w, l, separator) => 10 + weight(l) - 1 + 2*separator.map(_.s.length).getOrElse(0)
+    case Loop(w, l, separator) => 
+      val separatorweight = separator match {
+        case None => 0
+        case Some(ConstStr(s)) if isCommonSeparator(s) => 2
+        case Some(_) => 100 // Non-standard separators are penalized.
+      }
+      10 + weight(l) - 1 + separatorweight
     case Number(s@ SubStr(InputString(_), p1, p2, m), l, (o, step)) =>
-      10 + weight(s) - 2
+      3 + weight(s) - 3 + (if(step < 0) ((-step).toString.length * 7 + 5) else step.toString.length * 7)
     case Number(s@ SubStr(PrevStringNumber(_), p1, p2, m), l, (o, step)) =>
-      10 + weight(s) - 1 + (step - 1) + (o - 1)
+      10 + weight(s) - 1 + (Math.abs(step) - 1) + (o - 1)
     case Number(s, l, (o, step)) =>
       10 + weight(s) - 1 + (step-1) // if s is smaller, the better.
     case ConstStr(s) => 10 + s.size*10
@@ -277,7 +289,6 @@ object ProgramsSet {
       10 + weight(r2) + method.id
     case SubStr(vi, CPos(0), CPos(-1), method) => 10
     case SubStr(vi, p, pos, method) => 10 + weight(p)(true) + weight(pos)(false) + method.id
-    
     case TokenSeq(t) => t.length // Best for empty sequences.
     case IntLiteral(i) => Math.abs(i)
     case Linear(i,w,j) => i
@@ -509,8 +520,8 @@ object ProgramsSet {
     case (s1@SDag(ñ1, n1s, n1t, ξ1, w1),
           s2@SDag(ñ2, n2s, n2t, ξ2, w2)) => 
           //println(s"Intersecting two dags of size: ${s1.ñ.size} and ${s2.ñ.size}")
+          //println("computing edges...")
           
-          val ξ12 = for((n1, np1) <- ξ1; (n2, np2) <- ξ2) yield ((n1, n2), (np1, np2))
           val W12f = {  (arg : ((Node1, Node2), (Node1, Node2))) => arg match { case ((n1, n2), (np1, np2)) =>
               for(f1 <- w1(n1, np1); f2 <- w2(n2, np2)) yield {
                 intersectAtomicExpr(f1, f2)
@@ -521,11 +532,29 @@ object ProgramsSet {
           var nodesVisited = Set[(Node1, Node2)]()
           var nodesToVisit = Queue[(Node1, Node2)]((n1s, n2s))
           var nodesToVisitEnd = Queue[(Node1, Node2)]((n1t, n2t))
-          val edgeMap = ξ12.groupBy(iijj => iijj._1)
-          val edgeMapEnd = ξ12.groupBy(iijj => iijj._2)
+          //println("Grouping edges...")
+          val edgeMap11 = ξ1.groupBy(_1)
+          val edgeMap12 = ξ1.groupBy(_2)
+          val edgeMap21 = ξ2.groupBy(_1)
+          val edgeMap22 = ξ2.groupBy(_2)
+          //println("Gathering edges...")
+          val edgeMap = new  {
+            def getOrElse(n1n2: (Node1, Node2), orElse: Iterable[((Node1, Node2), (Node1, Node2))]) = {
+              for((_, n12) <- edgeMap11.getOrElse(n1n2._1, Set.empty).iterator; (_, n22) <- edgeMap21.getOrElse(n1n2._2, Set.empty))
+                yield (n1n2, (n12, n22))
+            }
+          }
+          val edgeMapEnd = new  {
+            def getOrElse(n1n2: (Node1, Node2), orElse: Iterable[((Node1, Node2), (Node1, Node2))]) = {
+              for((n12, _) <- edgeMap12.getOrElse(n1n2._1, Set.empty).iterator; (n22, _) <- edgeMap22.getOrElse(n1n2._2, Set.empty))
+                yield ((n12, n22), n1n2)
+            }
+          }
+
           var emptyEdges = Set[((Node1, Node2), (Node1, Node2))]()
           // Alternate between nodes to visit on the end and on the start.
           while(!(nodesToVisitEnd.isEmpty || nodesToVisit.isEmpty)) {
+            //println(s"Nodes to visit start: ${nodesToVisit.size}", s"Nodes to visit end: ${nodesToVisitEnd.size}")
             val nFirst = nodesToVisit.dequeue()
             nodesVisited += nFirst
             for(newEdge <- edgeMap.getOrElse(nFirst, Set.empty) if !(W12 contains newEdge) && !(emptyEdges(newEdge));
@@ -575,6 +604,7 @@ object ProgramsSet {
   def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = (a, b) match {
     case (SLoop(i1, e1, sep1), SLoop(i2, e2, sep2)) if i1 == i2 && sep1 == sep2 => SLoop(i1, intersect(e1, e2), sep1) 
     case (SConstStr(aa), SConstStr(bb)) if aa == bb => a
+    //case (SConstStr(aa), SConstStr(bb)) if aa.isNumber == bb.isNumber => a
     case (SSubStr(InputString(vi@IntLiteral(i)), pj, pk, m1), SSubStr(InputString(vj@IntLiteral(j)), pl, pm, m2)) =>
       if(i == j || (unify.isDefined && ((i == j + 1) || (i == j - 1)))) {
         val mm = m1 intersect m2
@@ -602,13 +632,15 @@ object ProgramsSet {
     case (SAny(i), SSubStr(PrevStringNumber(j), pj, pk, m)) => b
     case (SSubStr(PrevStringNumber(j), pj, pk, m), SAny(vi)) => a
     case (SNumber(ss1, l1, o1, s1), SNumber(ss2, l2, o2, s2)) =>
-      val ss = intersectAtomicExpr(ss1, ss2)
-      val l = l1 intersect l2
-      val o = intersectIntSet(o1, o2)
       val s = intersectIntSet(s1, s2)
-      if(sizePrograms(ss)>0 && l.size > 0 && sizePrograms(o) > 0 && sizePrograms(s) > 0)
-        SNumber(ss, l, o, s)
-      else SEmpty
+      val o = intersectIntSet(o1, o2)
+      val l = l1 intersect l2
+      if(l.size > 0 && sizePrograms(o) > 0 && sizePrograms(s) > 0) {
+        val ss = intersectAtomicExpr(ss1, ss2)
+        if(sizePrograms(ss)>0)
+          SNumber(ss, l, o, s)
+        else SEmpty
+      } else SEmpty
     case _ => SEmpty
   }
   def intersectPos(p1: SPosition, p2: SPosition)(implicit unify: Option[Identifier] = None): SPosition = (p1, p2) match {
@@ -635,7 +667,10 @@ object ProgramsSet {
     case _ => SEmpty
   }
   def intersectIntSet(p1: SInt, p2: SInt)(implicit unify: Option[Identifier] = None): SInt = (p1, p2) match {
-    case (SIntSet(a), SIntSet(b)) => SIntSet(a intersect b)
+    case (SIntSet(a), SIntSet(b)) => 
+      val res = a intersect b
+      if(res.isEmpty) SEmpty else
+      SIntSet(res)
     case (SAnyInt(default), b) => b
     case (a, SAnyInt(default)) => a
     case (SEmpty, _) => SEmpty
@@ -643,8 +678,18 @@ object ProgramsSet {
   }
   def intersectRegex(r1: SRegExp, r2: SRegExp): SRegExp = (r1, r2) match {
     case (STokenSeq(s1), STokenSeq(s2)) if s1.length == s2.length =>
-      val tokenSeq = s1 zip s2 map { case (t1, t2) => t1 intersect t2}
-      if(tokenSeq exists (e => e.size == 0)) SEmpty else STokenSeq(tokenSeq)
+      var i1 = s1
+      var i2 = s2
+      var res = ListBuffer[SToken]()
+      while(i1 != Nil && i2 != Nil) {
+        val tmp = i1.head intersect i2.head
+        if(tmp.size == 0) return SEmpty
+        res += tmp
+        i1 = i1.tail
+        i2 = i2.tail
+      }
+      if(i1 != Nil || i2 != Nil) return SEmpty // should not happen
+      STokenSeq(res.toList)
     case _ => SEmpty
   }
   def unify(s1: STraceExpr, s2: STraceExpr, w: Identifier) = intersect(s1, s2)(unify=Some(w))

@@ -13,8 +13,11 @@ class BenchMarks extends WordSpec  with ShouldMatchers {
   import Implicits._
   import Evaluator._
   
-  def renderer(c: FlashFillSolver): Unit = {
-    println(Printer(c.solve().get))
+  def renderer(c: FlashFill): Unit = {
+    c.solve() match {
+      case Some(prog) => println(Printer(prog))
+      case none => println("No program found")
+    }
   }
   
   "1. Renaming files with counters http://stackoverflow.com/questions/4631123/complex-file-rename" in {
@@ -31,6 +34,10 @@ class BenchMarks extends WordSpec  with ShouldMatchers {
     val c = FlashFill()
     val p1 = c.add(List("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), "Ep 178.mp4")
     val p2 = c.add(List("[TTB]_Some_Name_-_496_Vost_SD_(720x400_XviD_MP3).avi"), "Ep 496.avi")
+    println("Size of first:" + p1.sizePrograms)
+    println("Size of second:" + p2.sizePrograms)
+    println("Size of intersction:" + intersect(p1, p2).sizePrograms)
+    //val res = intersect(p1, p2)
     renderer(c)
     c.solve(List("Goffytofansub_Some name 483_HD.avi"))(0) should equal ("Ep 483.avi")
   }
@@ -158,8 +165,78 @@ asdx.dat  | 3.dat.txt""", 1)
   "18. Rename images by less 400  http://unix.stackexchange.com/questions/34014/bulk-rename-files-with-numbering" in {
     val c = FlashFill()
     c.add("""Image401.jpg -> Image001.jpg""")
+    c.add("""Image500.jpg -> Image100.jpg""")
+    //c.add("""Image501.jpg -> Image101.jpg""")
     renderer(c)
     c.solve("""Image402.jpg""") should equal ("Image002.jpg")
     c.solve("""Image403.jpg""") should equal ("Image003.jpg")
+  }
+  "19. Rename files by -1  http://www.unix.com/shell-programming-scripting/197485-multiple-file-rename.html " in {
+    val c = FlashFill()
+    c.add("""file02.dat -> file01.jpg""")
+    c.add("""file10.jpg -> file09.jpg""")
+    renderer(c)
+    c.solve("""file14.jpg""") should equal ("file13.jpg")
+  }
+  "20. Add extension to filename http://www.unix.com/shell-programming-scripting/176262-rename-file-add-extensions.html" in {
+    val c = FlashFill()
+    c.add("""myfileaa -> myfileaa.txt""")
+    renderer(c)
+    c.solve("""myfileab""") should equal ("myfileab.txt")
+    c.solve("""myfileac""") should equal ("myfileac.txt")
+    c.solve("""myfilead""") should equal ("myfilead.txt")
+  }
+  "21.Print all text files of an archive http://www.unix.com/shell-programming-scripting/32584-print-all-files-directory.html" in {
+    val c = FlashFill()
+    c.add("""abc.txt -> lpr abc.txt; rm abc.txt""")
+    renderer(c)
+    c.solve("""asd.txt""") should equal ("lpr asd.txt; rm asd.txt")
+    c.solve("""qwe.txt""") should equal ("lpr qwe.txt; rm qwe.txt")
+  }
+  "22.Move all files starting with - http://www.cyberciti.biz/faq/linuxunix-move-file-starting-with-a-dash/ " in {
+    val c = FlashFill()
+    c.add("""-abc.txt  | mv --abc.txt myfolder""", 1)
+    c.add("""abc.txt  | """, 1)
+    renderer(c)
+    c.solve("""-xyz.wmv""") should equal ("mv --xyz.txt myfolder")
+    c.solve("""xyz.wmv""") should equal ("")
+  }
+  "23.Print all doc files in a folder without opening each one of them.  http://forums.techguy.org/business-applications/485943-printing-multiple-files-folder.html " in {
+    val c = FlashFill()
+    c.add("""myfile.doc | thefile.doc | thirddoc | lpr myfile.doc; lpr thefile.doc;...""", 3)
+    renderer(c)
+    c.solve("""a.doc | b.doc | c.doc""") should equal ("lpr a.doc; lpr b.doc; lpr c.doc;")
+  }
+  "24.Convert jpg files in the directory to pdf files. For example convert, http://unix.stackexchange.com/questions/29869/converting-multiple-image-files-from-jpeg-to-pdf-format" in {
+    val c = FlashFill()
+    c.add("""myimage.jpg | convert myimage.jpg myimage.pdf""", 1)
+    renderer(c)
+    c.solve("""nicepicture.gif""") should equal ("convert nicepicture.gif nicepicture.pdf")
+  }
+  "25. Rename file with datetime appended to filename http://social.msdn.microsoft.com/forums/en-US/sqlintegrationservices/thread/1f5cc7b3-43c8-4d18-9c3b-445e76add1eb/" in {
+    val c = FlashFill()
+    //c.setVerbose(true)
+    //c.setTimeout(1500)
+    c.add("""betty.rpt | 09.24.08  | 15:30 |  betty0924081530.rpt""", 3)
+    renderer(c)
+    c.solve("""betty.rpt | 09.24.08  | 15:30""") should equal ("""betty0924081530.rpt""")
+    c.solve("""abc.txt   | 11.04.12  | 09:11""")  should equal ("abc1104120911.txt")
+    c.solve("""image.jpg | 12.09.11  | 11:50""")  should equal ("image1209111150.jpg")
+  }
+  "26. Rename files of type e_1.dat, e_5.dat, e_8.dat, etc. to 1.dat, 2.dat, 3.dat, http://www.unix.com/unix-dummies-questions-answers/127741-moving-files-out-multiple-directories-renaming-them-numerical-order.html" in {
+    val c = FlashFill()
+    c.add("""e_1.dat | 1.dat 
+e_5.dat | 2.dat 
+e_8.dat | 3.dat""", 1)
+    renderer(c)
+    c.solve("""e_9.dat""") should equal ("4.dat")
+    c.solve("""e_12.dat""") should equal ("5.dat")
+  }
+  "27. Rename files http://www.unix.com/shell-programming-scripting/94164-mv-command-rename-multiple-files-retain-some-portion-original-file-nam.html" in {
+    val c = FlashFill()
+    c.add("""001file1a.txt  | 11.12.2012  | 001renamedfile1a11122012.txt""", 2)
+    renderer(c)
+    c.solve("""011file2.txt  | 11.12.2012""") should equal ("011renamedfile211122012.txt")
+    c.solve("""101file1a.txt  | 11.12.2012""") should equal ("101renamedfile1a11122012.txt")
   }
 }

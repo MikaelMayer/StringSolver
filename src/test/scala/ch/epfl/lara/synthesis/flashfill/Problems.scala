@@ -15,14 +15,7 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
 
   "FlashFill" should "solve the book concatenation problem" in {
      val c = FlashFill()
-    c.setUseNumbers(false)
-    c.setUseDots(true)
-    c.setLoopLevel(1)
-    c.setMaxSeparatorLength(1)
-    //c.setAdvancedStats(true)
-    c.setOnlyInterestingPositions(true)
-    c.setVerbose(true)
-    c.setTimeout(120)
+    c.setTimeout(10)
     try {
     c.add(IndexedSeq("Algorithm1.pdf", "Algorithm2.pdf", "Algorithm3.pdf", "Algorithm4.pdf"), "convert Algorithm1.pdf Algorithm2.pdf... AlgorithmBook.pdf")
     } catch {
@@ -51,11 +44,6 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   
   "Problem: Renaming files" should "be solved" in {
     val c = FlashFill()
-    c.setUseNumbers(true)
-    c.setUseDots(true)
-    c.setLoopLevel(0)
-    c.setMaxSeparatorLength(0)
-    c.setVerbose(true)
     c.add(List("AB1234.gif"), "AB-0111-1.gif")
     println(Printer(c.solve().get))
     c.add(List("B3245.gif"), "B-0111-2.gif")
@@ -71,15 +59,11 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   
   "Problem: Refractoring the code" should "work for longer inputs" in {
     val c = FlashFill()
-    c.setLoopLevel(0)
-    c.setUseNumbers(false)
-    c.setUseDots(false)
-    c.setOnlyInterestingPositions(true)
-    c.setTimeout(180)
-    c.setVerbose(true)
+    c.setTimeout(10)
     
     c.add(List(""""Prof. Kathleen S. Fisher" ==> p5 ==> "Fisher, K.""""), """p5("Prof. Kathleen S. Fisher") should equal ("Fisher, K.")""")
     c.add(List(""""Bill Gates, Sr." ==> p5 ==> "Gates, B.""""), """p5("Bill Gates, Sr.") should equal ("Gates, B.")""")
+    println(Printer(c.solve().get))
     c.solve(List(""""George Ciprian Necula" ==> p5 ==> "Necula, G.""""))(0) should equal ("""p5("George Ciprian Necula") should equal ("Necula, G.")""")
   }
 }

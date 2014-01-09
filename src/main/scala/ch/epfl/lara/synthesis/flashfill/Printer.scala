@@ -73,8 +73,13 @@ object Printer {
   
   def apply(p: Program): String = { val res = p match {
       case Loop(w, c, separator) =>
-        val separated = separator.map((tt: ConstStr) => s" separated by ${tt.s}").getOrElse("")
-        t"concatenates$separated for all $w>=0 $c"
+        val separated = separator.map((tt: ConstStr) => s" separated by '${tt.s}'").getOrElse("")
+        c match {
+          case Concatenate(t) if t.length == 1 =>
+            t"concatenates for all $w>=0 $c$separated"
+          case _ => t"($c)"
+            t"concatenates$separated for all $w>=0 ($c)"
+        }
       case Concatenate(fs) =>
         if(fs.size == 1)
           apply(fs.head)
@@ -97,7 +102,7 @@ object Printer {
         }
         val sv1 = v1 match {
           case InputString(IntLiteral(i)) => s"${numeral(i+1)} input"
-          case InputString(v) => t"input $v"
+          case InputString(Linear(i, w, j)) => s"input ${apply(Linear(i, w, j+1))}"
           case PrevStringNumber(IntLiteral(i)) => s"numbers of previous ${numeral(i+1)} output"
           case PrevStringNumber(o) => s"numbers of previous output $o"
         }
@@ -121,16 +126,16 @@ object Printer {
             if(ending == "the end") {
               t"the$m $sv1 starting at [$starting]"
             } else if(starting == "the beginning") {
-              t"the$m $sv1 stopped at [$ending]"
+              t"the$m $sv1 until [$ending]"
             } else {
               t"the$m substring starting at [$starting] ending at [$ending] in $sv1"
             }
         }
-      case Pos(r1, Epsilon, IntLiteral(i)) =>
+      case Pos(r1, Epsilon, i) =>
         t"the end of the ${numeral(i)} $r1"
-      case Pos(Epsilon, r2, IntLiteral(i)) =>
+      case Pos(Epsilon, r2, i) =>
         t"the ${numeral(i)} $r2"
-      case Pos(r1, r2, IntLiteral(i)) =>
+      case Pos(r1, r2, i) =>
         t"the ${numeral(i)} $r2 after $r1"
       case NonUpperTok =>
         "token not containing A-Z"
@@ -145,11 +150,13 @@ object Printer {
       case NonAlphaTok =>
         "token not containing a-zA-Z"
       case AlphaNumTok =>
-        "identifier"
+        "AlphaNumeric token"
       case NonAlphaNumTok =>
         "token not containing 0-9a-zA-Z"
       case StartTok =>
         "the beginning"
+      case EndTok =>
+        "the end"
       case NumTok =>
         "number"
       case NonNumTok =>
@@ -175,11 +182,14 @@ object Printer {
       case IntLiteral(k) => k.toString
       case Identifier(v) =>
         v
+      case Number(s@SubStr(InputString(_), r1, r2, m), size, (offset, step)) =>
+        val incrementedby = if(step == 0) "" else if(step > 0) s" incremented by $step" else s" decremented by ${-step}"
+        val default = if(offset == 0) "" else s" (default: $offset)"
+        t"a $size-digit number from $s$incrementedby$default"
       case Number(s, size, (offset, step)) =>
         val by = if(step == 1) "" else s" by $step"
         val from = if(false && offset == 1) "" else s" starting at $offset"
         t"a $size-digit number incrementing$by$from continuing $s"
-
       case _ =>
         s"UNKNOWN : $p"
     }
@@ -189,6 +199,10 @@ object Printer {
     "(.*)for all (\\w+)>=0 the (\\w+)\\+1-th occurence(.*)" ==>
     { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>
         prefix + "every occurence" + suffix
+    }
+    "(.*)for all (\\w+)>=0 the input (\\w+)\\+1(.*)" ==>
+    { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>
+        prefix + "all inputs" + suffix
     }
     
     (res /: rules) { case (r, ruletoApply) => ruletoApply(r) }

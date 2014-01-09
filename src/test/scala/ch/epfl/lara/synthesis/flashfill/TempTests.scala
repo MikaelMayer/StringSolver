@@ -11,7 +11,7 @@ class TempTests  extends FlatSpec with ShouldMatchers {
   import FlashFill._
   import Implicits._
   import Evaluator._
-  def renderer(c: FlashFillSolver): Unit = {
+  def renderer(c: FlashFill): Unit = {
     println(Printer(c.solve().get))
   }
   

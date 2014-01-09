@@ -96,7 +96,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
       
     val pNumber = Concatenate(ConstStr("myFile"), Number(SubStr2(v1, NumTok, 1), 3, (5, 2)))
     pNumber("My number 1 should increase") should equal ("myFile003")
-    pNumber("No number should start at five") should equal ("myFile005")
+    pNumber("My number 4 should increase") should equal ("myFile006")
       
     val pos = Pos(TokenSeq(StartTok, UpperTok, LowerTok), TokenSeq(NonLowerTok, NonDotTok), 1)
     evalProg(pos)(IndexedSeq("Algorithm1.pdf")).asInt should equal(9)
@@ -249,19 +249,18 @@ class ProgramSetTest extends FlatSpec with ShouldMatchers {
         Map[(Int, Int), Set[SAtomicExpr]]()
         + ((0, 1) -> Set(SConstStr("a"):SAtomicExpr)) 
         + ((1, 2) -> Set(SConstStr("b"):SAtomicExpr))  
-        + ((2, 3) -> Set(SConstStr("c"):SAtomicExpr,SSubStr(0, Set(SCPos(1)), Set(SCPos(2)), SSubStrFlag(List(NORMAL))): SAtomicExpr)) 
+        + ((2, 3) -> Set(SConstStr("c"):SAtomicExpr,SSubStr(0, Set(SCPos(0)), Set(SCPos(-1)), SSubStrFlag(List(NORMAL))): SAtomicExpr)) 
         + ((0, 2) -> Set(SConstStr("ab"):SAtomicExpr)) 
-        + ((1, 3) -> Set(SConstStr("bc"):SAtomicExpr)) 
-        + ((0, 3) -> Set(SConstStr("abc"):SAtomicExpr))
+        + ((1, 3) -> Set(SConstStr("bc"):SAtomicExpr))
     )
     
   "DAG" should "compute neighbors correctly" in {
     
-    c.neighbors(0, 0).map(_._3) should equal (Set(1, 2, 3))
+    c.neighbors(0, 0).map(_._3) should equal (Set(1, 2))
   }
   
   it should "compute best paths" in {
-    c.takeBest should equal (Concatenate(ConstStr("ab"), SubStr(0, CPos(1), CPos(2))))
+    c.takeBest should equal (Concatenate(ConstStr("ab"), SubStr(0, CPos(0), CPos(-1))))
   }
   
   "SToken" should "correctly represent tokens" in {
@@ -286,7 +285,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   
   val generateStr = PrivateMethod[STraceExpr]('generateStr)
   
-  val f = new FlashFill()
+  val f = new FlashFillSolver()
   import f._
   initStats()
   
@@ -319,7 +318,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   
   it should "correctly compute number positions." in {
-     val res = ("0011" subnumberOf "1 2 10 15").toList
+     val res = ("0011" addedNumberFrom "1 2 10 15").toList
      res should contain ((0, 0, 10))
      res should contain ((2, 2, 9))
      res should contain ((4, 5, 1))
@@ -378,13 +377,13 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
     s.add(inputs, "ab...")
     val prog = s.solve()
     prog should not be 'empty
-    evalProg(prog.get)(IndexedSeq("a", "b","c", "d")) should equal (StringValue("abcd"))
-    
+    evalProg(prog.get)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("abcd"))
   }
   
   it should "compute loops medium" in {
     val inputs = List("a", "b", "c", "d")
     val s = FlashFill()
+    s.setMaxSeparatorLength(0)
     s.add(inputs, "a,a,b,b,...")
     val prog = s.solve()
     prog should not be 'empty
@@ -404,6 +403,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
     val c = FlashFill()
     //c.setVerbose(true)
     //c.setTimeout(5000)
+    c.setMaxSeparatorLength(0)
     c.add(inputs, "cp a a1;rm a;cp b b1;rm b;...")
     val prog = c.solve().get
     evalProg(prog)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("cp a a1;rm a;cp b b1;rm b;cp c c1;rm c;cp d d1;rm d;"))
@@ -416,11 +416,12 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
     val s = FlashFill()
     s.add(inputs, outputs)
     val prog = s.solve()
+    //s.solve("d,e,f,g") should equal ("d | e | f | g")
     //TODO
   }
   
   it should "compute dag intersections with correct numbering" in {
-     val f = new FlashFill()
+     val f = new FlashFillSolver()
      val res1 = (f.generateStr)(IndexedSeq("000"), "001", 0)
      val res2 = (f.generateStr)(IndexedSeq("001"), "002", 0)
      val res3 = intersect(res1, res2)
@@ -430,7 +431,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   
   it should "compute dag intersections with correct numbering with constants" in {
-     val f = new FlashFill()
+     val f = new FlashFillSolver()
      val res1 = f.generateStr(IndexedSeq("000,99"), "100,001", 0)
      val res2 = f.generateStr(IndexedSeq("100,001"), "002,101", 0)
      val res3 = intersect(res1, res2)

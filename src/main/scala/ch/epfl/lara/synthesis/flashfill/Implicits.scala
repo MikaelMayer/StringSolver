@@ -3,6 +3,9 @@
 package ch.epfl.lara.synthesis.flashfill
 
 import scala.Option.option2Iterable
+import scala.concurrent._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 object Implicits {
     import Programs._
@@ -38,13 +41,26 @@ object Implicits {
      *  Returns the start and ending positions in string, and the increment from the given string.
      *  Returns only positions where the source is a token
      **/
-    def subnumberOf(source: String): Seq[(Int, Int, Int)] = {
+    def addedNumberFrom(source: String): Seq[(Int, Int, Int)] = {
       val num = s.toInt
       for((i, j) <- ScalaRegExp.computePositionsOfTokenSimple(NumTok, source);
           increment <- source.e(i, j) to num) yield {
         (i, j, increment)
       }
     }
+    /** Returns a sequence of substrings which are numbers, with a certain number of digit and offset
+     *  Returns the start and ending positions in string, and the increment from the given string.
+     *  Returns only positions where the source is a token
+     **/
+    def subnumberIncNegativeOf(source: String): Seq[(Int, Int, Int)] = {
+      val num = s.toInt
+      for((i, j) <- ScalaRegExp.computePositionsOfTokenSimple(NumTok, source);
+          step <- source.e(i, j) reaching num) yield {
+        (i, j, step)
+      }
+    }
+    
+    
     /**
      * Computes an increment from this string to a given number, if it applies.
      */
@@ -52,6 +68,18 @@ object Implicits {
       if(s.isNumber) {
         val si = s.toInt
         if(si < t) {
+          Some(t - s.toInt)
+        } else None
+      } else None
+    }
+    
+    /**
+     * Computes an increment from this string to a given number, if it applies.
+     */
+    def reaching(t: Int): Option[Int] = {
+      if(s.isNumber) {
+        val si = s.toInt
+        if(si != t) {
           Some(t - s.toInt)
         } else None
       } else None
@@ -68,5 +96,16 @@ object Implicits {
     val start = System.nanoTime
     val res = op
     (res, System.nanoTime - start)
+  }
+  
+  def first[T](f: Future[T], g: Future[T]): Future[T] = {
+    val p = promise[T]
+    f onSuccess {
+      case x => p.trySuccess(x)
+    }
+    g onSuccess {
+      case x => p.trySuccess(x)
+    }
+    p.future
   }
 }
