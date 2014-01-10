@@ -1,16 +1,15 @@
-Flash-fill
-==========
+# Flash-fill
 
 Scala version of FlashFill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
 
 Build using sbt 0.13 and scala 2.10.3.
 
-Key features:
+## Key features:
 
 - Supports incremental numbering.
 - "..." continues an expression if there is a loop.
 
-Sample usage:
+## Sample usage:
 
 ```Scala
 import ch.epfl.lara.synthesis.flashfill._
@@ -71,7 +70,9 @@ object Test2 {
 }
 ```
 
-The other ways to add input in Flashfill are the following, given that c is a flashfill instance.
+## Providing input/output examples
+
+The other ways to add input/output examples in Flashfill are the following, given that c is a flashfill instance.
 
 ```Scala
 // Exactly one input and one output
@@ -87,6 +88,8 @@ c.add(List("input1", "input2", "input3"), List("output1", "output2"))
 // Three inputs and one output
 c.add(List("input1", "input2", "input3"), "output1)
 ```
+
+## Solving new input
 
 To solve and print an existing FlashFill instance, do the following:
 ```Scala
@@ -112,3 +115,29 @@ c.solve("c | d")
 c.solve(List("c", "d"))
 ```
 
+## Options
+
+Most of the FlashFill usage is fully automated, and does not require to change the following options.
+For some cases, they can be useful to trigger on/off.
+
+```Scala
+val c = FlashFill()
+
+/** Use dots ... to trigger manual loop research */
+c.setUseDots(b: Boolean)
+
+/** Use numbering from previous input option */
+c.setUseNumbers(b: Boolean)
+
+/** Loop level. 0 will not look for loops */
+c.setLoopLevel(i: Int)
+
+/**
+ * Timeout in seconds to add a new input/output example.
+ * This is approximate. Default is 30s
+ */
+c.setTimeout(seconds: Int)
+
+/** If looking for loops, what could be the maximum separator length */
+c.setMaxSeparatorLength(length: Int)
+```
