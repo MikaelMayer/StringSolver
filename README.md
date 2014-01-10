@@ -42,7 +42,8 @@ object Test2 {
    /* Prints:
 	* the constant string 'convert ' + the first input
 	  + the constant string ' ' + the first input until [the end of the first word]
-	  + a 3-digit number incrementing starting at 1 continuing the first number in previous output + the constant string '.pdf'
+	  + a 3-digit number incrementing starting at 1 continuing the first number in previous output
+	  + the constant string '.pdf'
 	*/ 
    println(Printer(c.solve().get))
    
