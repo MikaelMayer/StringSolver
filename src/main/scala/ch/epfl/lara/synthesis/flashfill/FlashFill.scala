@@ -66,27 +66,42 @@ class FlashFill {
   private var outputList = List[List[String]]()
     
   /**
-   * Use dots option
+   * Use dots ... to trigger manual loop research
    */
   def setUseDots(b: Boolean) = ff.useDots = b
   
   /**
-   * Use numbering option
+   * Use numbering from previous input option
    */
   def setUseNumbers(b: Boolean) = ff.numbering = b
   
   /**
-   * Set if use loops
+   * Loop level. 0 will not look for loops
    */
   def setLoopLevel(i: Int) = ff.DEFAULT_REC_LOOP_LEVEL = i
   
+  /**
+   * Timeout in seconds to add a new input/output example.
+   * This is approximate. Default is 30s
+   */
   def setTimeout(seconds: Int) = ff.TIMEOUT_SECONDS = seconds
   
+  /**
+   * If looking for loops, what could be the maximum separator length
+   */
   def setMaxSeparatorLength(length: Int) = ff.MAX_SEPARATOR_LENGTH = length
   
+  /**
+   * If only interesting positions (aka word, special chars and digit separators)
+   * are considered when looking for loops
+   */
   def setOnlyInterestingPositions(b: Boolean) = ff.onlyInterestingPositions = b
   
+  /**
+   * Outputs programs steps. Useful for debugging an other.
+   */
   def setVerbose(b: Boolean) = ff.verbose = b
+  
   /**
    * @returns an indexed seq with numbers derived from the previous output.
    */
@@ -416,7 +431,7 @@ class FlashFillSolver {
       allows us to discover all single loops. Nested loops may be discovered
       by controlling the recursion depth.
    */
-  var w_id = 1
+  var w_id = 0
   def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)(current: STraceExpr, preferredStart: Set[Int], preferredEnd: Set[Int]): W[Int] = {
     if(rec_loop_level <= 0) return W
     if(verbose) println(s"Find loop for $σ => $s")
@@ -425,7 +440,7 @@ class FlashFillSolver {
     val LITE = 0
     val FULL = 1
     
-    val w = Identifier("w" + w_id); w_id += 1
+    val w = Identifier(if(w_id <= 25) ('a' + w_id.toChar).toChar.toString else "w" + (w_id-25)); w_id += 1
     val positionToCheck: Int => Boolean = if(onlyInterestingPositions) {
       new (Int => Boolean) {
         val l = ScalaRegExp.convertToken(LowerTok)

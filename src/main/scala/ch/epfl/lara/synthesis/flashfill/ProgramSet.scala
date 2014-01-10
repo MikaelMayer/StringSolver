@@ -281,7 +281,7 @@ object ProgramsSet {
     case Number(s@ SubStr(InputString(_), p1, p2, m), l, (o, step)) =>
       3 + weight(s) - 3 + (if(step < 0) ((-step).toString.length * 7 + 5) else step.toString.length * 7)
     case Number(s@ SubStr(PrevStringNumber(_), p1, p2, m), l, (o, step)) =>
-      10 + weight(s) - 1 + (Math.abs(step) - 1) + (o - 1)
+      10 + weight(s) - 1 + 10*(Math.abs(step) - 1) + (o - 1)
     case Number(s, l, (o, step)) =>
       10 + weight(s) - 1 + (step-1) // if s is smaller, the better.
     case ConstStr(s) => 10 + s.size*10
