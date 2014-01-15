@@ -1,5 +1,5 @@
 # String-Solver
-Scala version of FlashFill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
+Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
 
 Build using sbt 0.13 and scala 2.10.3.
 
@@ -11,10 +11,10 @@ Build using sbt 0.13 and scala 2.10.3.
 ## Sample usage:
 
 ```Scala
-import ch.epfl.lara.synthesis.flashfill._
+import ch.epfl.lara.synthesis.stringsolver._
 
 object Test {
-   val c = FlashFill()
+   val c = StringSolver()
    c.add("file499.pdf -> 01file.pdf")
    c.add("report_761.pdf -> 02report.pdf")
    c.add("credits##.pdf -> 03credits.pdf")
@@ -34,7 +34,7 @@ object Test {
 }
 
 object Test2 {
-   val c = FlashFill()
+   val c = StringSolver()
    c.add(List("Alg1.txt"), "convert Alg1.txt Alg001.pdf")
    
    /* Prints:
@@ -51,7 +51,7 @@ object Test2 {
    println(c.solve("Math2.txt"))
 
    
-   val c2 = FlashFill()
+   val c2 = StringSolver()
    c2.add(List("Alg001.pdf", "Alg002.pdf", "Alg003.pdf"), "convert Alg001.pdf Alg002.pdf... AlgBook.pdf")
    
    /* Prints:
@@ -71,7 +71,7 @@ object Test2 {
 
 ## Providing input/output examples
 
-The other ways to add input/output examples in Flashfill are the following, given that c is a flashfill instance.
+The other ways to add input/output examples in StringSolver are the following, given that c is a StringSolver instance.
 
 ```Scala
 // Exactly one input and one output
@@ -90,9 +90,9 @@ c.add(List("input1", "input2", "input3"), "output1)
 
 ## Solving new input
 
-To solve and print an existing FlashFill instance, do the following:
+To solve and print an existing StringSolver instance, do the following:
 ```Scala
-val c = FlashFill()
+val c = StringSolver()
 c.add(List("a","b"),List("ab","ba"))
 
 // If one output was provided (equivalent to c.solve(0))
@@ -116,11 +116,11 @@ c.solve(List("c", "d"))
 
 ## Options
 
-Most of the FlashFill usage is fully automated, and does not require to change the following options.
+Most of the StringSolver usage is fully automated, and does not require to change the following options.
 For some cases, they can be useful to trigger on/off.
 
 ```Scala
-val c = FlashFill()
+val c = StringSolver()
 
 /** Use dots ... to trigger manual loop research */
 c.setUseDots(b: Boolean)
