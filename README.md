@@ -10,7 +10,9 @@ Build using sbt 0.13 and scala 2.10.3.
 
 ## File renaming
 
-StringSolver includes a nice renaming tool included.
+StringSolver includes a nice renaming tool.
+
+[![ScreenShot](https://raw.github.com/GabLeRoux/WebMole/master/ressources/WebMole_Youtube_Video.png)](http://youtu.be/F9mUIPK7h-I)
 
 - Build the project using `sbt one-jar`.
 - Use the following alias to rename file using the tool:
