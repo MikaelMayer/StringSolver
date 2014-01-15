@@ -8,7 +8,18 @@ Build using sbt 0.13 and scala 2.10.3.
 - Supports incremental numbering.
 - "..." continues an expression if there is a loop.
 
-## Sample usage:
+## File renaming
+
+StringSolver includes a nice renaming tool included.
+
+- Build the project using `sbt one-jar`.
+- Use the following alias to rename file using the tool:
+```
+alias mv='java -jar "[/path/to/target/scala/]stringsolver_2.10-1.0-one-jar.jar" move'
+```
+- Do your renaming normally, e.g. `mv file1 file2`
+
+## API:
 
 ```Scala
 import ch.epfl.lara.synthesis.stringsolver._
