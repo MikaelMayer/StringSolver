@@ -1,6 +1,6 @@
 
 
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import scala.Option.option2Iterable
 import scala.concurrent._
@@ -8,9 +8,14 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 object Implicits {
-    import Programs._
-    import ProgramsSet._
-    implicit class AugString(s: String) {
+  import Programs._
+  import ProgramsSet._
+  
+  implicit class AugBoolean(s: Boolean) {
+    def implies(other: Boolean): Boolean = !s || other
+  }
+  
+  implicit class AugString(s: String) {
     def e(i: Int, j: Int) = s.substring(i, j + 1)
     /**
      * Returns the positions of s in source.
@@ -90,6 +95,19 @@ object Implicits {
      */
     def numbers: String = {
       (s map {(c: Char) => if(c.isDigit) c else ' '}).mkString("")
+    }
+    
+    /**
+     * If this string is a path, retrieves the path until the file inc. Slash
+     */
+    def getDirectory: String = {
+      s.replaceAll("""\\[^\\]*$""", """\\""")
+    }
+    /**
+     * If this string is a path, retrieves the name of the file
+     */
+    def getFile: String = {
+      s.replaceAll(".*\\\\","")
     }
   }
   def timedScope[A](op: => A): (A, Long) = {

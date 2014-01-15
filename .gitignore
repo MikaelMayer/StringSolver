@@ -3,3 +3,9 @@
 /project/project/target/*
 /project/target/*
 .settings
+
+rename
+
+/.classpath
+
+/.cache

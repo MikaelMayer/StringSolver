@@ -12,7 +12,7 @@
  */
 
 
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 /**
  * Attribution to Sumit Gulwani for this particular piece of code.
@@ -21,7 +21,7 @@ package ch.epfl.lara.synthesis.flashfill
 object Programs {
   import Evaluator._
   import ProgramsSet._
-  import FlashFill._
+  import StringSolver._
   
   sealed trait Program {
 
@@ -93,7 +93,7 @@ object Programs {
   class CharClass(val f: List[(Char, Char)]) extends Program { def reverse = this
     def unapply(c: Char): Option[Unit] = f find { case tuple => tuple._1 <= c && c <= tuple._2 } map {_ => ()}
     override def toString = {
-      val res = this.getClass().getName().replace("ch.epfl.lara.synthesis.flashfill.Programs$","").replace("$", "")
+      val res = this.getClass().getName().replace("ch.epfl.lara.synthesis.stringsolver.Programs$","").replace("$", "")
       if(res == "CharClass") {
         "CharClass("+f.toString+")"
       } else res

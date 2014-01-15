@@ -1,4 +1,4 @@
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import Programs._
 
@@ -14,7 +14,7 @@ trait ComputePositionsInString {
 object Evaluator {
   //import ctx.reporter._
   import Implicits._
-  import FlashFill._
+  import StringSolver._
   
   final val RegexpPositionsInString: ComputePositionsInString = ScalaRegExp
 

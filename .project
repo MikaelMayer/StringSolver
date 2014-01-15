@@ -1,5 +1,5 @@
 <projectDescription>
-  <name>flash-fill</name>
+  <name>Stringsolver</name>
   <buildSpec>
     <buildCommand>
       <name>org.scala-ide.sdt.core.scalabuilder</name>

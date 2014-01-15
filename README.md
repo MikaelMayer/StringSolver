@@ -1,5 +1,4 @@
-# Flash-fill
-
+# String-Solver
 Scala version of FlashFill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
 
 Build using sbt 0.13 and scala 2.10.3.
@@ -65,7 +64,7 @@ object Test2 {
    /* Prints:
 	* convert Math1.pdf Math2.pdf Math3.pdf Math4.pdf MathBook.pdf
 	*/
-   println(c2.solve("Math1.txt | Math2.txt | Math3.txt | Math4.txt"))
+   println(c2.solve("Math1.pdf | Math2.pdf | Math3.pdf | Math4.pdf"))
    // prints "
 }
 ```

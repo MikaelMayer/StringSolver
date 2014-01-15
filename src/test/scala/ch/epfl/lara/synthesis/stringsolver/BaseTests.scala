@@ -1,11 +1,10 @@
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import org.scalatest._
 import org.scalatest.matchers._
 
 class PrinterTest extends FlatSpec with ShouldMatchers with PrivateMethodTester {
-  import ch.epfl.lara.synthesis.flashfill.Programs._
-  import ch.epfl.lara.synthesis.flashfill.Printer
+  import Programs._
   import scala.language._
 
   val v1 = InputString(0)
@@ -35,15 +34,14 @@ class PrinterTest extends FlatSpec with ShouldMatchers with PrivateMethodTester 
 }
 
 class EvaluatorTest extends FlatSpec with ShouldMatchers  {
-  import ch.epfl.lara.synthesis.flashfill.Programs._
-  import ch.epfl.lara.synthesis.flashfill.Printer
+  import Programs._
   import scala.language._
 
   
   val v1 = InputString(0)
   val w = Identifier("w")
 
-  import ch.epfl.lara.synthesis.flashfill.Evaluator._
+  import Evaluator._
   
   "Evaluator" should "correctly concatenate strings" in {
     concatenate(StringValue("a"), StringValue("b"), StringValue("c")) should equal (StringValue("abc"))
@@ -103,122 +101,9 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
   }
 }
 
-class AutomataTest extends FlatSpec with ShouldMatchers  {
-  import ch.epfl.lara.synthesis.flashfill.Programs._
-  import ch.epfl.lara.synthesis.flashfill.Printer
-  import ch.epfl.lara.synthesis.flashfill.AutomataChar.{not => nt, _}
-  import ch.epfl.lara.synthesis.flashfill.AutomataChar
-  import ch.epfl.lara.synthesis.flashfill.Automata
-  /*def contain[A](f: Function[A] => Boolean) = Matcher { (left: Iterator[Function[A]]) =>
-    MatchResult(
-        left.find(f) != None,
-        left + " did not contain the required function",
-        left + " contained the required function"   
-    )
-  }
-  def containFNMapping[A](input: List[List[Int]], output: List[A]) = Matcher { (left: Iterator[Function[A]]) =>
-    MatchResult(
-        left.find({ f => 
-          println(s"testing ${f.toReadableString}")
-          input.map{elem => f(elem)} == output }) != None,
-        left + s" did not contain the mapping from ${input} to ${output}",
-        left + s" contained the required function"   
-    )
-  }*/
-  
-  
-  "Automata" should "correctly compute negations" in {
-    val digit = '0' -> '9'
-    val up = 'A' -> 'Z'
-    val low = 'a' -> 'z'
-    
-    nt(List(up)) should equal (List((0: Char, ('A'-1).toChar), (('Z' + 1).toChar, Char.MaxValue)))
-    
-    nt(List()) should equal (List((0: Char, Char.MaxValue)))
-    nt(List((0: Char, Char.MaxValue))) should equal (List())
-    
-    val cl = List(digit, up, low)
-    nt(nt(cl)) should equal (cl)
-  }
-  
-  it should "correctly compute intersections" in {
-    val digit = '0' -> '9'
-    val up = 'A' -> 'Z'
-    val low = 'a' -> 'z'
-    
-    inter(List(digit, up, low), List(up)) should equal(List(up))
-    inter(List(digit, up, low), List(low)) should equal(List(low))
-    inter(List(digit, up, low), List(digit)) should equal(List(digit))
-    
-    inter(List(digit, up, low), List(up, low)) should equal(List(up, low))
-    inter(List(digit, up, low), List(digit, low)) should equal(List(digit, low))
-    inter(List(digit, up, low), List(digit, up)) should equal(List(digit, up))
-    
-    // Compute union
-    nt(inter(nt(List(digit)), nt(List(up)))) should equal(List(digit, up))
-    
-  }
-  
-  it should "correctly compute sub-labels" in {
-    val digit = List('0' -> '9')
-    val up = List('A' -> 'Z')
-    val low = List('a' -> 'z')
-    val b = List('B' -> 'B')
-    
-    val res = createLabelSubsets(List(digit, up,  allChars && !digit && !up), List(b, !b))
-    //println(res)
-    res(digit) should equal (List(CharLabel(digit)))
-    res(up) should equal (List(CharLabel(List(('B','B'))), CharLabel(List(('A','A'), ('C','Z')))))
-    res(b) should equal (List(CharLabel(b)))
-    
-    val res2 = createLabelSubsets(List(digit, allChars && !digit), List(allChars))
-    
-    res2 should contain key (allChars)
-    //res(allChars) should equal (List(CharLabel(digit), up))
-  }
-  
-  it should "correctly compute createDisjointSets" in {
-    val digit = List('0' -> '9')
-    val up = List('A' -> 'Z')
-    val low = List('a' -> 'z')
-    val b = List('B' -> 'B')
-    
-    val res = Automata.createDisjointSets(List(CharLabel(digit), CharLabel(nt(digit)), CharLabel(up), CharLabel(nt(up))))
-    res(digit) should equal (List(CharLabel(digit)))
-    res(up) should equal  (List(CharLabel(up)))
-    res(nt(digit)).toSet should equal (Set(CharLabel(inter(nt(digit), nt(up))), CharLabel(up)))
-  }
-  
-  
-  it should "correctly convert simple tokens" in {
-    val d = convertToken(UpperTok)
-    d.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
-
-    convertToken(StartTok).recordFinalStates("UZEabOPQ") should equal (List(-1))
-    convertToken(LowerTok).recordFinalStates("abcdEFG") should equal (List(0, 1, 2, 3))
-  }
-
-  it should "correctly convert regexps" in {
-    val dfa = convertRegExp(UpperTok)
-    dfa.recordFinalStates("UZEabOPQ") should equal (List(0,1,2, 5, 6, 7))
-    
-    val dfa2 = convertRegExp(TokenSeq(StartTok, UpperTok))
-    dfa2.recordFinalStates("UZEabOPQ") should equal (List(0,1,2))
-    
-    val dfa3 = convertRegExp(TokenSeq(LowerTok, SlashTok))
-    dfa3.recordFinalStates("125abc/1/aa1/ab/") should equal (List(6,15))
-    
-    val dfa4 = convertRegExp(Epsilon)
-    dfa4.recordFinalStates("0/2/1") should equal (List(-1, 0, 1, 2, 3, 4))
-  }
-}
-
-
-
 class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
-  import ch.epfl.lara.synthesis.flashfill.Programs._
-  import ch.epfl.lara.synthesis.flashfill.Printer
-  import ch.epfl.lara.synthesis.flashfill.ScalaRegExp._
+  import Programs._
+  import ScalaRegExp._
   
   "ScalaRegExp" should "correctly convert regexps" in {
     computePositionsEndingWith(UpperTok, "UZEabOPQ") should equal (List(2, 7))
@@ -236,12 +121,11 @@ class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
 }
 
 class ProgramSetTest extends FlatSpec with ShouldMatchers {
-  import ch.epfl.lara.synthesis.flashfill._
   import Programs._
   import ProgramsSet._
   import ScalaRegExp._
-  import FlashFill._
-  import FlashFill._
+  import StringSolver._
+  import StringSolver._
   import Implicits._
   import Evaluator._
   val c = SDag[Int](Set(0, 1, 2, 3), 0, 3,
@@ -274,19 +158,18 @@ class ProgramSetTest extends FlatSpec with ShouldMatchers {
   }
 }
 
-class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTester {
-  import ch.epfl.lara.synthesis.flashfill._
+class StringSolverTest extends FlatSpec with ShouldMatchers with PrivateMethodTester {
   import Programs._
   import ProgramsSet._
   import ScalaRegExp._
-  import FlashFill._
+  import StringSolver._
   import Implicits._
   import Evaluator._
   
   val generateStr = PrivateMethod[STraceExpr]('generateStr)
   
-  val f = new FlashFillSolver()
-  import f._
+  val f = new StringSolverAlgorithms()
+import f._
   initStats()
   
   "flashfill" should "correcly compute positions" in {
@@ -373,7 +256,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   
   it should "compute loops easily" in {
     val inputs = List("a", "b", "c", "d")
-    val s = FlashFill()
+    val s = StringSolver()
     s.add(inputs, "ab...")
     val prog = s.solve()
     prog should not be 'empty
@@ -382,7 +265,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   
   it should "compute loops medium" in {
     val inputs = List("a", "b", "c", "d")
-    val s = FlashFill()
+    val s = StringSolver()
     s.setMaxSeparatorLength(0)
     s.add(inputs, "a,a,b,b,...")
     val prog = s.solve()
@@ -391,7 +274,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   it should "compute loops medium with separator" in {
     val inputs = List("a", "b", "c", "d")
-    val s = FlashFill()
+    val s = StringSolver()
     s.add(inputs, "a,a,b,b...")
     val prog = s.solve()
     prog should not be 'empty
@@ -400,7 +283,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   
   it should "compute loops hard" in {
     val inputs = List("a", "b", "c", "d")
-    val c = FlashFill()
+    val c = StringSolver()
     //c.setVerbose(true)
     //c.setTimeout(5000)
     c.setMaxSeparatorLength(0)
@@ -413,7 +296,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   it should "compute splits" in {
     val inputs = List("a,b,c,d")
     val outputs = List("a","b","...")
-    val s = FlashFill()
+    val s = StringSolver()
     s.add(inputs, outputs)
     val prog = s.solve()
     //s.solve("d,e,f,g") should equal ("d | e | f | g")
@@ -421,7 +304,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   
   it should "compute dag intersections with correct numbering" in {
-     val f = new FlashFillSolver()
+     val f = new StringSolverAlgorithms()
      val res1 = (f.generateStr)(IndexedSeq("000"), "001", 0)
      val res2 = (f.generateStr)(IndexedSeq("001"), "002", 0)
      val res3 = intersect(res1, res2)
@@ -431,7 +314,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   
   it should "compute dag intersections with correct numbering with constants" in {
-     val f = new FlashFillSolver()
+     val f = new StringSolverAlgorithms()
      val res1 = f.generateStr(IndexedSeq("000,99"), "100,001", 0)
      val res2 = f.generateStr(IndexedSeq("100,001"), "002,101", 0)
      val res3 = intersect(res1, res2)
@@ -441,7 +324,7 @@ class FlashFillTest extends FlatSpec with ShouldMatchers with PrivateMethodTeste
   }
   
   it should "compute simple number sequences" in {
-    val f = FlashFill()
+    val f = StringSolver()
     f.add(List("AB00"), "AB-00-1")
     f.add(List("A652"), "A-652-2")
     f.add(List("C14"), "C-14-3")

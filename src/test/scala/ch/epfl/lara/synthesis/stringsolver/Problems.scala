@@ -1,20 +1,19 @@
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import org.scalatest.FlatSpec
 import org.scalatest.matchers.ShouldMatchers
 
 
 class BenchMarkTest extends FlatSpec with ShouldMatchers {
-  import ch.epfl.lara.synthesis.flashfill._
   import Programs._
   import ProgramsSet._
   import ScalaRegExp._
-  import FlashFill._
+  import StringSolver._
   import Implicits._
   import Evaluator._
 
-  "FlashFill" should "solve the book concatenation problem" in {
-     val c = FlashFill()
+  "StringSolver" should "solve the book concatenation problem" in {
+     val c = StringSolver()
     c.setTimeout(10)
     try {
     c.add(IndexedSeq("Algorithm1.pdf", "Algorithm2.pdf", "Algorithm3.pdf", "Algorithm4.pdf"), "convert Algorithm1.pdf Algorithm2.pdf... AlgorithmBook.pdf")
@@ -29,7 +28,7 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   }
   
   it should "Find words after the first dot (2 tok necessary)" in {
-     val c = FlashFill()
+     val c = StringSolver()
     c.setUseNumbers(true)
     c.setUseDots(true)
     c.setLoopLevel(0)
@@ -43,7 +42,7 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   }
   
   "Problem: Renaming files" should "be solved" in {
-    val c = FlashFill()
+    val c = StringSolver()
     c.add(List("AB1234.gif"), "AB-0111-1.gif")
     println(Printer(c.solve().get))
     c.add(List("B3245.gif"), "B-0111-2.gif")
@@ -58,7 +57,7 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   }
   
   "Problem: Refractoring the code" should "work for longer inputs" in {
-    val c = FlashFill()
+    val c = StringSolver()
     c.setTimeout(10)
     
     c.add(List(""""Prof. Kathleen S. Fisher" ==> p5 ==> "Fisher, K.""""), """p5("Prof. Kathleen S. Fisher") should equal ("Fisher, K.")""")

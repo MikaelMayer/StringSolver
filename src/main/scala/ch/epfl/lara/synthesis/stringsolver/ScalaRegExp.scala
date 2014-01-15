@@ -1,4 +1,4 @@
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import Programs._
 import scala.util.matching.Regex

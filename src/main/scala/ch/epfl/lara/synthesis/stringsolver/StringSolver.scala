@@ -1,4 +1,4 @@
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import java.util.regex.Pattern
 
@@ -9,10 +9,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
 
-/**FlashFill object
- * Used to create a FlashFill instance to solve input/output problems.
+/**StringSolver object
+ * Used to create a StringSolver instance to solve input/output problems.
  */
-object FlashFill {
+object StringSolver {
   import Programs._  
   import ProgramsSet._
   import Evaluator._
@@ -33,7 +33,7 @@ object FlashFill {
   
   //def debug(s: String) = if(debugActive) println(s)
   
-  def apply(): FlashFill = new FlashFill()
+  def apply(): StringSolver = new StringSolver()
   
   def apply(input: List[List[String]], output: List[String]): Option[Program] = {
     val solver = apply()
@@ -50,14 +50,14 @@ object FlashFill {
 /**
  * Instance solving the problem iteratively
  */
-class FlashFill {
+class StringSolver {
   import Programs._  
   import ProgramsSet._
   import Evaluator._
   import Implicits._
   import scala.language._
-  import FlashFill._
-  private var ff = new FlashFillSolver()
+  import StringSolver._
+  private var ff = new StringSolverAlgorithms()
   private var currentPrograms: IndexedSeq[STraceExpr] = null
   private var singlePrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
   private var previousOutputs: IndexedSeq[String] = Array[String]()
@@ -102,6 +102,8 @@ class FlashFill {
    */
   def setVerbose(b: Boolean) = ff.verbose = b
   
+  //def setPreferCounter(b: Boolean)
+  
   /**
    * @returns an indexed seq with numbers derived from the previous output.
    */
@@ -137,12 +139,12 @@ class FlashFill {
     }
     var tmp = ff.DEFAULT_REC_LOOP_LEVEL
     val newProgramSets : IndexedSeq[STraceExpr] = try {
-      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS/2).seconds)
+      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS/2f).seconds)
     } catch {
       case e: TimeoutException  => 
         ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time
         ff.timeout = true
-        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS*1/3).seconds)
+        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS*1/3f).seconds)
       case e: Throwable => throw e
     }
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
@@ -159,7 +161,7 @@ class FlashFill {
         //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
       }
       val intersections = try {
-        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS/2).seconds)
+        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS/2f).seconds)
       } catch {
         case e: TimeoutException  => 
           if(ff.verbose) println("Intersection took too much time!")
@@ -214,10 +216,34 @@ class FlashFill {
   /**
    * Solved a piped example. Returns a piped example.
    * AB | CD | XY  => EF | GH
+   * 
+   * If multiline, solve the complete instance, e.g.
+   * a | A | a1    a | A | a1
+   * b | B | b1 => b | B | b1 
+   * c             c | C | c1
+   * d             d | D | d1
    */
   def solve(input: String): String = {
-    val elems = input.split("\\|").map(_.trim()).toList
-    solve(elems).mkString(" | ")
+    if(input.indexOf('\n') != -1) {
+      val problems = input.split('\n').map(_.split("\\|").toList.map(_.trim())).toList
+      val iolength = (0 /: problems) { case (a, io) => Math.max(a, io.length)}
+      val ilength  = (iolength /: problems) { case (a, io) => Math.min(a, io.length)}
+      var adding_inputoutput = true
+      (for(i <- problems.toList) yield {
+        if(i.length == iolength) {
+          if(adding_inputoutput) {
+            add(i.take(ilength), i.drop(ilength))
+            i.mkString(" | ")
+          } else throw new Exception("All examples must be at the beginning")
+        } else if(i.length == ilength) {
+          adding_inputoutput = false
+          i.mkString(" | ") +" | "+solve(i).mkString(" | ")
+        } else throw new Exception("All examples must be at the beginning")
+      }) mkString "\n"
+    } else {
+      val elems = input.split("\\|").map(_.trim()).toList
+      solve(elems).mkString(" | ")
+    }
   }
   
   /** Returns the best solution to the problem for the whole output */
@@ -247,7 +273,7 @@ class FlashFill {
       previousOutputs = res.toIndexedSeq
       res
   }
-  
+
   /**
    * Verifies the current state so that the resulting program
    * works for everybody.
@@ -276,17 +302,17 @@ class FlashFill {
   }
 }
 
-class FlashFillSolver {
+class StringSolverAlgorithms {
   import Programs._  
   import ProgramsSet._
   import Evaluator._
   import Implicits._
   import scala.language._
-  import FlashFill._
+  import StringSolver._
   
   // Parameter: Are we using dots to describe not finished loops.
   var useDots = true
-  // Adds the last output as the last input for the next program.
+  // Adds the last output number-only as input for the next program.
   var numbering = true
   
   final val dots = "..."
@@ -310,6 +336,7 @@ class FlashFillSolver {
   var onlyInterestingPositions = false
   
   var verbose = false
+
   
   /**synthesis algorithm*/
   def generateStringProgram(S: Set[(σ, S)]) = {
@@ -340,7 +367,7 @@ class FlashFillSolver {
      from a given string.
    */
   implicit val cacheGenerateStr = MMap[(Input_state, Output_state, Int), STraceExpr]()
-  def generateStr = cached((σ: Input_state, s: Output_state, rec_loop_level: Int) => {
+  def generateStr(σ: Input_state, s: Output_state, rec_loop_level: Int) = cached((σ, s, rec_loop_level), cacheGenerateStr) {
     //debug(s"generateStr on: $σ, $s and $rec_loop_level")
     val ñ = (0 to s.length).toSet
     val ns = 0
@@ -358,13 +385,17 @@ class FlashFillSolver {
       j <- (i+1) to s.length;
       σvi <- σ.inputs
       if σvi.indexOf(s.substring(i, j)) >= 0) yield (i, j)).toSet
-    val interestingEdges2 = interestingEdges1.toList filterNot {
-      case (i, j) => (interestingEdges1 contains ((i, j+1))) ||
-                     (interestingEdges1 contains ((i-1, j)))} sortBy(longestSizeFirst)
+    // Removes edges which belong to a greater substring if they are not themselves longest numbers
+    val longestInterestingEdges = ((interestingEdges1.toList filterNot {
+      case (i, j) =>
+        val isNumber = s.substring(i, j).isNumber
+        (((interestingEdges1 contains ((i, j+1))) && (isNumber implies s(j).isDigit)) ||
+         ((interestingEdges1 contains ((i-1, j))) && (isNumber implies s(i-1).isDigit)))
+    }))sortBy(longestSizeFirst)
      
-    if(verbose) println(s"found ${interestingEdges2.length} longest substrings:\n"+(interestingEdges2 map { case (i, j) => s.e(i, j-1)}))
-    val remaining_edges = ξ.filter{ case (i,j ) => !interestingEdges2.contains((i, j)) }.toList.sortBy(longestSizeFirst)
-    for((i, j) <- interestingEdges2.toIterable ++ remaining_edges if !timeout) {
+    if(verbose) println(s"found ${longestInterestingEdges.length} longest substrings:\n"+(longestInterestingEdges map { case (i, j) => s.e(i, j-1)}))
+    val remaining_edges = ξ.filter{ case (i,j ) => !longestInterestingEdges.contains((i, j)) }.toList.sortBy(longestSizeFirst)
+    for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout) {
       W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j-1))))
     }
     if(timeout && verbose) println("exited loop of generateStr because timed out")
@@ -372,9 +403,9 @@ class FlashFillSolver {
       generateSubString(σ, s.e(i, j-1)) ++ Set(SConstStr(s.e(i, j-1)))
     }*/
     val previous = SDag(ñ, ns, nt, ξ, W): STraceExpr
-    val Wp =  generateLoop(σ, s, W, rec_loop_level)(previous, preferredStart=interestingEdges2.map(_1).toSet, preferredEnd = interestingEdges2.map(_2).toSet)
+    val Wp =  generateLoop(σ, s, W, rec_loop_level)(previous, preferredStart=longestInterestingEdges.map(_1).toSet, preferredEnd = longestInterestingEdges.map(_2).toSet)
     SDag(ñ, ns, nt, ξ, Wp): STraceExpr
-  })
+  }
   
   /**
    * Specializes a DAG by removing all positions except those between k1 and k2
@@ -547,7 +578,7 @@ class FlashFillSolver {
    * Generate all atomic expressions which can generate a string s from input states.
    */
   implicit val cacheGenerateSubstring = MMap[(Input_state, String), Set[SAtomicExpr]]()
-  def generateSubString = cached((σ: Input_state, s: String) => {
+  def generateSubString(σ: Input_state, s: String) = cached((σ, s), cacheGenerateSubstring){
     var result = Set.empty[SAtomicExpr]
     if(verbose) println(s"Going to extract $s from $σ")
     for(vi <- 0 until σ.inputs.length if !timeout) {
@@ -609,18 +640,24 @@ class FlashFillSolver {
       }
     }
     result
-  })
+  }
   
   /**
    * Compute the set of all tokenseq between two given positions.
    */
+  private var computedForString = ""
+  private var computedForList = List[Token]()
+  private var cacheComputeTokenSeq = MMap[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]]()
 
-  def computetokenSeq(s: String, listTokens: List[Token]): Map[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]] = {
+  def computetokenSeq(s: String, listTokens: List[Token]): MMap[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]] =
+    if(s == computedForString && (listTokens eq computedForList)) cacheComputeTokenSeq else {
     val finalstart = 0
     val finalend = s.length-1
-    var res = Map[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]]()
-    def addMapping(i: Start, j: End, s: TokenSeq, index: (List[Start], List[End])) = res += (i, j) -> (res.getOrElse((i, j), Set()) + ((s, index)))
-    def removeMapping(t: TokenSeq) = res = res.mapValues(s => s.filterNot(_._1 == t))
+    var res = MMap[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]]()
+    def addMapping(i: Start, j: End, s: TokenSeq, index: (List[Start], List[End])) = 
+      if(s.t.isEmpty || s.t.exists(_ != NonDotTok))
+        res += (i, j) -> (res.getOrElse((i, j), Set()) + ((s, index)))
+    //def removeMapping(t: TokenSeq) = res //= res.mapValues(s => s.filterNot(_._1 == t))
     val tokenPositions: Map[Token, (List[Start], List[End])] =
       (listTokens map { token =>
       token -> ScalaRegExp.computePositionsOfToken(token, s)
@@ -693,9 +730,12 @@ class FlashFillSolver {
       }
     }
     // Remove single NonDotTok anywhere.
-    removeMapping(TokenSeq(NonDotTok))
-    removeMapping(TokenSeq(NonDotTok, NonDotTok))
-    removeMapping(TokenSeq(NonDotTok, NonDotTok, NonDotTok))
+    //removeMapping(TokenSeq(NonDotTok))
+    //removeMapping(TokenSeq(NonDotTok, NonDotTok))
+    //removeMapping(TokenSeq(NonDotTok, NonDotTok, NonDotTok))
+    cacheComputeTokenSeq = res
+    computedForString = s
+    computedForList = listTokens
     res
   }
   
@@ -762,9 +802,17 @@ class FlashFillSolver {
   initStats()
   
   /**
-   * Generate the set of positions describing position k in string.
+   * Generate a cache
    */
-  def cached[U, T](f: U => T)(implicit cache: MMap[U, T]): U => T = u => {
+  def cached[T, A](s: T, cache: MMap[T, A])(f: => A) = {
+    cache_call += 1
+    if(cache contains s) {
+      cache_hit += 1
+      if(advanced_stats) advanced_cache = advanced_cache + (s -> (advanced_cache.getOrElse(s, 0) + 1))
+    }
+    cache.getOrElseUpdate(s, f)
+  }
+  /*def cached[U, T](f: U => T)(implicit cache: MMap[U, T]): U => T = u => {
     cache_call += 1
     if(cache contains u) {
       cache_hit += 1
@@ -788,13 +836,14 @@ class FlashFillSolver {
       if(advanced_stats) advanced_cache = advanced_cache + ((u, v, w) -> (advanced_cache.getOrElse((u, v, w), 0) + 1))
     }
     cache.getOrElseUpdate((u, v, w), f(u, v, w))
-  }
+  }*/
   
   /**
    * Generates a set of algebraic positions for a given position and a string.
    */
   implicit val cache = MMap[(String, Int), Set[SPosition]]()
-  def generatePosition = cached((σ: String, k: Int) => {
+  def generatePosition(σ: String, k: Int) = cached((σ, k), cache){
+    if(verbose) println(s"Generating position $k")
     var result = Set[SPosition](SCPos(k), SCPos(-σ.length+k-1))
     implicit val (tokenSet, mapping) = Reps(σ)
     for((_, _, r1@TokenSeq(t_list1), r2@TokenSeq(t_list2), intersections) <- matchingTokenSeq(σ, atPos=k, listTokens=tokenSet)) {   
@@ -811,7 +860,7 @@ class FlashFillSolver {
         }
     }
     result
-  })
+  }
   
   def generateRegex(r: Regular_Expression, s: String)(implicit map: Map[Token, List[Token]]): SRegExp = {
     r match {
@@ -836,8 +885,9 @@ class FlashFillSolver {
   }
   def IParts(ss: String, t: Token)(implicit map: Map[Token,List[Token]] = IPart_s(ss)): SToken = if(t == StartTok || t == EndTok) SToken(Set(t))(Programs.listTokens) else SToken(map(t).toSet)(Programs.listTokens)
   
+  private var cacheReps = MMap[String, (List[Token], Map[Token,List[Token]])]()
   /** Returns a subset of equivalent tokens */
-  def Reps(s: String): (List[Token], Map[Token,List[Token]]) = {
+  def Reps(s: String): (List[Token], Map[Token,List[Token]]) = cached(s, cacheReps){
     val res = IPart_s(s)
     (res.values.toList
     .map(t => t.head), res)

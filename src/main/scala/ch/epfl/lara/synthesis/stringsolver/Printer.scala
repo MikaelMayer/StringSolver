@@ -12,7 +12,7 @@
  */
 
 
-package ch.epfl.lara.synthesis.flashfill
+package ch.epfl.lara.synthesis.stringsolver
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -203,6 +203,10 @@ object Printer {
     "(.*)for all (\\w+)>=0 the input (\\w+)\\+1(.*)" ==>
     { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>
         prefix + "all inputs" + suffix
+    }
+    "(.*)\\[((?:(?!= and )[^,])*)\\](.*)" ==>
+    { case Seq(prefix, inner, suffix) =>
+        prefix + inner + suffix
     }
     
     (res /: rules) { case (r, ruletoApply) => ruletoApply(r) }
