@@ -172,7 +172,7 @@ class StringSolverTest extends FlatSpec with ShouldMatchers with PrivateMethodTe
 import f._
   initStats()
   
-  "flashfill" should "correcly compute positions" in {
+  "StringSolver" should "correcly compute positions" in {
     val c = "AB12a.  .45? #AB"
     for(i <- 0 to c.length; spos <- f.generatePosition(c, i); pos <- spos) {
       evalProg(pos)(IndexedSeq(c)).asInt should equal(i)

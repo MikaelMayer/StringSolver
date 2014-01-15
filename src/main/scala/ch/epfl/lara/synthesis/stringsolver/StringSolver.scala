@@ -64,6 +64,9 @@ class StringSolver {
 
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
+  
+  private var proportion_compute_vs_merge = 0.4f
+  
     
   /**
    * Use dots ... to trigger manual loop research
@@ -139,12 +142,12 @@ class StringSolver {
     }
     var tmp = ff.DEFAULT_REC_LOOP_LEVEL
     val newProgramSets : IndexedSeq[STraceExpr] = try {
-      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS/2f).seconds)
+      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * (if(currentPrograms == null) 1f else proportion_compute_vs_merge)).seconds)
     } catch {
       case e: TimeoutException  => 
         ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time
         ff.timeout = true
-        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS*1/3f).seconds)
+        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
       case e: Throwable => throw e
     }
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
@@ -161,7 +164,7 @@ class StringSolver {
         //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
       }
       val intersections = try {
-        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS/2f).seconds)
+        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * (1-proportion_compute_vs_merge)).seconds)
       } catch {
         case e: TimeoutException  => 
           if(ff.verbose) println("Intersection took too much time!")
@@ -252,6 +255,7 @@ class StringSolver {
     if(debugActive) verifyCurrentState()
     res
   } catch {
+    case _: java.lang.Error => None
     case _: Exception => None
   } else None
   

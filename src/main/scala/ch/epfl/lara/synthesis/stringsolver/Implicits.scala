@@ -100,8 +100,8 @@ object Implicits {
     /**
      * If this string is a path, retrieves the path until the file inc. Slash
      */
-    def getDirectory: String = {
-      s.replaceAll("""\\[^\\]*$""", """\\""")
+    def getDirectory(): String = {
+      s.replaceFirst("""(\\|\/)[^\\/]*$""", """""")
     }
     /**
      * If this string is a path, retrieves the name of the file
