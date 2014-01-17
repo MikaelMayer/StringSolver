@@ -65,9 +65,8 @@ class StringSolver {
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
   
-  private var proportion_compute_vs_merge = 0.4f
-  
-    
+  private var proportion_compute_vs_merge = 0.35f
+
   /**
    * Use dots ... to trigger manual loop research
    */
@@ -167,8 +166,9 @@ class StringSolver {
         Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * (1-proportion_compute_vs_merge)).seconds)
       } catch {
         case e: TimeoutException  => 
-          if(ff.verbose) println("Intersection took too much time!")
-          throw e
+          if(ff.verbose) println("Intersection took too much time! Returning empty")
+          currentPrograms map {_ => SEmpty}
+          //throw e
       }
       currentPrograms = intersections
     }
@@ -249,9 +249,25 @@ class StringSolver {
     }
   }
   
+  /** Returns the best solutions to the problem for the whole output */
+  def solveAll(): List[Option[Program]] = for(i <- (0 until currentPrograms.length).toList) yield solve(i)
+  
+  /** Returns the best solution to the last problem for the whole output */
+  def solveLasts(): List[Option[Program]] = for(i <- (0 until currentPrograms.length).toList) yield solveLast(i)
+  
   /** Returns the best solution to the problem for the whole output */
   def solve(nth: Int = 0): Option[Program] = if(currentPrograms != null) try {
     val res = Some(currentPrograms(nth).takeBest)
+    if(debugActive) verifyCurrentState()
+    res
+  } catch {
+    case _: java.lang.Error => None
+    case _: Exception => None
+  } else None
+  
+  /** Returns the best solution to the problem for the whole output */
+  def solveLast(nth: Int = 0): Option[Program] = if(singlePrograms != null) try {
+    val res = Some(singlePrograms(singlePrograms.length - 1)(nth).takeBest)
     if(debugActive) verifyCurrentState()
     res
   } catch {
@@ -265,17 +281,40 @@ class StringSolver {
    * Solves for a new instance of input.
    */
   def solve(input: Seq[String]): Seq[String] = {
-      val res = currentPrograms map (progSet => 
-        try {
-          val prog = progSet.takeBest
-          val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
-          r.asString
-        } catch {
-          case e: Exception => ""
-        }
-      )
-      previousOutputs = res.toIndexedSeq
-      res
+    //println(s"Solving for input $input")
+    val res = currentPrograms map (progSet => 
+      try {
+        //println(s"progSet $progSet")
+        val prog = progSet.takeBest
+        val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
+        r.asString
+      } catch {
+        case _: java.lang.Error => ""
+        case _: Exception => ""
+      }
+    )
+    previousOutputs = res.toIndexedSeq
+    res
+  }
+  
+  /**
+   * Solves using the last input/output example
+   */
+  def solveLast(input: Seq[String]): Seq[String] = {
+    //println(s"Solving for input $input")
+    val res = singlePrograms(singlePrograms.length - 1) map (progSet => 
+      try {
+        //println(s"progSet $progSet")
+        val prog = progSet.takeBest
+        val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
+        r.asString
+      } catch {
+        case _: java.lang.Error => ""
+        case _: Exception => ""
+      }
+    )
+    previousOutputs = res.toIndexedSeq
+    res
   }
 
   /**

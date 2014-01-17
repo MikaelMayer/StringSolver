@@ -205,19 +205,9 @@ object Programs {
   sealed trait StringVariable extends Program
   case class InputString(i: IntegerExpr) extends StringVariable
   case class PrevStringNumber(i: IntegerExpr) extends StringVariable
-  //type StringVariable = IntegerExpr
-  //extends Program { def index: IntegerExpr }
   object InputString { 
     def apply(index: Int): InputString = InputString(IntLiteral(index))
   }
-  /*object InputOutputString {
-    def unapply(s: StringVariable): Option[(IntegerExpr, IntegerExpr => StringVariable)] = {
-      s match {
-        case InputString(i) => Some((i, InputString.apply))
-        case PrevStringNumber(j) => Some((j, PrevStringNumber.apply ))
-      }
-    }
-  }*/
   
   trait Alternative[A <: Program] {
     private var alternatives: Iterable[A] = SEmpty
@@ -243,7 +233,7 @@ object Programs {
   sealed trait AtomicExpr extends Program with Alternative[AtomicExpr]
   
   object SubStrFlag {
-    var registered = List[SubStrFlag](NORMAL, CONVERT_LOWERCASE, CONVERT_UPPERCASE)
+    var registered = List[SubStrFlag](NORMAL, CONVERT_LOWERCASE, CONVERT_UPPERCASE, UPPERCASE_INITIAL)
     def apply(i: Int) = {
       registered(i)
     }
@@ -252,7 +242,7 @@ object Programs {
   case object NORMAL extends SubStrFlag { def id = 0 ; def apply(s: String) = s}
   case object CONVERT_LOWERCASE extends SubStrFlag { def id = 1 ; def apply(s: String) = s.toLowerCase() }
   case object CONVERT_UPPERCASE extends SubStrFlag { def id = 2 ; def apply(s: String) = s.toUpperCase() }
-  //case object UPPERCASE_INITIAL extends SubStrFlag { def id = 3 }
+  case object UPPERCASE_INITIAL extends SubStrFlag { def id = 3 ; def apply(s: String) = if(s.length == 0) "" else s(0).toUpper.toString + s.substring(1, s.length)}
   
    /**
       The SubStr(vi; p1; p2) constructor makes use of two position expressions

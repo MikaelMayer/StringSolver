@@ -48,7 +48,9 @@ object ProgramsSet {
     def foreach[T](f: A => T): Unit
     def map[T](f: A => T): Stream[T]
     def flatMap[T](f: A => GenTraversableOnce[T]) = map(f).flatten
-    def takeBest: A
+    private var cacheBest: Option[Any] = None
+    def takeBest: A = { if(cacheBest.isEmpty) cacheBest = Some(takeBestRaw); cacheBest.get.asInstanceOf[A]}
+    def takeBestRaw: A
     override def isEmpty: Boolean = this == SEmpty || ProgramsSet.sizePrograms(this) == 0
     def sizePrograms = ProgramsSet.sizePrograms(this)
     override def toIterable: Iterable[A] = map((i: A) =>i)
@@ -64,7 +66,7 @@ object ProgramsSet {
     def foreach[T](f: Switch =>T): Unit = {
       for(t <- combinations(s map _2)) f(Switch(s map _1 zip t))
     }
-    def takeBest = Switch((s map _1) zip ((s map _2) map (_.takeBest)))
+    def takeBestRaw = Switch((s map _1) zip ((s map _2) map (_.takeBest)))
   }
   /**
    * Set of concatenate expressions described in Programs.scala
@@ -88,7 +90,7 @@ object ProgramsSet {
         (-weight(atomic) + n_weight, atomic, e._2)
       }
     }
-    def takeBest = {
+    def takeBestRaw = {
       var minProg = Map[Node, List[AtomicExpr]]()
       var weights = Map[Node, Int]()
       var nodesToVisit = new PriorityQueue[(Int, List[AtomicExpr], Node)]()(Ordering.by[(Int, List[AtomicExpr], Node), Int](e => e._1))
@@ -165,7 +167,7 @@ object ProgramsSet {
         (-weight(atomic) + n_weight, atomic, e._2)
       }
     }
-    def takeBest = {
+    def takeBestRaw = {
       var minProg = Map[Int, List[AtomicExpr]]()
       var weights = Map[Int, Int]()
       var nodesToVisit = new PriorityQueue[(Int, List[AtomicExpr], Int)]()(Ordering.by[(Int, List[AtomicExpr], Node), Int](e => e._1))
@@ -226,7 +228,7 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       for(prog <- e) f(Loop(i, prog, separator))
     }
-    def takeBest = Loop(i, e.takeBest, separator)//.withAlternative(this.toIterable)
+    def takeBestRaw = Loop(i, e.takeBest, separator)//.withAlternative(this.toIterable)
   }
   
 
@@ -241,7 +243,7 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       for(pp1 <- p1; ppp1 <- pp1; pp2 <- p2; ppp2 <- pp2; method <- methods) f(SubStr(vi, ppp1, ppp2, method))
     }
-    def takeBest = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head, methods.takeBest)//.withAlternative(this.toIterable)
+    def takeBestRaw = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head, methods.takeBest)//.withAlternative(this.toIterable)
   }
   
   def isCommonSeparator(s: String) = s match {
@@ -262,14 +264,14 @@ object ProgramsSet {
     def foreach[T](f: IntLiteral => T): Unit = {
        for(i <- cl) f(i)
     }
-    def takeBest = cl.toList.sortBy{ case IntLiteral(k) => Math.abs(k) }.head
+    def takeBestRaw = cl.toList.sortBy{ case IntLiteral(k) => Math.abs(k) }.head
   }
   case class SAnyInt(default: Int) extends SInt { 
     def map[T](f: IntLiteral => T): Stream[T] = {
       Stream(f(default))
     }
     def foreach[T](f: IntLiteral => T): Unit = {f(default)}
-    def takeBest = IntLiteral(default)
+    def takeBestRaw = IntLiteral(default)
   }
   /**
    * Used to match any program on this string variable
@@ -282,7 +284,7 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       f(SubStr2(vi, NumTok, 1))
     }
-    def takeBest = SubStr2(vi, NumTok, 1)
+    def takeBestRaw = SubStr2(vi, NumTok, 1)
   }
   /**
    * Set of SubStr expressions described in Programs.scala
@@ -294,7 +296,7 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       for(pp1 <- a; l <- length; o <- offset; s <- step) f(Number(pp1, l, (o.k, s.k)))
     }
-    def takeBest = Number(a.takeBest, length.toList.sortBy(weight).head, (offset.takeBest.k, step.takeBest.k))//.withAlternative(this.toIterable)
+    def takeBestRaw = Number(a.takeBest, length.toList.sortBy(weight).last, (offset.takeBest.k, step.takeBest.k))//.withAlternative(this.toIterable)
   }
   
   /**
@@ -307,7 +309,7 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       f(ConstStr(s))
     }
-    def takeBest = ConstStr(s)
+    def takeBestRaw = ConstStr(s)
   }
   
   type SPosition = ProgramSet[Position]
@@ -321,7 +323,7 @@ object ProgramsSet {
     def foreach[T](f: Position => T): Unit = {
       f(CPos(k))
     }
-    def takeBest = CPos(k)
+    def takeBestRaw = CPos(k)
   }
   /**
    * Set of regexp positions described in Programs.scala
@@ -333,7 +335,7 @@ object ProgramsSet {
     def foreach[T](f: Position => T): Unit = {
       for(rr1 <- r1; rr2 <- r2; cc <- c) f(Pos(rr1, rr2, cc))
     }
-    def takeBest = Pos(r1.takeBest, r2.takeBest, c.toList.sortBy(weight).head)
+    def takeBestRaw = Pos(r1.takeBest, r2.takeBest, c.toList.sortBy(weight).head)
   }
   
   type SRegExp = ProgramSet[RegExp]
@@ -348,7 +350,7 @@ object ProgramsSet {
     def foreach[T](f: RegExp =>T): Unit = {
       for(t <- combinations(s)) f(TokenSeq(t))
     }
-    def takeBest = TokenSeq(s map (_.takeBest))
+    def takeBestRaw = TokenSeq(s map (_.takeBest))
   }
   
   /**
@@ -357,7 +359,7 @@ object ProgramsSet {
   case object SEmpty extends ProgramSet[Nothing] with Iterable[Nothing] {
     def map[T](f: Nothing => T): Stream[T] = ???
     override def foreach[T](f: Nothing => T): Unit = ???
-    def takeBest = throw new Error("No program found")
+    def takeBestRaw = throw new Error("No program found")
     def iterator = Nil.toIterator
     override def toIterable = Nil
     override def isEmpty = true
@@ -417,7 +419,7 @@ object ProgramsSet {
       rec(mask, l)
     }
     override def isEmpty = size == 0
-    def takeBest = map((i: Token) => i).toList.sortBy(weight).head
+    def takeBestRaw = map((i: Token) => i).toList.sortBy(weight).head
     def contains(t: Token): Boolean = ((1L << l.indexOf(t)) & mask) != 0
     override def toString = "SToken("+this.toList.mkString(",")+")"
   }
@@ -453,7 +455,7 @@ object ProgramsSet {
       rec(mask)
     }
     override def isEmpty = mask == 0
-    def takeBest = map((i: SubStrFlag) => i).toList.sortBy(weight).head
+    def takeBestRaw = map((i: SubStrFlag) => i).toList.sortBy(weight).head
     override def toString = "SSubStrFlag("+this.toList.mkString(",")+")"
   }
   

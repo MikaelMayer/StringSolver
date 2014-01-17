@@ -33,8 +33,9 @@ object Implicits {
           val in = source.substring(pos, pos + s.length)
           var res= Set[SubStrFlag](); implicit class Adder(b: Boolean) { def ==>(t: SubStrFlag) = if(b) res += t }
           in == s ==> NORMAL
-          in.toLowerCase == s ==> CONVERT_LOWERCASE
-          in.toUpperCase == s ==> CONVERT_UPPERCASE
+          CONVERT_LOWERCASE(in) == s ==> CONVERT_LOWERCASE
+          CONVERT_UPPERCASE(in) == s ==> CONVERT_UPPERCASE
+          UPPERCASE_INITIAL(in) == s ==> UPPERCASE_INITIAL
           if(res.isEmpty) Nil else List((pos, SSubStrFlag(res.toTraversable)))
       }
     }
@@ -84,9 +85,9 @@ object Implicits {
     def reaching(t: Int): Option[Int] = {
       if(s.isNumber) {
         val si = s.toInt
-        if(si != t) {
+        //if(si != t) {
           Some(t - s.toInt)
-        } else None
+        //} else None
       } else None
     }
     

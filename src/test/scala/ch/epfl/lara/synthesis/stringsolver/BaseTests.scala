@@ -331,5 +331,11 @@ import f._
     f.add(List("E56"), "E-56-4")
     f.solve(List("D3"))(0) should equal ("D-3-5")
   }
+  it should "prefer numbers over strings" in {
+    val f = StringSolver()
+    val c = f.add("Algorithm1.txt -> Algorithm01.txt")
+    println(Printer(c.takeBest))
+    f.solve("Algorithm10.txt") should equal ("Algorithm10.txt")
+  }
 }
 

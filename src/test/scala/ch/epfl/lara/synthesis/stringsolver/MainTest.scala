@@ -23,13 +23,13 @@ class MainTest extends WordSpec with ShouldMatchers {
   }
   
   "Main should keep history" in {
-    Main.deleteHistory()
-    Main.storeRenameHistory(new File(Main.decodedPath, "test.txt"), new File(Main.decodedPath, "tist.txt"))
-    Main.storeRenameHistory(new File(Main.decodedPath, "tost.txt"), new File(Main.decodedPath, "tust.txt"))
+    Main.deleteMvHistory()
+    Main.storeMvHistory(new File(Main.decodedPath), "test.txt", "tist.txt")
+    Main.storeMvHistory(new File(Main.decodedPath), "tost.txt", "tust.txt")
     println(Main.decodedPath)
-    Main.recoverHistoryForFolder(new File(Main.decodedPath)) should equal (List(("test.txt", "tist.txt"), ("tost.txt", "tust.txt")))
-    Main.deleteHistory()
-    Main.recoverHistoryForFolder(new File(Main.decodedPath)) should equal (Nil)
+    Main.getMvHistory(new File(Main.decodedPath)) should equal (List(("test.txt", "tist.txt"), ("tost.txt", "tust.txt")))
+    Main.deleteMvHistory()
+    Main.getMvHistory(new File(Main.decodedPath)) should equal (Nil)
   }
   
   "Main should suggest renaming" in {
@@ -41,6 +41,8 @@ class MainTest extends WordSpec with ShouldMatchers {
       tmpDir.mkdir()
     }
     
+    tmpDir.list() foreach { e => new File(tmpDir, e).delete()}
+    
     var c1: File = null
     var c2: File = null
     var c3: File = null
@@ -51,6 +53,8 @@ class MainTest extends WordSpec with ShouldMatchers {
     try {
       import Main._
       Main.decodedPath = tmpDir.getAbsolutePath()
+      Main.deleteMvHistory()
+      
       
       c1 = new File(decodedPath, "infoAutocad.log")
       c2 = new File(decodedPath, "mathAnalyse.log")
@@ -64,11 +68,19 @@ class MainTest extends WordSpec with ShouldMatchers {
       c2.createNewFile()
       c3.createNewFile()
       
-      System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
+      cc1 should not be('exists)
+      cc2 should not be('exists)
+      cc3 should not be('exists)
+      
+      //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
       Main.automatedMv(List("mv", "infoAutocad.log", "autocad_info_1.txt"))
-      Main.automatedMv(List("mv", "mathAnalyse.log", "analyse_math_2.txt"))
-      Main.automatedMv(List("mv"))
       c1 should not be 'exists
+      cc1 should be('exists)
+      Main.automatedMv(List("mv", "mathAnalyse.log", "analyse_math_2.txt"))
+      c2 should not be 'exists
+      cc2 should be('exists)
+      cc3 should not be('exists)
+      Main.automatedMv(List("mv"))
       c2 should not be 'exists
       c3 should not be 'exists
       cc1 should be('exists)
@@ -79,6 +91,86 @@ class MainTest extends WordSpec with ShouldMatchers {
       if(c1!=null&&c1.exists()) c1.delete()
       if(c2!=null&&c2.exists()) c2.delete()
       if(c3!=null&&c3.exists()) c3.delete()
+      if(cc1!=null&&cc1.exists()) cc1.delete()
+      if(cc2!=null&&cc2.exists()) cc2.delete()
+      if(cc3!=null&&cc3.exists()) cc3.delete()
+    }
+  }
+  
+  "Main should create multiple commands" in {
+    val tmpIn = System.in
+    val tmpUserDir = System.getProperty("user.dir")
+
+    val tmpDir = new File(System.getProperty("java.io.tmpdir"), "tmpMainTest")
+    if(!tmpDir.exists()) {
+      tmpDir.mkdir()
+    }
+    tmpDir.list() foreach { e => new File(tmpDir, e).delete()}
+    
+    var c1: File = null
+    var c2: File = null
+    var c3: File = null
+    var a1: IndexedSeq[File] = null
+    var a2: IndexedSeq[File] = null
+    var a3: IndexedSeq[File] = null
+    var b1: IndexedSeq[File] = null
+    var b2: IndexedSeq[File] = null
+    var b3: IndexedSeq[File] = null
+    def as = List(a1, a2, a3)
+    def bs = List(b1, b2, b3)
+    var cc1: File = null
+    var cc2: File = null
+    var cc3: File = null
+    
+    try {
+      import Main._
+      decodedPath = tmpDir.getAbsolutePath()
+      Main.deleteAutoHistory()
+      
+      c1 = new File(decodedPath, "Algorithms")
+      c2 = new File(decodedPath, "Maths")
+      c3 = new File(decodedPath, "Physics")
+      
+      a1 = for(i <- 1 to 3) yield new File(decodedPath, s"Algorithm$i.txt")
+      a2 = for(i <- 1 to 5) yield new File(decodedPath, s"Math$i.txt")
+      a3 = for(i <- 1 to 11) yield new File(decodedPath, s"Algebra$i.txt")
+      b1 = for(i <- 1 to 3) yield new File(decodedPath, s"Algorithms/Algorithm$i.pdf")
+      b2 = for(i <- 1 to 5) yield new File(decodedPath, s"Maths/Math$i.pdf")
+      b3 = for(i <- 1 to 11) yield new File(decodedPath, s"Algebras/Algebra$i.pdf")
+      
+      cc1 = new File(decodedPath, "AlgorithmsBook.pdf")
+      cc2 = new File(decodedPath, "MathsBook.pdf")
+      cc3 = new File(decodedPath, "PhysicsBook.pdf")
+      
+      for(a <- as; f <- a) f.createNewFile()
+
+      //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
+      Main.automateCmd(List("auto", "Algorithm1.txt", "mkDir Algorithms;convert Algorithm1.txt Algorithms/Algorithm1.pdf;rm Algorithm1.txt"))
+      Main.automateCmd(List("auto"))
+      for(a <- as; f <- a) f should not be ('exists)
+      
+      c1 should be('exists)
+      c2 should be('exists)
+      c3 should be('exists)
+      for(a <- as; f <- a) f should not be 'exists
+      for(a <- bs; f <- a) f should be ('exists)
+      Main.automateCmd(List("auto", "Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"))
+      Main.automateCmd(List("auto"))
+      cc1 should be('exists)
+      cc2 should be('exists)
+      cc3 should be('exists)
+      for(a <- bs; f <- a) f should not be ('exists)
+      c1 should not be('exists)
+      c2 should not be('exists)
+      c3 should not be('exists)
+      
+    } finally {
+      //System.setIn(tmpIn)
+      if(c1!=null&&c1.exists()) c1.delete()
+      if(c2!=null&&c2.exists()) c2.delete()
+      if(c3!=null&&c3.exists()) c3.delete()
+      for(a <- as; f <- a) if(f != null && f.exists()) f.delete()
+      for(a <- bs; f <- a) if(f != null && f.exists()) f.delete()
       if(cc1!=null&&cc1.exists()) cc1.delete()
       if(cc2!=null&&cc2.exists()) cc2.delete()
       if(cc3!=null&&cc3.exists()) cc3.delete()

@@ -23,6 +23,8 @@ import java.nio.ByteBuffer
 object Main {
   import Implicits._
   
+  final val debug = true
+  
   final object Move {
     def unapply(s: String): Option[Unit] = {
       if(s == "mv" || s.toLowerCase() == "move") {
@@ -30,6 +32,22 @@ object Main {
       } else None
     }
   }
+  final object Convert {
+    def unapply(s: String): Option[Unit] = {
+      if(s.toLowerCase() == "convert") {
+        Some(())
+      } else None
+    }
+  }
+  
+  final object Auto {
+    def unapply(s: String): Option[Unit] = {
+      if(s.toLowerCase() == "auto") {
+        Some(())
+      } else None
+    }
+  }
+  
   
   trait REPFL_ANSWER
   object FINISH extends REPFL_ANSWER
@@ -40,65 +58,68 @@ object Main {
   var decodedPath = System.getProperty("user.dir");//URLDecoder.decode(path, "UTF-8");
   
   val HISTORY_DIR = "StringSolverRenaming"
-  val HISTORY_FILE = "mv.log"
+  val HISTORY_MV_FILE = "mv.log"
+  val HISTORY_AUTO_FILE = "auto.log"
   
   /**
    * Returns an history file.
    */
-  private def getHistoryFile(): Option[File] = {
+  private def getHistoryFile(name: String): Option[File] = {
     val tmpDir = System.getProperty("java.io.tmpdir")
     val history_dir = new File(tmpDir, HISTORY_DIR)
     if(!history_dir.exists()) {
       history_dir.mkdir()
     }
-    val history_file = new File(history_dir, HISTORY_FILE)
+    val history_file = new File(history_dir, name)
     if(if(!history_file.exists) history_file.createNewFile() else true) {
       Some(history_file)
     } else None
   }
-  
-  def deleteHistory() = {
-    getHistoryFile() map (_.delete())
+  def deleteMvHistory() = {
+    getHistoryFile(HISTORY_MV_FILE) map (_.delete())
+  }
+  def deleteAutoHistory() = {
+    getHistoryFile(HISTORY_AUTO_FILE) map (_.delete())
   }
   
   /**
-   * Store a renaming in the rename history
+   * Stores a renaming in the rename history
    */
-  def storeRenameHistory(file: File, to: File): Unit = {
-    //println(s"recover history file for $file to $to")
-    getHistoryFile() map { history_file =>
+  def storeMvHistory(dir: File, file: String, to: String): Unit = {
+    getHistoryFile(HISTORY_MV_FILE) map { history_file =>
       try {
-         //println(s"Creating out in $history_file")
-          val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
+        if(debug) println(s"Writing in history")
+        val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
           
-          val date= new java.util.Date();
-          val time = new Timestamp(date.getTime()).toString();
+        val date= new java.util.Date();
+        val time = new Timestamp(date.getTime()).toString();
    
-          // println("Timestamp")
-          out.println(time + ";" + file.getAbsolutePath()+";"+to.getAbsolutePath());
-          out.close();
+        //println("Timestamp")
+        out.println(time + ";" + dir.getAbsolutePath() + ";" + file+";"+to);
+        out.close();
       } catch  {
-        case e: IOException =>// println("ioexception")
+        case e: IOException =>println("ioexception")
       }
     }
   }
+  
   /**
-   * Recover all renaming in history
+   * Recovesr all renaming in history which happened in this folder
    */
-  def recoverHistoryForFolder(path: File): Seq[(String, String)] = {
-    val dir = if(path.isDirectory()) path.getAbsoluteFile() else new File(path.getParent()).getAbsolutePath()
-    
-    val checkFile = (s: String) => new File(new File(s).getParent()).getAbsoluteFile() == dir
-      
-    getHistoryFile() map { history_file =>
+  def getMvHistory(folder: File): Seq[(String, String)] = {
+    val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
+    val checkDir = (s: String) => s == dir
+    getHistoryFile(HISTORY_MV_FILE) map { history_file =>
+      if(debug) println(s"history file : $history_file")
       val encoded = Files.readAllBytes(Paths.get(history_file.getAbsolutePath()));
       val content = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(encoded)).toString();
       if(content.isEmpty) Nil
       else {
       val res = 
         for(line <- content.filterNot(_ == '\r').split("\n").toList;
-            Array(time, file1, file2) = line.split(";");
-            if(checkFile(file1))) yield (new File(file1).getName(), new File(file2).getName())
+            splitted = line.split(";") if splitted.length == 4;
+            Array(time, dir, file1, file2) = splitted;
+            if(checkDir(dir))) yield (file1, file2)
       res
       }
     } getOrElse (List[(String, String)]())
@@ -109,59 +130,101 @@ object Main {
    */
   def main(args: Array[String]): Unit = {
     val cmd = args.toList
-    automatedMv(cmd)
+    cmd match {
+      case Auto()::q =>    automateCmd(cmd)
+      case Move()::q =>    automatedMv(cmd)
+      case Convert()::q => automatedConvert(cmd)
+      case _ =>
+    }
   }
   
   /**
    * Performs automated renaming suggestion
    * @param perform Indicates if renaming is applied.
+   * 
+   * Problem: Take the last instances, then the last two, etc.
    */
   def automatedRenaming(perform: Boolean = true, explain: Boolean = false): Unit = {
-    val examples = recoverHistoryForFolder(new File(decodedPath))
+    val examples = getMvHistory(new File(decodedPath))
     val c = StringSolver()
     c.setTimeout(2)
     var exceptions = Set[String]()
-    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else return ();
+    if(debug) println(s"$decodedPath $examples, $perform; $explain")
+    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else if(explain) return ();
+    
+    var nested_level = 0
     examples.reverse.take(2).reverse foreach {
       case (in, out) =>
+        if(debug) println(s"Adding $in, $out")
         c.add(List(in), List(out))(0)
+        nested_level = in.count(_ == '/') + in.count(_ == '\\')
         exceptions += out
     }
-    c.solve() match {
-      case Some(Concatenate(List(ConstStr(a)))) =>
-      case Some(prog) =>
-        if(explain) {
-          println(Printer(prog))
-        } else {
-          val files = new File(decodedPath).list()
-             .filter(file => !new File(decodedPath, file).isDirectory()).filterNot(exceptions)
-          if(files.length != 0) {
-            val mappedFiles = files map { f => c.solve(f) }
-            val mapping = files zip mappedFiles
-            if(perform) {
-              for((file, to) <- mapping) {
-                move(file, to)
-              }
-              suggestMapping(prog, mapping, title=false)
+    
+    
+    val files: Array[String] = if(nested_level == 0) {
+      new File(decodedPath).list()
+      .filter(file => !new File(decodedPath, file).isDirectory()).filterNot(exceptions)
+    } else if(nested_level == 1){
+      new File(decodedPath).listFiles().filter(_.isDirectory()).flatMap{ theDir =>
+        theDir.list().map(file => theDir.getName() + File.separator + file)
+        .filter(file => !new File(decodedPath, file).isDirectory())
+        .filterNot(exceptions)
+      }
+    } else Array[String]()
+    if(files.length != 0) {       
+      //println("Solving problem...")
+      if(debug) println(s"Solving with at most 2")
+      
+      val attempts = (() => c.solve(),   (e: String) => c.solve(List(e)))::
+                     (() => c.solveLast(), (e: String) => c.solveLast(List(e)))::Nil
+      attempts find { case (computation, solver) => 
+        computation() match {
+          case Some(Concatenate(List(ConstStr(a)))) => true
+          case Some(prog) =>
+            if(debug) println(Printer(prog))
+            if(explain) {
+              println(Printer(prog))
             } else {
-              suggestMapping(prog, mapping)
+              val mappedFiles = files map { f => solver(f) }
+              val mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
+              if(mapping.nonEmpty) {
+                if(perform) {
+                  for((file, to) <- mapping) {
+                    move(file, to.head)
+                  }
+                  suggestMapping(List(prog), mapping, title=false)
+                } else {
+                  suggestMapping(List(prog), mapping)
+                }
+              }
             }
-          }
+            true
+          case None =>
+            if(debug) println(s"no program found")
+            false
         }
-      case None =>
-        if(!explain && !perform) println("No mappings found")
+      }
     }
   }
+  
   
   /**Enhanced move command
    * Feature list:
    * - "mv file1 file2" will move file1 to file2, and then 
    * - "mv" will look at the previous history and the last two moves, and perform a generalization to all files
+   * - "mv -c" clears previous history
+   * - "mv -e" explains
+   * - "mv -t" tests the mv command.
    */
   def automatedMv(cmd: List[String]): Unit = {
     cmd match {
-      case Move()::"-e"::_ => // Automated move.
+      case Move()::("-c" | "--clear")::_ => // Automated move.
+        deleteMvHistory()
+      case Move()::("-e" | "--explain")::_ => // Automated move.
         automatedRenaming(perform=false, explain=true)
+      case Move()::("-t" | "--test")::_ => // Automated move.
+        automatedRenaming(perform=false, explain=false)
       case Move()::Nil => // Automated move.
         automatedRenaming()
         
@@ -169,34 +232,174 @@ object Main {
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
-        val dir = file1.getAbsolutePath().getDirectory
-        val files = new File(dir).list().filter(file => !new File(file).isDirectory())
         move(sfile1, sfile2)
-        storeRenameHistory(file1, file2)
+        storeMvHistory(new File(decodedPath), sfile1, sfile2)
         automatedRenaming(false)
-        /*if(files.length != 0 && files(0) == sfile1.getFile) {
-          // see if there is a pattern in renaming.
-          val c = StringSolver()
-          c.setTimeout(4)
-          c.add(List(sfile1), List(sfile2))
-          c.solve() match {
-            case Some(Concatenate(List(ConstStr(a)))) =>
-            case Some(prog) =>
-              val mappedFiles = files map { f => c.solve(f) }
-              val mapping = files zip mappedFiles
-              askIfMapping(prog, mapping)
-            case None => 
-          }
-        }*/
       case Move()::_ => println("The mv command takes exactly two parameters")
         
       case other => println("Unkown function : " + other.mkString(" "))
     }
   }
   
-  def suggestMapping(prog: Program, mapping: Array[(String, String)], title: Boolean = true) = {
+  
+  def automatedConvert(cmd: List[String]): Unit = {
+    cmd match {
+      case Convert()::("-c" | "--clear")::_ =>
+      case _ =>
+    }
+  }
+  
+  
+  /**
+   * Stores a renaming in the rename history
+   */
+  def storeAutoHistory(dir: File, file: String, cmd: List[String]): Unit = {
+    getHistoryFile(HISTORY_AUTO_FILE) foreach { history_file =>
+      try {
+        if(debug) println(s"Writing in history")
+        val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
+          
+        val date= new java.util.Date();
+        val time = new Timestamp(date.getTime()).toString();
+   
+        //println("Timestamp")
+        out.println(time + "||" + dir.getAbsolutePath() + "||" + file + "||" + cmd.mkString("||"));
+        out.close();
+      } catch  {
+        case e: IOException =>println("ioexception")
+      }
+    }
+  }
+  
+  /**
+   * Recovers all renaming in history which happened in this folder
+   */
+  def getAutoHistory(folder: File): Seq[(String, List[String])] = {
+    val dirFolder = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
+    val checkDir = (s: String) => s == dirFolder
+    getHistoryFile(HISTORY_AUTO_FILE) map { history_file =>
+      if(debug) println(s"history file : $history_file")
+      val encoded = Files.readAllBytes(Paths.get(history_file.getAbsolutePath()));
+      val content = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(encoded)).toString();
+      if(content.isEmpty) Nil
+      else {
+      val res = 
+        for(line <- content.filterNot(_ == '\r').split("\n").toList;
+            splitted = line.split("\\|\\|").toList if splitted.length >= 4;
+            time::dir::file::command = splitted;
+            if(checkDir(dir))) yield (file, command)
+      res
+      }
+    } getOrElse (List[(String, List[String])]())
+  }
+  
+  /**
+   * Generic automated commands.
+   */
+  def automateCmd(cmd: List[String]): Unit = {
+    cmd match {
+      case Auto()::("-c" | "--clear")::_ =>
+        deleteAutoHistory()
+      case Auto()::Nil =>
+        automatedAction(perform=true, explain=false)
+      case Auto()::("-e" | "--explain")::_ =>
+        automatedAction(perform=false,explain=true)
+      case Auto()::("-t" | "--test")::_ =>
+        automatedAction(perform=false, explain=false)
+      case Auto()::sfile::l =>
+        val file1 = if(sfile.indexOf("\\") != -1 || sfile.indexOf("/") != -1) new File(sfile) else new File(decodedPath, sfile)
+        if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
+        auto(l)
+        storeAutoHistory(new File(decodedPath), sfile, l)
+        automatedAction(false, false)
+      case _ =>
+    }
+  }
+  
+  /**
+   * Performs automated renaming suggestion
+   * @param perform Indicates if renaming is applied.
+   * @param explain Indicates if the algorithm is explained. If both are false, displays the mapping.
+   */
+  def automatedAction(perform: Boolean = true, explain: Boolean = false): Unit = {
+    val examples = getAutoHistory(new File(decodedPath))
+    val c = StringSolver()
+    c.setTimeout(2)
+    var exceptions = Set[String]()
+    if(debug) println(s"$decodedPath $examples, $perform; $explain")
+    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else if(explain) return ();
+    
+    var nested_level = 0
+    examples.reverse.take(2).reverse foreach {
+      case (file, command) =>
+        if(debug) println(s"Adding $file, $command")
+        c.add(List(file), command)(0)
+        nested_level = file.count(_ == '/') + file.count(_ == '\\')
+        exceptions += command.last
+        exceptions += file
+    }
+    
+    val files: Array[String] = if(nested_level == 0) {
+      new File(decodedPath).list()
+      .filter(file => !new File(decodedPath, file).isDirectory()).filterNot(exceptions)
+    } else if(nested_level == 1){
+      new File(decodedPath).listFiles().filter(_.isDirectory()).flatMap{ theDir =>
+        theDir.list().map(file => theDir.getName() + File.separator + file)
+        .filter(file => !new File(decodedPath, file).isDirectory())
+        .filterNot(exceptions)
+      }
+    } else Array[String]()
+    if(files.length != 0) {       
+      //println("Solving problem...")
+      if(debug) println(s"Solving with at most 2 and then 1")
+      
+      val attempts = (() => c.solveAll(),   (e: List[String]) => c.solve(e))::
+                     (() => c.solveLasts(), (e: List[String]) => c.solveLast(e))::Nil
+      attempts find { case (computation, solver) => 
+        computation() match {
+          case List(Some(Concatenate(List(ConstStr(a))))) => false
+          case l if l.forall(_.nonEmpty) =>
+            if(explain || debug) {
+              for(ls <- l; prog <- ls) {
+                println(Printer(prog))
+              }
+            }
+            if(!explain) {
+              val mapping = for(f <- files;
+                  mappedFile = solver(List(f))
+                  if mappedFile forall (_.nonEmpty);
+                  dummy = auto(mappedFile.toList)) yield {
+                f -> mappedFile
+              }
+              suggestMapping(l.map(_.get), mapping, title= !perform)
+            }
+            true
+          case _ =>
+            if(debug) println(s"No program found")
+            false
+        }
+      }
+    }
+  }
+  
+  
+  def auto(cmd: List[String]) = {
+    if(System.getProperty("os.name").contains("indow")) {
+      val cmdString = "\""+cmd.mkString(";").replaceAll("\"","\\\"")+"\""
+      val p = Runtime.getRuntime().exec(Array[String]("C:\\cygwin\\bin\\bash.exe",
+                                              "-c")++List(cmdString),
+                                 Array[String]("PATH=/cygdrive/c/cygwin/bin"));
+      p.waitFor()
+      
+    } else {
+      Runtime.getRuntime().exec(cmd.toArray)
+    }
+  }
+  
+  
+  def suggestMapping(prog: List[Program], mapping: Array[(String, Seq[String])], title: Boolean = true) = {
     val t = if(title) "  (Mapping found. Type 'mv' to perform it, 'mv -e' to explain)  \n" else ""
-    val m = (mapping map { case (i: String, j: String) => s"$i -> $j"} mkString "\n")
+    val m = (mapping map { case (i: String, j: Seq[String]) => s"$i -> ${j.mkString(";")}"} mkString "\n")
     println(t+m)
     /*val question = "Apply the following transformation to all files?\n" + m
     ask(question, 
@@ -248,17 +451,17 @@ object Main {
     } else decodedPath
     val theDir = new File(directoryName);
 
-    // if the directory does not exist, create it
     if (!theDir.exists()) {
-      //System.out.println("creating directory: " + directoryName);
       val result = theDir.mkdir();  
-  
-      //if(result) {    
-      //  System.out.println("DIR created");  
-      //}
     }
-    new File(decodedPath, file).renameTo(new File(theDir, to))
+    new File(decodedPath, file).renameTo(new File(decodedPath, to))
     
+    if(file.indexOf("/") != -1 || file.indexOf("\\") != -1) {
+      val dir = new File(decodedPath, file.getDirectory)
+      if(dir.list().length == 0) {
+        dir.delete()
+      }
+    }
     //s"move $file $to".!!
     //println(s"move $file $to")
   }

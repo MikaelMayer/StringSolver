@@ -19,10 +19,15 @@ object Weights {
     case CPos(-1) => 1
     case CPos(k) => 10
     case Pos(r1, r2, c) => 
+      val const_weight = c match {
+        case IntLiteral(i) if i >= 1 => i - 1
+        case IntLiteral(i) if i <= -1 => -i + 1
+        case _ => weight(c)
+      }
       if(starting_pos) {
-        3*weight(r1)+2*weight(r2)+weight(c)
+        3*weight(r1)+2*weight(r2)+const_weight
       } else {
-        2*weight(r1)+3*weight(r2)+weight(c)
+        2*weight(r1)+3*weight(r2)+const_weight
       }
     case Concatenate(l) => l.map(weight).sum
     
@@ -34,15 +39,15 @@ object Weights {
       }
       10 + weight(l) - 1 + separatorweight
     case Number(s@ SubStr(InputString(_), p1, p2, m), l, (o, step)) =>
-      3 + weight(s) - 3 + (if(step < 0) ((-step).toString.length * 7 + 5) else step.toString.length * 7)
+      0 + weight(s) + (if(step < 0) ((-step).toString.length * 7 + 5) else if(step == 0) 0 else step.toString.length * 7)
     case Number(s@ SubStr(PrevStringNumber(_), p1, p2, m), l, (o, step)) =>
       10 + weight(s) - 1 + 10*(Math.abs(step) - 1) + (o - 1)
     case Number(s, l, (o, step)) =>
       10 + weight(s) - 1 + (step-1) // if s is smaller, the better.
-    case ConstStr(s) => 4 + s.size*10
+    case ConstStr(s) => 6 + s.size*10
     case SubStr(vi, Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
       10 + weight(r2) + method.id
-    case SubStr(vi, CPos(0), CPos(-1), method) => 10
+    case SubStr(vi, CPos(0), CPos(-1), method) => 14
     case SubStr(vi, p, pos, method) => 10 + weight(p)(true) + weight(pos)(false) + method.id
     case TokenSeq(t) => t.length // Best for empty sequences.
     case IntLiteral(i) => Math.abs(i)
