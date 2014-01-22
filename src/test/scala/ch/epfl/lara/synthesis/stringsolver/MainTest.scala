@@ -14,13 +14,7 @@ class MainTest extends WordSpec with ShouldMatchers {
   import StringSolver._
   import Implicits._
   import Evaluator._
-  
-  def renderer(c: StringSolver): Unit = {
-    c.solve() match {
-      case Some(prog) => println(Printer(prog))
-      case none => println("No program found")
-    }
-  }
+
   
   "Main should keep history" in {
     Main.deleteMvHistory()
@@ -97,8 +91,34 @@ class MainTest extends WordSpec with ShouldMatchers {
     }
   }
   
+  "Main should have a working command line " in {
+    val tmpUserDir = System.getProperty("user.dir")
+    val tmpDir = new File(System.getProperty("java.io.tmpdir"), "tmpMainTest")
+    if(!tmpDir.exists()) {
+      tmpDir.mkdir()
+    }
+    tmpDir.list() foreach { e => new File(tmpDir, e).delete()}
+    
+    Main.decodedPath = tmpDir.getAbsolutePath()
+    Main.auto(List("touch file.txt"))
+    val f = new File(tmpDir, "file.txt")
+    val p = new File(tmpDir, "file.pdf")
+    val f1 = new File(tmpDir, "folder\\file.txt")
+    val ff = new File(tmpDir, "folder")
+    f should be('exists)
+    p should not be ('exists)
+    Main.auto(List("mkDir folder;mv file.txt folder/file.txt"))
+    f should not be 'exists
+    f1 should be ('exists)
+    Main.auto(List("convert folder/file.txt file.pdf;rm -r folder"))
+    ff should not be 'exists
+    p should be ('exists)
+    Main.auto(List("rm file.pdf"))
+    p should not be ('exists)
+  }
+  
   "Main should create multiple commands" in {
-    val tmpIn = System.in
+    //val tmpIn = System.in
     val tmpUserDir = System.getProperty("user.dir")
 
     val tmpDir = new File(System.getProperty("java.io.tmpdir"), "tmpMainTest")
@@ -129,7 +149,7 @@ class MainTest extends WordSpec with ShouldMatchers {
       
       c1 = new File(decodedPath, "Algorithms")
       c2 = new File(decodedPath, "Maths")
-      c3 = new File(decodedPath, "Physics")
+      c3 = new File(decodedPath, "Algebras")
       
       a1 = for(i <- 1 to 3) yield new File(decodedPath, s"Algorithm$i.txt")
       a2 = for(i <- 1 to 5) yield new File(decodedPath, s"Math$i.txt")
@@ -140,7 +160,7 @@ class MainTest extends WordSpec with ShouldMatchers {
       
       cc1 = new File(decodedPath, "AlgorithmsBook.pdf")
       cc2 = new File(decodedPath, "MathsBook.pdf")
-      cc3 = new File(decodedPath, "PhysicsBook.pdf")
+      cc3 = new File(decodedPath, "AlgebrasBook.pdf")
       
       for(a <- as; f <- a) f.createNewFile()
 
@@ -155,8 +175,8 @@ class MainTest extends WordSpec with ShouldMatchers {
       for(a <- as; f <- a) f should not be 'exists
       for(a <- bs; f <- a) f should be ('exists)
       Main.automateCmd(List("auto", "Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"))
-      Main.automateCmd(List("auto"))
       cc1 should be('exists)
+      Main.automateCmd(List("auto"))
       cc2 should be('exists)
       cc3 should be('exists)
       for(a <- bs; f <- a) f should not be ('exists)

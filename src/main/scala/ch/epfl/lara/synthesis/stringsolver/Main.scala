@@ -1,4 +1,5 @@
 package ch.epfl.lara.synthesis.stringsolver
+
 import scala.sys.process._
 import java.net.URLDecoder
 import java.io.File
@@ -13,6 +14,12 @@ import java.sql.Timestamp
 import java.nio.file._
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
+import scala.language.postfixOps
+import scala.sys.process._
+import Evaluator._
+import Programs._
+import scala.collection.mutable.HashMap
+import scala.collection.JavaConversions._
 
 /**
  * Usage
@@ -182,9 +189,9 @@ object Main {
         computation() match {
           case Some(Concatenate(List(ConstStr(a)))) => true
           case Some(prog) =>
-            if(debug) println(Printer(prog))
+            if(debug) displayProg(prog)
             if(explain) {
-              println(Printer(prog))
+             displayProg(prog)
             } else {
               val mappedFiles = files map { f => solver(f) }
               val mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
@@ -261,9 +268,9 @@ object Main {
           
         val date= new java.util.Date();
         val time = new Timestamp(date.getTime()).toString();
-   
+        val nature = if(new File(dir, file).isDirectory()) "DIRECTORY" else "FILE"
         //println("Timestamp")
-        out.println(time + "||" + dir.getAbsolutePath() + "||" + file + "||" + cmd.mkString("||"));
+        out.println(time + "||" + dir.getAbsolutePath() + "||" + file + "||" + nature + "||" + cmd.mkString("||"));
         out.close();
       } catch  {
         case e: IOException =>println("ioexception")
@@ -273,8 +280,9 @@ object Main {
   
   /**
    * Recovers all renaming in history which happened in this folder
+   * Name of file, nature (DIRECTORY or FILE), and list of associated commands.
    */
-  def getAutoHistory(folder: File): Seq[(String, List[String])] = {
+  def getAutoHistory(folder: File): Seq[(String, String, List[String])] = {
     val dirFolder = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s == dirFolder
     getHistoryFile(HISTORY_AUTO_FILE) map { history_file =>
@@ -285,12 +293,12 @@ object Main {
       else {
       val res = 
         for(line <- content.filterNot(_ == '\r').split("\n").toList;
-            splitted = line.split("\\|\\|").toList if splitted.length >= 4;
-            time::dir::file::command = splitted;
-            if(checkDir(dir))) yield (file, command)
+            splitted = line.split("\\|\\|").toList if splitted.length >= 5;
+            time::dir::file::nature::command = splitted;
+            if(checkDir(dir))) yield (file, nature, command)
       res
       }
-    } getOrElse (List[(String, List[String])]())
+    } getOrElse (List[(String, String, List[String])]())
   }
   
   /**
@@ -307,10 +315,10 @@ object Main {
       case Auto()::("-t" | "--test")::_ =>
         automatedAction(perform=false, explain=false)
       case Auto()::sfile::l =>
-        val file1 = if(sfile.indexOf("\\") != -1 || sfile.indexOf("/") != -1) new File(sfile) else new File(decodedPath, sfile)
+        val file1 = if(sfile.indexOf("\\") != -1 || sfile.indexOf("/") != -1) new File(decodedPath, sfile) else new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
-        auto(l)
         storeAutoHistory(new File(decodedPath), sfile, l)
+        auto(l)
         automatedAction(false, false)
       case _ =>
     }
@@ -327,25 +335,33 @@ object Main {
     c.setTimeout(2)
     var exceptions = Set[String]()
     if(debug) println(s"$decodedPath $examples, $perform; $explain")
-    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else if(explain) return ();
+    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else {
+      println("No action to reproduce in this folder")
+      return ();
+    }
     
     var nested_level = 0
     examples.reverse.take(2).reverse foreach {
-      case (file, command) =>
+      case (file, nature, command) =>
         if(debug) println(s"Adding $file, $command")
         c.add(List(file), command)(0)
         nested_level = file.count(_ == '/') + file.count(_ == '\\')
         exceptions += command.last
         exceptions += file
     }
+    // All files should have the same nature.
+    val onlyFiles = examples.lastOption match {
+      case Some((file, nature, command)) => nature == "FILE"
+      case None => true
+    }
     
     val files: Array[String] = if(nested_level == 0) {
       new File(decodedPath).list()
-      .filter(file => !new File(decodedPath, file).isDirectory()).filterNot(exceptions)
+      .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles).filterNot(exceptions)
     } else if(nested_level == 1){
       new File(decodedPath).listFiles().filter(_.isDirectory()).flatMap{ theDir =>
         theDir.list().map(file => theDir.getName() + File.separator + file)
-        .filter(file => !new File(decodedPath, file).isDirectory())
+        .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
         .filterNot(exceptions)
       }
     } else Array[String]()
@@ -361,14 +377,14 @@ object Main {
           case l if l.forall(_.nonEmpty) =>
             if(explain || debug) {
               for(ls <- l; prog <- ls) {
-                println(Printer(prog))
+               displayProg(prog)
               }
             }
             if(!explain) {
               val mapping = for(f <- files;
                   mappedFile = solver(List(f))
                   if mappedFile forall (_.nonEmpty);
-                  dummy = auto(mappedFile.toList)) yield {
+                  dummy = if(perform) auto(mappedFile.toList) else ()) yield {
                 f -> mappedFile
               }
               suggestMapping(l.map(_.get), mapping, title= !perform)
@@ -383,16 +399,19 @@ object Main {
   }
   
   
-  def auto(cmd: List[String]) = {
+  def auto(cmd: List[String]): Unit = {
     if(System.getProperty("os.name").contains("indow")) {
-      val cmdString = "\""+cmd.mkString(";").replaceAll("\"","\\\"")+"\""
-      val p = Runtime.getRuntime().exec(Array[String]("C:\\cygwin\\bin\\bash.exe",
-                                              "-c")++List(cmdString),
-                                 Array[String]("PATH=/cygdrive/c/cygwin/bin"));
+      val cmdString = "\""+cmd.mkString(";").replaceAll("\"","\\\"").replaceAll("""\bconvert """, """convert.exe """) +"\""
+      val env = collection.mutable.Map[String, String]() ++ System.getenv();
+      val key = if(env contains "Path") "Path" else if(env contains "PATH") "PATH" else throw new Error("No Path or PATH variable found in environment")
+      env(key) += ";c:\\cygwin\\bin;c:\\Windows\\System32"
+      val envString = (env.map{ case (k, v) => k + "=" + v }).toArray
+      val p = Runtime.getRuntime().exec(Array[String]("C:\\cygwin\\bin\\bash.exe","-c",cmdString),
+                                 envString,
+                                 new File(decodedPath));
       p.waitFor()
-      
     } else {
-      Runtime.getRuntime().exec(cmd.toArray)
+      Runtime.getRuntime().exec(cmd.toArray, Array[String](), new File(decodedPath))
     }
   }
   
@@ -409,7 +428,7 @@ object Main {
           }),
         ('\n',"",         FINISH,   () => ()), 
         ('n', "Abort",    FINISH,   () => ()), 
-        ('e', "explain",  CONTINUE, () => println(Printer(prog))), 
+        ('e', "explain",  CONTINUE, () =>displayProg(prog)), 
         ('t', "test",     CONTINUE, () => ()))
     )
     */
@@ -464,5 +483,9 @@ object Main {
     }
     //s"move $file $to".!!
     //println(s"move $file $to")
+  }
+  
+  def displayProg(prog: Program): Unit = {
+    println(Printer(prog).replaceAll("first input", "file name"))
   }
 }

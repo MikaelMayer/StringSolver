@@ -249,12 +249,10 @@ e_8.dat | 3.dat""", 1)
   }
   "29. Insert the contents of one text file into all the files found http://www.unix.com/shell-programming-scripting/42272-find-append-move-rename-multiple-files.html " in {
     val c = StringSolver()
-    c.add("""pic01.bmp | pic0001.bmp  """, 1)
-    c.add("""pic142.bmp | pic0142.bmp  """, 1)
-    c.add("""pic2340.bmp | pic2340.bmp  """, 1)
+    c.add("""abc.log | abc.101 """, 1)
     renderer(c)
-    c.solve("""pic02.bmp""") should equal ("pic0002.bmp")
-    c.solve("""pic871.bmp""") should equal ("pic0871.bmp")
+    c.solve("""def.log""") should equal ("""def.101""")
+    c.solve("""ghi.log""") should equal ("""ghi.101""")
   }
   
 }
