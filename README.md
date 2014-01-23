@@ -7,19 +7,78 @@ Build using sbt 0.13 and scala 2.10.3.
 
 - Supports incremental numbering.
 - "..." continues an expression if there is a loop.
+- Automated file commands.
 
-## File renaming
 
-StringSolver includes a nice renaming tool.
+## Automated Bash commands
 
-[![ScreenShot](https://raw.github.com/GabLeRoux/WebMole/master/ressources/WebMole_Youtube_Video.png)](http://youtu.be/F9mUIPK7h-I)
+StringSolver includes a nice renaming tool and automated command.
+
+Installation:
 
 - Build the project using `sbt one-jar`.
-- Use the following alias to rename file using the tool:
+- Use the following alias to rename file using the tool (e.g. in your `.bashrc` file:
 ```
 alias mv='java -jar "[/path/to/target/scala/]stringsolver_2.10-1.0-one-jar.jar" move'
+alias auto='java -jar "[/path/to/target/scala/]/stringsolver_2.10-1.0-one-jar.jar" auto'
 ```
-- Do your renaming normally, e.g. `mv file1 file2`
+
+### Automated Renaming
+
+[![ScreenShot](http://i1.ytimg.com/vi/F9mUIPK7h-I/mqdefault.jpg)](http://youtu.be/F9mUIPK7h-I)
+
+The standard way to rename files is still the following:
+
+```mv file1 file2```
+
+However, when a mapping is detected, the algorithm displays it and you can then use `mv` to trigger it for all other files.
+
+```mv```
+
+This is equivalent to perform the global transformation in a single line using `-a` or `--auto` modifier, when you trust enough the system:
+
+```mv -a file1 file2```
+
+For testing, you can use `mv -e` alone to have an high-level overview of the transformation, or `mv -t` alone to visualize the transformation.
+
+Adding options `-e` or `-t` along with filenames helps the system to refine the request without touching any files.
+
+If you experience trouble with the `mv` command, you can always run `mv --clear` to clear the history stored in a temporary file.
+
+### Automated bash commands
+
+[![ScreenShot](http://i1.ytimg.com/vi/yaNr-JDc8tA/mqdefault.jpg)](http://youtu.be/yaNr-JDc8tA)
+
+The standard way to run bash commands is the following:
+
+```auto filename "my unix command depending on filename"```
+
+For example, to convert a like `Algebra2Week5.txt` to `Week5/Algebra2.pdf` and remove the original file, you can do the following:
+
+```auto Algebra2Week5.txt "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"```
+
+To perform this transformation for all files, just type again
+
+```auto```
+
+The last two commands could be combined in a single command if you trust the system enough by using the `-a` or `--auto` command.
+
+```auto -a Algebra2Week5.txt "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"```
+
+#### Implicit file names
+
+The previous command can also be abbreviated by letting the program infer what is the file the command depends on. So writing this would be equivalent to the previous command:
+
+```auto -a "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"```
+
+If you do not trust the system, you can run `auto -e` before your command, or after any command having used `auto` to check what the global transformation would be. In the other hand, `auto -t` visualizes the transformation.
+
+For example, running the following command will not trigger it, but will display a list of command that would be executed if the user runs `auto`
+
+```auto -t "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"```
+
+If you experience trouble with the `auto` command, you can always run `auto --clear` to clear the history stored in a temporary file.
+
 
 ## API:
 
