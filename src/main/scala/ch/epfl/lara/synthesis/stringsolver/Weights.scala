@@ -17,7 +17,7 @@ object Weights {
   def weight(p: Program)(implicit starting_pos: Boolean = true): Int = p match {
     case CPos(0) => 1
     case CPos(-1) => 1
-    case CPos(k) => 10
+    case CPos(k) => Math.abs(k)*2+8
     case Pos(r1, r2, c) => 
       val const_weight = c match {
         case IntLiteral(i) if i >= 1 => i - 1
@@ -44,10 +44,10 @@ object Weights {
       10 + weight(s) - 1 + 10*(Math.abs(step) - 1) + (o - 1)
     case Number(s, l, (o, step)) =>
       10 + weight(s) - 1 + (step-1) // if s is smaller, the better.
-    case ConstStr(s) => 6 + s.size*10
+    case ConstStr(s) => 5 + s.size*10
     case SubStr(vi, Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
       10 + weight(r2) + method.id
-    case SubStr(vi, CPos(0), CPos(-1), method) => 14
+    case SubStr(vi, CPos(0), CPos(-1), method) => 13
     case SubStr(vi, p, pos, method) => 10 + weight(p)(true) + weight(pos)(false) + method.id
     case TokenSeq(t) => t.length // Best for empty sequences.
     case IntLiteral(i) => Math.abs(i)

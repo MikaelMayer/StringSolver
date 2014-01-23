@@ -144,9 +144,21 @@ class StringSolver {
       Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * (if(currentPrograms == null) 1f else proportion_compute_vs_merge)).seconds)
     } catch {
       case e: TimeoutException  => 
-        ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time
-        ff.timeout = true
-        Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+        if(output.exists(_.indexOf("...") != -1 && ff.useDots)) { // Stop first phase of computing GenerateStr if there are still dots to computee.
+          ff.timeoutGenerateStr = true
+          try {
+            Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+          } catch {
+            case e: TimeoutException =>
+              ff.DEFAULT_REC_LOOP_LEVEL = 0
+              ff.timeout = true
+              Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+          }
+        } else {
+          ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time, especially if there is no
+          ff.timeout = true
+          Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+        }
       case e: Throwable => throw e
     }
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
@@ -366,9 +378,13 @@ class StringSolverAlgorithms {
  
 
   @volatile private var mTimeout = false
+  @volatile private var mTimeoutPhaseGenerateStr = false
+  def timeoutGenerateStr = mTimeoutPhaseGenerateStr
+  def timeoutGenerateStr_=(v: Boolean) = mTimeoutPhaseGenerateStr = v
   def timeout = mTimeout
   def timeout_=(v: Boolean): Unit = {
     mTimeout = v
+    mTimeoutPhaseGenerateStr = v
     if(v) {
       ifTimeOut.success(SEmpty)
       ifTimeOut = promise[STraceExpr]
@@ -422,6 +438,8 @@ class StringSolverAlgorithms {
       W += (i,j) -> (Set(SConstStr(s.e(i, j-1))))
     }
     if(verbose) println("Looking for longest substrings...")
+    val dotsPositions = "\\.\\.\\.".r.findAllMatchIn(s).map(mt => mt.start(0)).toSet
+    
     val longestSizeFirst = (ij : (Int, Int)) => ij._1 - ij._2
     var interestingEdges1 = (for(
       i <- 0 until s.length;
@@ -432,14 +450,15 @@ class StringSolverAlgorithms {
     val longestInterestingEdges = ((interestingEdges1.toList filterNot {
       case (i, j) =>
         val isNumber = s.substring(i, j).isNumber
-        (((interestingEdges1 contains ((i, j+1))) && (isNumber implies s(j).isDigit)) ||
+        ((((interestingEdges1 contains ((i, j+1))) && (!dotsPositions(j))) && (isNumber implies s(j).isDigit)) ||
          ((interestingEdges1 contains ((i-1, j))) && (isNumber implies s(i-1).isDigit)))
     }))sortBy(longestSizeFirst)
      
     if(verbose) println(s"found ${longestInterestingEdges.length} longest substrings:\n"+(longestInterestingEdges map { case (i, j) => s.e(i, j-1)}))
     val remaining_edges = ξ.filter{ case (i,j ) => !longestInterestingEdges.contains((i, j)) }.toList.sortBy(longestSizeFirst)
-    for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout) {
-      W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j-1))))
+    
+    for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout && !mTimeoutPhaseGenerateStr) {
+      W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j- 1))))
     }
     if(timeout && verbose) println("exited loop of generateStr because timed out")
     /*val W: W[Int] = ξ ==> { case (i, j) =>
@@ -508,7 +527,7 @@ class StringSolverAlgorithms {
   var w_id = 0
   def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)(current: STraceExpr, preferredStart: Set[Int], preferredEnd: Set[Int]): W[Int] = {
     if(rec_loop_level <= 0) return W
-    if(verbose) println(s"Find loop for $σ => $s")
+    if(verbose) println(s"Looking for loops for $σ => $s")
     //var WpLite = W // Create a copy?
     var Wp = W // Do not create a copy
     val LITE = 0
@@ -568,7 +587,7 @@ class StringSolverAlgorithms {
         if(k2 == ksep || ProgramsSet.isCommonSeparator(optionSeparator.get.s));
         k1 <- preferedStartFirst(k2-1 to 0 by -1) if positionToCheck(k1);
         e1 = subDag(k1, k2, liteOrFull)) {
-      if(timeout) return Wp
+      if(timeout) {if(verbose) println("exited loop of generateLoop because timed out"); return Wp }
       if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
       val (e, time) = timedScope(if(liteOrFull == LITE) {
         unify(e1, e2, w)  // If unify results only in constants
@@ -886,7 +905,7 @@ class StringSolverAlgorithms {
    */
   implicit val cache = MMap[(String, Int), Set[SPosition]]()
   def generatePosition(σ: String, k: Int) = cached((σ, k), cache){
-    if(verbose) println(s"Generating position $k")
+    if(verbose) println(s"Generating position $k in $σ")
     var result = Set[SPosition](SCPos(k), SCPos(-σ.length+k-1))
     implicit val (tokenSet, mapping) = Reps(σ)
     for((_, _, r1@TokenSeq(t_list1), r2@TokenSeq(t_list2), intersections) <- matchingTokenSeq(σ, atPos=k, listTokens=tokenSet)) {   

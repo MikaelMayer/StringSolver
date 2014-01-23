@@ -18,10 +18,10 @@ class MainTest extends WordSpec with ShouldMatchers {
   
   "Main should keep history" in {
     Main.deleteMvHistory()
-    Main.storeMvHistory(new File(Main.decodedPath), "test.txt", "tist.txt")
-    Main.storeMvHistory(new File(Main.decodedPath), "tost.txt", "tust.txt")
+    Main.storeMvHistory(new File(Main.decodedPath), true, "test.txt", "tist.txt")
+    Main.storeMvHistory(new File(Main.decodedPath), false, "tost.txt", "tust.txt")
     println(Main.decodedPath)
-    Main.getMvHistory(new File(Main.decodedPath)) should equal (List(("test.txt", "tist.txt"), ("tost.txt", "tust.txt")))
+    Main.getMvHistory(new File(Main.decodedPath)) should equal (List((true, "test.txt", "tist.txt"), (false, "tost.txt", "tust.txt")))
     Main.deleteMvHistory()
     Main.getMvHistory(new File(Main.decodedPath)) should equal (Nil)
   }
