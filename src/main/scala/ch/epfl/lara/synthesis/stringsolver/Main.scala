@@ -536,16 +536,26 @@ object Main {
   
   
   def auto(cmd: List[String]): Unit = {
-    if(System.getProperty("os.name").contains("indow")) {
+    val p = if(System.getProperty("os.name").contains("indow")) {
+      val cygwinbindir = "C:\\cygwin\\bin"
+      val cygwinbash = cygwinbindir + "\\bash.exe"
+      
+      if(!new File(cygwinbash).exists) {
+        println(s"Cygwin bin directory not found $cygwinbindir")
+        return
+      }
       val cmdString = "\""+cmd.mkString(";").replaceAll("\"","\\\"").replaceAll("""\bconvert """, """convert.exe """) +"\""
       val env = collection.mutable.Map[String, String]() ++ System.getenv();
       val key = if(env contains "Path") "Path" else if(env contains "PATH") "PATH" else throw new Error("No Path or PATH variable found in environment")
-      env(key) += ";c:\\cygwin\\bin;c:\\Windows\\System32"
+      env(key) += ";"+cygwinbindir+";c:\\Windows\\System32"
       val envString = (env.map{ case (k, v) => k + "=" + v }).toArray
-      val p = Runtime.getRuntime().exec(Array[String]("C:\\cygwin\\bin\\bash.exe","-c",cmdString),
+      Runtime.getRuntime().exec(Array[String](cygwinbash,"-c",cmdString),
                                  envString,
                                  new File(decodedPath));
-      val input = new BufferedReader(new InputStreamReader(p.getInputStream()));
+    } else {
+      Runtime.getRuntime().exec(Array("/bin/bash", "-c") ++ cmd.toArray, Array[String](), new File(decodedPath))
+    }
+    val input = new BufferedReader(new InputStreamReader(p.getInputStream()));
       var line = input.readLine()
       while (line != null) {
         System.out.println(line);
@@ -553,10 +563,6 @@ object Main {
       }
       input.close();
       p.waitFor();
-  
-    } else {
-      Runtime.getRuntime().exec(cmd.toArray, Array[String](), new File(decodedPath))
-    }
   }
   
   
