@@ -29,11 +29,13 @@ alias auto='java -jar "[/path/to/target/scala/]/stringsolver_2.10-1.0-one-jar.ja
 
 The standard way to rename files is still the following:
 
-```mv file1 file2```
+```
+mv file1 file2```
 
 However, when a mapping is detected, the algorithm displays it and you can then use `mv` to trigger it for all other files.
 
-```mv```
+```
+mv```
 
 This is equivalent to perform the global transformation in a single line using `-a` or `--auto` modifier, when you trust enough the system:
 
