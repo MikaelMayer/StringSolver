@@ -65,8 +65,15 @@ class StringSolver {
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
   
-  private var proportion_compute_vs_merge = 0.35f
-
+  private var extra_time_to_merge = 0.45f
+  private var extra_time_to_compute_loop = 0.5f
+  private var extra_time_to_resolve = 0.2f
+  
+  /**
+   * Proportion of the original time to give to compute loops
+   */
+  def setExtraTimeToComputeLoops(f: Float) = extra_time_to_compute_loop = f
+  
   /**
    * Use dots ... to trigger manual loop research
    */
@@ -141,23 +148,23 @@ class StringSolver {
     }
     var tmp = ff.DEFAULT_REC_LOOP_LEVEL
     val newProgramSets : IndexedSeq[STraceExpr] = try {
-      Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * (if(currentPrograms == null) 1f else proportion_compute_vs_merge)).seconds)
+      Await.result(fetchPrograms, ff.TIMEOUT_SECONDS.seconds)
     } catch {
       case e: TimeoutException  => 
         if(output.exists(_.indexOf("...") != -1 && ff.useDots)) { // Stop first phase of computing GenerateStr if there are still dots to computee.
           ff.timeoutGenerateStr = true
           try {
-            Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+            Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_compute_loop).seconds)
           } catch {
             case e: TimeoutException =>
               ff.DEFAULT_REC_LOOP_LEVEL = 0
               ff.timeout = true
-              Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+              Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_resolve).seconds)
           }
         } else {
           ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time, especially if there is no
           ff.timeout = true
-          Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * proportion_compute_vs_merge).seconds)
+          Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_resolve).seconds)
         }
       case e: Throwable => throw e
     }
@@ -175,7 +182,7 @@ class StringSolver {
         //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
       }
       val intersections = try {
-        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * (1-proportion_compute_vs_merge)).seconds)
+        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * extra_time_to_merge).seconds)
       } catch {
         case e: TimeoutException  => 
           if(ff.verbose) println("Intersection took too much time! Returning empty")
@@ -380,9 +387,13 @@ class StringSolverAlgorithms {
   @volatile private var mTimeout = false
   @volatile private var mTimeoutPhaseGenerateStr = false
   def timeoutGenerateStr = mTimeoutPhaseGenerateStr
-  def timeoutGenerateStr_=(v: Boolean) = mTimeoutPhaseGenerateStr = v
+  def timeoutGenerateStr_=(v: Boolean) = {
+    if(verbose && v) println("TimeoutGeneratestr")
+    mTimeoutPhaseGenerateStr = v
+  }
   def timeout = mTimeout
   def timeout_=(v: Boolean): Unit = {
+    if(verbose && v) println("Timeout")
     mTimeout = v
     mTimeoutPhaseGenerateStr = v
     if(v) {
@@ -440,6 +451,9 @@ class StringSolverAlgorithms {
     if(verbose) println("Looking for longest substrings...")
     val dotsPositions = "\\.\\.\\.".r.findAllMatchIn(s).map(mt => mt.start(0)).toSet
     
+    /**
+     * Heuristict to deal with substrings of longest size first.
+     */
     val longestSizeFirst = (ij : (Int, Int)) => ij._1 - ij._2
     var interestingEdges1 = (for(
       i <- 0 until s.length;
@@ -447,6 +461,8 @@ class StringSolverAlgorithms {
       σvi <- σ.inputs
       if σvi.indexOf(s.substring(i, j)) >= 0) yield (i, j)).toSet
     // Removes edges which belong to a greater substring if they are not themselves longest numbers
+    //if(verbose) println(s"found ${interestingEdges1.size} substrings:\n"+(interestingEdges1 map { case (i, j) => s"[$i,$j]"+s.substring(i, j)}))
+   
     val longestInterestingEdges = ((interestingEdges1.toList filterNot {
       case (i, j) =>
         val isNumber = s.substring(i, j).isNumber
@@ -454,18 +470,50 @@ class StringSolverAlgorithms {
          ((interestingEdges1 contains ((i-1, j))) && (isNumber implies s(i-1).isDigit)))
     }))sortBy(longestSizeFirst)
      
-    if(verbose) println(s"found ${longestInterestingEdges.length} longest substrings:\n"+(longestInterestingEdges map { case (i, j) => s.e(i, j-1)}))
+    if(verbose) println(s"found ${longestInterestingEdges.length} longest substrings:\n"+(longestInterestingEdges map { case (i, j) => s"[$i,$j]"+s.substring(i, j)}))
     val remaining_edges = ξ.filter{ case (i,j ) => !longestInterestingEdges.contains((i, j)) }.toList.sortBy(longestSizeFirst)
+    
+    /**
+     * Heuristic to compute separators start positions.
+     * Takes the positions having the same chars before the dots
+     */
+    val presentSeparators = s.toList.zipWithIndex.flatMap{ case (char, i) => if(ProgramsSet.isCommonSeparator(char.toString)) List(i) else Nil}
+    val preferredStart = longestInterestingEdges.map(_1).toSet ++ presentSeparators
+    val preferredEnd = longestInterestingEdges.map(_2).toSet ++ presentSeparators
+
+    var preferredSeparatorStart: Set[Int] = presentSeparators.toSet
+    var preferredSeparatorEnd: Set[Int] = preferredSeparatorStart.map(_+1)
+    
+    if(!dotsPositions.isEmpty) {
+      val middleCandidates = (for(dpos <- dotsPositions;
+          i <- (dpos-1) to 0 by -1;
+          ss = s.substring(i, dpos);
+          endpos <- Pattern.quote(ss).r.findAllMatchIn(s).map(_.end(0))
+          if(endpos != dpos)
+      ) yield endpos)
+        .groupBy(i => i).toList
+        .sortBy{ case (key, value) => -value.size }
+        .map(_._1)
+      if(middleCandidates.nonEmpty) {
+        preferredSeparatorEnd = middleCandidates.toSet
+        preferredSeparatorStart = preferredSeparatorEnd ++ preferredSeparatorEnd.map(_ - 1)
+      }
+    }
+    
+    
     
     for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout && !mTimeoutPhaseGenerateStr) {
       W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j- 1))))
     }
     if(timeout && verbose) println("exited loop of generateStr because timed out")
-    /*val W: W[Int] = ξ ==> { case (i, j) =>
-      generateSubString(σ, s.e(i, j-1)) ++ Set(SConstStr(s.e(i, j-1)))
-    }*/
+
     val previous = SDag(ñ, ns, nt, ξ, W): STraceExpr
-    val Wp =  generateLoop(σ, s, W, rec_loop_level)(previous, preferredStart=longestInterestingEdges.map(_1).toSet, preferredEnd = longestInterestingEdges.map(_2).toSet)
+    
+    
+    
+    
+    val Wp =  generateLoop(σ, s, W, rec_loop_level)(
+        previous, preferredStart=preferredStart, preferredSeparatorStart=preferredSeparatorStart, preferredEnd = preferredEnd, preferredSeparatorEnd=preferredSeparatorEnd)
     SDag(ñ, ns, nt, ξ, Wp): STraceExpr
   }
   
@@ -483,17 +531,18 @@ class StringSolverAlgorithms {
     case e => orElse
   }
   /**
-   * Specializes a DAG by removing all edges except the one between k1 and k2
+   * Specializes a DAG by removing all edges except the one between k1 and k2 and other local positions
+   * // TODO: Keep the constant strings and the global inputs.
    */
-  def extractDag(dag: STraceExpr, k1: Int, k2: Int, orElse: => STraceExpr): STraceExpr = dag match {
+  def extractDag(dag: STraceExpr, k1: Int, k2: Int, notablePositions: Set[Int], orElse: => STraceExpr): STraceExpr = dag match {
     case SDag(ñ, ns: Int, nt, ξ, a) =>
       val x = ξ.asInstanceOf[Set[(Int, Int)]]
       val nn = ñ.asInstanceOf[Set[Int]]
       val aa = a.asInstanceOf[W[Int]]
-      def ok1(i: Int): Boolean = k1 == i
-      def ok2(i: Int): Boolean = i == k2
+      def ok1(i: Int): Boolean = k1 == i  || notablePositions(i)
+      def ok2(i: Int): Boolean = i == k2  || notablePositions(i)
       def ok3(ij: (Int, Int)): Boolean = ok1(ij._1) && ok2(ij._2)
-      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa.filterKeys(ok3))
+      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa.filterKeys(ok3)) // TODO : Check if the last filterKeys is necessary.
     case e => orElse
   }
   
@@ -525,7 +574,8 @@ class StringSolverAlgorithms {
       by controlling the recursion depth.
    */
   var w_id = 0
-  def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)(current: STraceExpr, preferredStart: Set[Int], preferredEnd: Set[Int]): W[Int] = {
+  def generateLoop(σ: Input_state, s: Output_state, W: W[Int], rec_loop_level: Int)
+                  (current: STraceExpr, preferredStart: Set[Int], preferredSeparatorStart: Set[Int], preferredEnd: Set[Int], preferredSeparatorEnd: Set[Int]): W[Int] = {
     if(rec_loop_level <= 0) return W
     if(verbose) println(s"Looking for loops for $σ => $s")
     //var WpLite = W // Create a copy?
@@ -533,24 +583,38 @@ class StringSolverAlgorithms {
     val LITE = 0
     val FULL = 1
     
+    val preferredPositions = preferredStart ++ preferredEnd
+    if(verbose) {
+      println(s"preferredPositions = $preferredPositions")
+    }
+    
     val w = Identifier(if(w_id <= 25) ('a' + w_id.toChar).toChar.toString else "w" + (w_id-25)); w_id += 1
-    val positionToCheck: Int => Boolean = if(onlyInterestingPositions) {
-      new (Int => Boolean) {
+    val positionToCheckEnd: (Int, Int) => Boolean = new ((Int, Int) => Boolean) {
         val l = ScalaRegExp.convertToken(LowerTok)
         val u = ScalaRegExp.convertToken(UpperTok)
         val n = ScalaRegExp.convertToken(NumTok)
         val w = ScalaRegExp.convertToken(SpaceTok)
-        val acceptable: Set[Int] = s"[^a-zA-Z0-9]|$l|$u|$n|$w".r.findAllMatchIn(s).toSet.flatMap{(m: Regex.Match) =>Set(m.start(0), m.end(0))}
-        def apply(i: Int) = acceptable(i)
+        val acceptable: Set[Int] = s"[^a-zA-Z0-9 ]|$l|$u|$n|$w".r.findAllMatchIn(s).toSet.flatMap{(m: Regex.Match) =>Set(m.end(0))}
+        def apply(i: Int, liteOrFull: Int) = if(onlyInterestingPositions) {
+          acceptable(i)
+        } else if(liteOrFull == LITE) acceptable(i) else true
       }
-    } else {i => true}
-    
+    val positionToCheckStart: (Int, Int) => Boolean = new ((Int, Int) => Boolean) {
+        val l = ScalaRegExp.convertToken(LowerTok)
+        val u = ScalaRegExp.convertToken(UpperTok)
+        val n = ScalaRegExp.convertToken(NumTok)
+        val w = ScalaRegExp.convertToken(SpaceTok)
+        val acceptable: Set[Int] = s"[^a-zA-Z0-9 ]|$l|$u|$n|$w".r.findAllMatchIn(s).toSet.flatMap{(m: Regex.Match) =>Set(m.start(0))}
+        def apply(i: Int, liteOrFull: Int) = if(onlyInterestingPositions) {
+          acceptable(i)
+        } else if(liteOrFull == LITE) acceptable(i) else true
+      }
     
     def subDag(k1: Int, k2: Int, liteOrFull: Int): STraceExpr = {
       if(liteOrFull == LITE) {
         current match {
           case sd: SDag[_] =>
-            extractDag(current, k1, k2, SEmpty)
+            extractDag(current, k1, k2, preferredPositions, SEmpty)
           case _ =>
             SEmpty
         }
@@ -562,30 +626,53 @@ class StringSolverAlgorithms {
         }
       }
     }
-    val preferedStartFirst: Iterable[Int] => Iterable[Int] = { (i: Iterable[Int]) =>
-      i.filter(preferredStart) ++ i.filterNot(preferredStart)
+    def preferredSeparatorStartFirst(i: Iterable[Int], liteOrFull: Int): Iterable[Int] = {
+      i.filter(preferredSeparatorStart) ++ (if(liteOrFull == LITE) Nil else i.filterNot(preferredSeparatorStart))
     }
-    val preferedEndFirst: Iterable[Int] => Iterable[Int] = { (i: Iterable[Int]) =>
-      i.filter(preferredEnd) ++ i.filterNot(preferredEnd)
+    def preferredStartFirst(i: Iterable[Int], liteOrFull: Int): Iterable[Int] = {
+      i.filter(preferredStart) ++ (if(liteOrFull == LITE) Nil else i.filterNot(preferredStart))
+    }
+    def preferredSeparatorEndFirst(i: Iterable[Int], liteOrFull: Int): Iterable[Int] = {
+      i.filter(preferredSeparatorEnd) ++ (if(liteOrFull == LITE) Nil else i.filterNot(preferredSeparatorEnd))
+    }
+    def preferredEndFirst(i: Iterable[Int], liteOrFull: Int): Iterable[Int] = {
+      i.filter(preferredEnd) ++ (if(liteOrFull == LITE) Nil else i.filterNot(preferredEnd))
     }
     
     // Priority if dots found in string.
-    val endingRange: Iterable[Int] = if(useDots) { s.indexOf("...") match {
+   def endingRange(liteOrFull: Int): Iterable[Int] = if(useDots) { s.indexOf("...") match {
         case -1 => Range(2, s.length-1) // Nothing can be done.
-        case k3 => k3 :: preferedEndFirst((Range(2, s.length-1).toList.filterNot(_ == k3))).toList
+        case k3 => k3 :: preferredEndFirst((Range(2, s.length-1).toList.filterNot(_ == k3)), liteOrFull).toList
       }
     } else Range(2, s.length-1)
 
     // Two loops versions, one with lite loops (no more than 1 expression in the loop)
     // the other allows more expressions.
-    for(liteOrFull <- LITE to FULL;
-        k3 <- endingRange if positionToCheck(k3);
-        ksep <- preferedStartFirst(k3-1 to 1 by -1) if positionToCheck(ksep);
+    if(verbose) println(s"Acceptable starts:"+preferredStart.toList.sortBy(i=>i))
+    if(verbose) println(s"Acceptable sep starts:"+preferredSeparatorStart.toList.sortBy(i=>i))
+    if(verbose) println(s"Acceptable ends:"+preferredEnd.toList.sortBy(i=>i))
+    if(verbose) println(s"Acceptable sep ends:"+preferredSeparatorEnd.toList.sortBy(i=>i))
+    for(liteOrFull <- (LITE to FULL).view;
+        //dummy = (if(verbose) println(s"Looping ${if(liteOrFull == LITE) "LITE" else "FULL"}") else ());
+        k3_range = endingRange(liteOrFull).filter(positionToCheckEnd(_, liteOrFull));
+        //dummy2 = (if(verbose) println(s"k3 range: $k3_range") else ());
+        k3 <- k3_range.view;
+        //dummy4 = (if(verbose) println(s"k3 =: $k3") else ());
+        ksep_range = preferredSeparatorEndFirst(k3-1 to 1 by -1, liteOrFull).filter(positionToCheckStart(_, liteOrFull));
+        //dummy3 = (if(verbose) println(s"ksep range: $ksep_range") else ());
+        ksep <- ksep_range.view;
+        //dummy5 = (if(verbose) println(s"ksep $ksep") else ());
         e2 = subDag(ksep, k3, liteOrFull);
-        k2 <- preferedEndFirst(ksep to (ksep - MAX_SEPARATOR_LENGTH) by -1) if positionToCheck(k2);
+        k2_range = preferredSeparatorStartFirst(ksep to (ksep - MAX_SEPARATOR_LENGTH) by -1, FULL);
+        //dummy7 = (if(verbose) println(s"k2_range $k2_range") else ());
+        k2 <- k2_range.view;
         optionSeparator = if(ksep > k2) Some(ConstStr(s.substring(k2, ksep))) else None;
+        //dummy6 = (if(verbose) println(s"k2 $k2") else ());
         if(k2 == ksep || ProgramsSet.isCommonSeparator(optionSeparator.get.s));
-        k1 <- preferedStartFirst(k2-1 to 0 by -1) if positionToCheck(k1);
+        k1_range =  preferredStartFirst(k2-1 to 0 by -1, liteOrFull).filter(positionToCheckStart(_, liteOrFull));
+        //dummy8 = (if(verbose) println(s"k1_range $k1_range") else ());
+        k1 <- k1_range.view;
+        //dummy8 = (if(verbose) println(s"k1 $k1") else ());
         e1 = subDag(k1, k2, liteOrFull)) {
       if(timeout) {if(verbose) println("exited loop of generateLoop because timed out"); return Wp }
       if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
@@ -622,8 +709,9 @@ class StringSolverAlgorithms {
                 positionNotMatch match {
                   case Some(p) if s(p) == dots(0) =>
                     if(p + dots.length <= s.length && s.substring(p, p + dots.length) == dots) {
-                      Wp = Wp + (((k1, p+dots.length))->(Wp((k1, p+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
-                      if(verbose) println(s"Found dotted loop: $s (returns $res)")
+                      val newLoop = SLoop(w, e, optionSeparator)
+                      Wp = Wp + (((k1, p+dots.length))->(Wp((k1, p+dots.length)) ++ Set(newLoop)))
+                      if(verbose) println(s"Found dotted loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
                     }
                   case _ =>
                 }
@@ -643,9 +731,9 @@ class StringSolverAlgorithms {
   def generateSubString(σ: Input_state, s: String) = cached((σ, s), cacheGenerateSubstring){
     var result = Set.empty[SAtomicExpr]
     if(verbose) println(s"Going to extract $s from $σ")
-    for(vi <- 0 until σ.inputs.length if !timeout) {
+    for(vi <- 0 until σ.inputs.length if !timeoutGenerateStr) {
       val σvi =  σ.inputs(vi)
-      for((k, m) <- s substringWithCaseOf σvi if !timeout) {
+      for((k, m) <- s substringWithCaseOf σvi if !timeoutGenerateStr) {
         val Y1 = generatePosition(σvi, k)
         val Y2 = generatePosition(σvi, k + s.length)
         

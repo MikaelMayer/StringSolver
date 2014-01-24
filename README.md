@@ -97,7 +97,7 @@ auto -t "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 
 If you experience trouble with the `auto` command, you can always run `auto --clear` to clear the history stored in a temporary file.
 
-## API:
+## API
 
 ```Scala
 import ch.epfl.lara.synthesis.stringsolver._

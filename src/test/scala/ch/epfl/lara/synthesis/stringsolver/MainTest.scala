@@ -67,14 +67,14 @@ class MainTest extends WordSpec with ShouldMatchers {
       cc3 should not be('exists)
       
       //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
-      Main.automatedMv(List("mv", "infoAutocad.log", "autocad_info_1.txt"))
+      Main.parseMvCmd(List("mv", "infoAutocad.log", "autocad_info_1.txt"))
       c1 should not be 'exists
       cc1 should be('exists)
-      Main.automatedMv(List("mv", "mathAnalyse.log", "analyse_math_2.txt"))
+      Main.parseMvCmd(List("mv", "mathAnalyse.log", "analyse_math_2.txt"))
       c2 should not be 'exists
       cc2 should be('exists)
       cc3 should not be('exists)
-      Main.automatedMv(List("mv"))
+      Main.parseMvCmd(List("mv"))
       c2 should not be 'exists
       c3 should not be 'exists
       cc1 should be('exists)
@@ -165,8 +165,7 @@ class MainTest extends WordSpec with ShouldMatchers {
       for(a <- as; f <- a) f.createNewFile()
 
       //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
-      Main.automateCmd(List("auto", "Algorithm1.txt", "mkDir Algorithms;convert Algorithm1.txt Algorithms/Algorithm1.pdf;rm Algorithm1.txt"))
-      Main.automateCmd(List("auto"))
+      Main.parseAutoCmd(List("auto", "Algorithm1.txt", "mkDir Algorithms;convert Algorithm1.txt Algorithms/Algorithm1.pdf;rm Algorithm1.txt"), perform=true, explain=false, performAll=true, contentFlag=false)
       for(a <- as; f <- a) f should not be ('exists)
       
       c1 should be('exists)
@@ -174,9 +173,8 @@ class MainTest extends WordSpec with ShouldMatchers {
       c3 should be('exists)
       for(a <- as; f <- a) f should not be 'exists
       for(a <- bs; f <- a) f should be ('exists)
-      Main.automateCmd(List("auto", "Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"))
+      Main.parseAutoCmd(List("auto", "Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"), perform=true, explain=false, performAll=true, contentFlag=false)
       cc1 should be('exists)
-      Main.automateCmd(List("auto"))
       cc2 should be('exists)
       cc3 should be('exists)
       for(a <- bs; f <- a) f should not be ('exists)

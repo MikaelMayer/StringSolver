@@ -560,7 +560,12 @@ object ProgramsSet {
   }
   def notEmpty[T <: Program](a: ProgramSet[T]): Option[ProgramSet[T]] = if(a == SEmpty) None else Some(a)
   def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = (a, b) match {
-    case (SLoop(i1, e1, sep1), SLoop(i2, e2, sep2)) if i1 == i2 && sep1 == sep2 => SLoop(i1, intersect(e1, e2), sep1) 
+    case (SLoop(i1, e1, sep1), SLoop(i2, e2, sep2)) if sep1 == sep2 =>
+      val be2 = replaceSTraceExpr(e2){ (i: Identifier) => if(i == i1) i2 else i }
+      val intersectBody = intersect(e1, e2)
+      if(!intersectBody.isEmpty) {
+        SLoop(i2, intersect(e1, e2), sep1) 
+      } else SEmpty
     case (SConstStr(aa), SConstStr(bb)) if aa == bb => a
     //case (SConstStr(aa), SConstStr(bb)) if aa.isNumber == bb.isNumber => a
     case (SSubStr(InputString(vi@IntLiteral(i)), pj, pk, m1), SSubStr(InputString(vj@IntLiteral(j)), pl, pm, m2)) =>
@@ -693,4 +698,37 @@ object ProgramsSet {
     rec(p1.nt)
   }
   
+  /**
+   * Replace routines (for intersection of loops)
+   */
+  
+  /**
+   * Replace routines
+   */
+  def replaceSTraceExpr(e: STraceExpr)(implicit w: Identifier => Identifier): STraceExpr = e match {
+    case SDag(n, ns, nt, e, ww) =>  SDag(n, ns, nt, e, ww.mapValues(_.map(v => replaceSAtomicExpr(v)(w))))
+    case e => e
+  }
+  def replaceSAtomicExpr(e: SAtomicExpr)(implicit w: Identifier => Identifier): SAtomicExpr = e match {
+    case SSubStr(vi, p1, p2, m) => SSubStr(replaceStringVariable(vi)(w), p1.map(t=>replaceSPosition(t)(w)), p2.map(t=>replaceSPosition(t)(w)), m)
+    case SConstStr(s) => e
+    case SLoop(w2, _, separator) if w2 == w => e
+    case SLoop(w2, e, separator) => SLoop(w2, replaceSTraceExpr(e)(w), separator)
+    case SNumber(s, l, o, step) => SNumber(replaceSAtomicExpr(s)(w), l, o, step)
+    case e => e
+  }
+  def replaceSPosition(e: SPosition)(implicit w: Identifier => Identifier): SPosition = e match {
+    case SPos(p1, p2, t) => SPos(p1, p2, replaceSIntegerExpr(t)(w))
+    case _ => e
+  }
+  def replaceStringVariable(e: StringVariable)(implicit w: Identifier => Identifier): StringVariable = e match {
+    case InputString(i) => InputString(replaceIntegerExpr(i)(w))
+    case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i)(w))
+    case e => e
+  }
+  def replaceSIntegerExpr(e: SIntegerExpr)(implicit w: Identifier => Identifier): SIntegerExpr = e.map(t => replaceIntegerExpr(t)(w))
+  def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier => Identifier): IntegerExpr = e match {
+    case Linear(i, v, j) => Linear(i, w(v), j)
+    case e => e
+  }
 }

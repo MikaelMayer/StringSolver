@@ -59,7 +59,7 @@ class BenchMarkTest extends FlatSpec with ShouldMatchers {
   "Problem: Refractoring the code" should "work for longer inputs" in {
     val c = StringSolver()
     c.setTimeout(3)
-    //c.setVerbose(true)
+    c.setVerbose(true)
     c.add(List(""""Prof. Kathleen S. Fisher" ==> p5 ==> "Fisher, Kay.""""), """p5("Prof. Kathleen S. Fisher") should equal ("Fisher, Kay.")""")
     c.add(List(""""Bill Gates, Sr." ==> p5 ==> "Gates, B.""""), """p5("Bill Gates, Sr.") should equal ("Gates, B.")""")
     println(Printer(c.solve().get))

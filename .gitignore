@@ -4,7 +4,9 @@
 /project/target/*
 .settings
 
-rename
+/res/concatenate
+/res/dots
+/res/rename
 
 /.classpath
 

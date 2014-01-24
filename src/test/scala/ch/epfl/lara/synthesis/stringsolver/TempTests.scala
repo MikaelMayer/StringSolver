@@ -17,11 +17,10 @@ class TempTests  extends FlatSpec with ShouldMatchers {
   
   "Your test" should "work faster" in {
     val c = StringSolver()
-    c.setTimeout(3)
+    c.setTimeout(20)
     c.setVerbose(true)
-    c.add("""mathAnalyse1.log ->  math_analyse_1.txt""")
+    c.add("""Along Came Ruth (1924) | After Midnight (1927) | Our Dancing Daughters (1928, plus sequels) |  touch 'Along Came Ruth (1924).avi' 'After Midnight (1927).avi'...""", 3)
     //c.add("""mathAnalyse2.log ->  math_analyse_2.txt""")
     renderer(c)
-    c.solve("mathAnalyse3.log") should equal ("math_analyse_3.txt")
   }
 }
