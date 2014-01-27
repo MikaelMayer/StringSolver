@@ -255,29 +255,39 @@ object ProgramsSet {
   
   /**
    * Sets of integers for number decomposition.
+   * The best one is the greatest one in this implementation
    */
   type SInt = ProgramSet[IntLiteral]
-  case class SIntSet(cl: Set[IntLiteral]) extends SInt {
+  case class SIntSemiLinearSet(start: Int, step: Int, max: Int) extends SInt {
     def map[T](f: IntLiteral => T): Stream[T] = {
-      for(i <- cl.toStream) yield f(i)
+      if(step > 0)
+      for(i <- start to max by step toStream) yield f(i)
+      else if(start <= max)
+        Stream(f(start))
+      else Stream.empty
     }
     def foreach[T](f: IntLiteral => T): Unit = {
-       for(i <- cl) f(i)
+      if(step > 0)
+       for(i <- start to max by step toStream) f(i)
+      else if(start <= max)
+        Stream(f(start))
+      else Stream.empty
     }
-    def takeBestRaw = cl.toList.sortBy{ case IntLiteral(k) => Math.abs(k) }.head
+    def takeBestRaw = if(step == 0) IntLiteral(start) else IntLiteral(start+step*((max-start)/step))
+    def apply(elem: Int): Boolean = elem >= start && elem <= max && (step == 0 && start == elem || step != 0 && (elem-start)%step == 0)
   }
-  case class SAnyInt(default: Int) extends SInt { 
+  /*case class SAnyInt(default: Int) extends SInt { 
     def map[T](f: IntLiteral => T): Stream[T] = {
       Stream(f(default))
     }
     def foreach[T](f: IntLiteral => T): Unit = {f(default)}
     def takeBestRaw = IntLiteral(default)
-  }
+  }*/
   /**
    * Used to match any program on this string variable
    * Useful to intersect with working sub-expressions.
    */
-  case class SAny(vi: PrevStringNumber) extends SAtomicExpr {
+  /*case class SAny(vi: PrevStringNumber) extends SAtomicExpr {
     def map[T](f: AtomicExpr => T): Stream[T] = {
       Stream(f(SubStr2(vi, NumTok, 1)))
     }
@@ -285,18 +295,32 @@ object ProgramsSet {
       f(SubStr2(vi, NumTok, 1))
     }
     def takeBestRaw = SubStr2(vi, NumTok, 1)
-  }
+  }*/
   /**
    * Set of SubStr expressions described in Programs.scala
    */
-  case class SNumber(a: SAtomicExpr, length: SIntegerExpr, offset: SInt, step: SInt) extends SAtomicExpr {
+  case class SNumber(a: SAtomicExpr, length: SInt, offset: Int) extends SAtomicExpr {
     def map[T](f: AtomicExpr => T): Stream[T] = {
-      for(pp1: AtomicExpr <- a.toStream; l <- length; o: IntLiteral <- offset; s: IntLiteral <- step) yield f(Number(pp1, l, (o.k, s.k)))
+      for(pp1: AtomicExpr <- a.toStream; l: IntLiteral <- length) yield f(NumberMap(pp1.asInstanceOf[SubStr], l.k, offset))
     }
     def foreach[T](f: AtomicExpr => T): Unit = {
-      for(pp1 <- a; l <- length; o <- offset; s <- step) f(Number(pp1, l, (o.k, s.k)))
+      for(pp1: AtomicExpr <- a; l <- length) f(NumberMap(pp1.asInstanceOf[SubStr], l.k, offset))
     }
-    def takeBestRaw = Number(a.takeBest, length.toList.sortBy(weight).last, (offset.takeBest.k, step.takeBest.k))//.withAlternative(this.toIterable)
+    def takeBestRaw = NumberMap(a.takeBest.asInstanceOf[SubStr], length.takeBest.k, offset)//.withAlternative(this.toIterable)
+  }
+  
+  /**
+   * Step = (index - start) / count if the division is applicable
+   * Except if count = 0, step can be anything from 1 to infinity.
+   */
+  case class SCounter(length: SInt, starts: SInt, index: Int, count: Int) extends SAtomicExpr {
+    def map[T](f: AtomicExpr => T): Stream[T] = {
+      for(l <- length.toStream; s: IntLiteral <- starts; step <- if(count == 0) Stream.from(1) else List((index - s.k)/count)) yield f(Counter(l.k, s.k, step))
+    }
+    def foreach[T](f: AtomicExpr => T): Unit = {
+      for(l <- length.toStream; s: IntLiteral <- starts; step <- if(count == 0) Stream.from(1) else List((index - s.k)/count)) f(Counter(l.k, s.k, step))
+    }
+    def takeBestRaw = Counter(length.takeBest.k, starts.takeBest.k, if(count == 0) 1 else (index - starts.takeBest.k)/count)//.withAlternative(this.toIterable)
   }
   
   /**
@@ -580,7 +604,7 @@ object ProgramsSet {
           else SEmpty
         }
       } else SEmpty
-      case (SSubStr(PrevStringNumber(vi@IntLiteral(i)), pj, pk, m1), SSubStr(PrevStringNumber(vj@IntLiteral(j)), pl, pm, m2)) =>
+      /*case (SSubStr(PrevStringNumber(vi@IntLiteral(i)), pj, pk, m1), SSubStr(PrevStringNumber(vj@IntLiteral(j)), pl, pm, m2)) =>
       if(i == j || (unify.isDefined && ((i == j + 1) || (i == j - 1)))) {
         val mm = m1 intersect m2
         val pp1 = (for(p1 <- pj; p2 <- pl; res <- notEmpty(intersectPos(p1, p2))) yield res)
@@ -591,18 +615,37 @@ object ProgramsSet {
            else if(i == j + 1 && unify.isDefined) SSubStr(PrevStringNumber(Linear(1, unify.get, j)), pp1, pp2, mm)
            else SEmpty
         }
-      } else SEmpty
-    case (SAny(i), SSubStr(PrevStringNumber(j), pj, pk, m)) => b
-    case (SSubStr(PrevStringNumber(j), pj, pk, m), SAny(vi)) => a
-    case (SNumber(ss1, l1, o1, s1), SNumber(ss2, l2, o2, s2)) =>
-      val s = intersectIntSet(s1, s2)
-      val o = intersectIntSet(o1, o2)
-      val l = l1 intersect l2
-      if(l.size > 0 && sizePrograms(o) > 0 && sizePrograms(s) > 0) {
+      } else SEmpty*/
+    //case (SAny(i), SSubStr(PrevStringNumber(j), pj, pk, m)) => b
+    //case (SSubStr(PrevStringNumber(j), pj, pk, m), SAny(vi)) => a
+    case (SNumber(ss1, l1, o1), SNumber(ss2, l2, o2)) if(o1 == o2)=>
+      //val s = intersectIntSet(s1, s2)
+      val l = intersectIntSet(l1, l2)
+      if(sizePrograms(l) > 0) {
         val ss = intersectAtomicExpr(ss1, ss2)
         if(sizePrograms(ss)>0)
-          SNumber(ss, l, o, s)
+          SNumber(ss.asInstanceOf[SSubStr], l, o1)
         else SEmpty
+      } else SEmpty
+    case (SCounter(l1, s1, i1, c1), SCounter(l2, s2, i2, c2)) =>
+      val s = intersectIntSet(s1, s2)
+      val l = intersectIntSet(l1, l2)
+      if(sizePrograms(l) > 0 && sizePrograms(s) > 0) {
+        if(c1 == c2) {
+          if(i1 == i2)
+            SCounter(l, s, i1, c1)
+          else
+            SEmpty
+        } else {
+          if((i2 - i1) % (c2 - c1) != 0) SEmpty else {
+            val newStep = Math.abs((i2 - i1)/(c1-c2))
+            val newStart = i1 - c1 * newStep
+            val s2 = intersectIntSet(s, SIntSemiLinearSet(newStart, 0, newStart))
+            if(c1 == 0) {
+              SCounter(l, s2, i2, c2)
+            } else SCounter(l, s2, i1, c1)
+          }
+        }
       } else SEmpty
     case _ => SEmpty
   }
@@ -629,13 +672,59 @@ object ProgramsSet {
       }
     case _ => SEmpty
   }
+  def gcd(a: Int, b: Int): Int = if (a == 0) b else gcd(b%a, a)
+  def extendGcd(a: Int, b: Int, s: Int = 0, t: Int= 1, old_s: Int = 1, old_t: Int = 0)(r: Int = b, old_r: Int = a): (Int, Int) = {
+    if(r == 0) { (old_s, old_t)
+    } else { val quotient = (old_r / r)
+      extendGcd(a, b, old_s - quotient*s, old_t - quotient*t, s, t)(old_r - quotient*r, r)
+    }
+  }
+  
   def intersectIntSet(p1: SInt, p2: SInt)(implicit unify: Option[Identifier] = None): SInt = (p1, p2) match {
-    case (SIntSet(a), SIntSet(b)) => 
-      val res = a intersect b
-      if(res.isEmpty) SEmpty else
-      SIntSet(res)
-    case (SAnyInt(default), b) => b
-    case (a, SAnyInt(default)) => a
+    case (p1@SIntSemiLinearSet(start1, step1, max1), p2@SIntSemiLinearSet(start2, step2, max2)) => 
+      // Multiple cases.
+      val newMax = Math.min(max1, max2)
+      if(step1 == 0 || step2 == 0) {
+        if(step1 == 0) {
+          if(p2(start1)) p1 else SEmpty
+        } else { // step2 == 0
+          if(p1(start2)) p2 else SEmpty
+        }
+      } else if(step1 == step2) {
+        if(start1 == start2) {
+          if(max1 <= max2) p1 else p2
+        } else if((start2 - start1) % step1 == 0){
+          val newStart = Math.max(start2, start1)
+          if(newStart <= newMax) {
+            SIntSemiLinearSet(newStart, step1, newMax)
+          } else SEmpty
+        } else SEmpty
+      } else { // both steps are different. Will find the first one greater than the two starts.
+        // Find a, b such that start1 + a*step1 == start2 + b*step2
+        // It means that a*step1-b*step2=start2-start1
+        val gcd2 = gcd(step1, step2)
+        if((start2 - start1) % gcd2 != 0) SEmpty else {
+          val c1 = step1/gcd2
+          val c2 = step2/gcd2
+          val i = (start2 - start1)/gcd2
+          // Solve a*c1+b*c2 == 1 with bezout.
+          val (a_wo_i, b_wo_i) = extendGcd(c1, c2)()
+          val a = a_wo_i * i
+          val b = b_wo_i * i
+          // Now start1 + a * step1 == start2 + b * step2
+          val newStep = step1 * step2 / gcd2 // The LCM is the new step.
+          val possibleStart = start1 + a*step1
+          val maxStart = Math.max(start1, start2)
+          val base = maxStart - possibleStart
+          val startI = (base + ((((newStep - base) % newStep) + newStep)%newStep))/newStep
+          val newStart = possibleStart + newStep*startI
+          if(newStart <= newMax)
+          SIntSemiLinearSet(newStart, newStep, newMax)
+          else SEmpty
+        }
+      }
+    /*case (SAnyInt(default), b) => b
+    case (a, SAnyInt(default)) => a*/
     case (SEmpty, _) => SEmpty
     case (_, SEmpty) => SEmpty
   }
@@ -662,7 +751,8 @@ object ProgramsSet {
    * Size function
    */
   def sizePrograms(p: ProgramSet[T forSome { type T <: Program} ]): Long = p match {
-    case SNumber(s, digits, offset, step) => sizePrograms(s)*digits.size*sizePrograms(offset)*sizePrograms(step)
+    case SNumber(s, digits, offset) => sizePrograms(s)*digits.size
+    case SCounter(length, start, index, count) => if(count == 0) 100 else sizePrograms(start)*sizePrograms(length)
     case SSwitch(conds) => (1L /: (conds map _2 map sizePrograms)) (_ * _)
     case dag@SDag(ñ1, n1s, n1t, ξ1, w1) => sizeDag(dag)
     case SSubStr(vi, pj, pk, mm) => (pj.toList map sizePrograms).sum * (pk.toList map sizePrograms).sum * mm.sizePrograms
@@ -673,9 +763,9 @@ object ProgramsSet {
     case STokenSeq(tseq) => (1L /: (tseq map { (t:SToken) => t.size})) (_ * _)
     case s@ SToken(_) => s.size
     case SEmpty => 0
-    case SAny(_) => 1
-    case SAnyInt(i) => 1
-    case SIntSet(c) => c.size
+    /*case SAny(_) => 1
+    case SAnyInt(i) => 1*/
+    case SIntSemiLinearSet(start, offset, max) => if(offset == 0) 1 else (max - start)/offset + 1
     case s @ SSubStrFlag(mask) => s.size
   }
   def sizeDag[Node](p1: SDag[Node]): Long = {
@@ -714,7 +804,7 @@ object ProgramsSet {
     case SConstStr(s) => e
     case SLoop(w2, _, separator) if w2 == w => e
     case SLoop(w2, e, separator) => SLoop(w2, replaceSTraceExpr(e)(w), separator)
-    case SNumber(s, l, o, step) => SNumber(replaceSAtomicExpr(s)(w), l, o, step)
+    case SNumber(s, l, o) => SNumber(replaceSAtomicExpr(s)(w), l, o)
     case e => e
   }
   def replaceSPosition(e: SPosition)(implicit w: Identifier => Identifier): SPosition = e match {
@@ -723,7 +813,7 @@ object ProgramsSet {
   }
   def replaceStringVariable(e: StringVariable)(implicit w: Identifier => Identifier): StringVariable = e match {
     case InputString(i) => InputString(replaceIntegerExpr(i)(w))
-    case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i)(w))
+    //case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i)(w))
     case e => e
   }
   def replaceSIntegerExpr(e: SIntegerExpr)(implicit w: Identifier => Identifier): SIntegerExpr = e.map(t => replaceIntegerExpr(t)(w))

@@ -63,7 +63,8 @@ object Evaluator {
     case ConstStr(s) => e
     case Loop(w2, _, separator) if w2 == w => e
     case Loop(w2, e, separator) => Loop(w2, replaceTraceExpr(e), separator)
-    case Number(s, l, ostep) => Number(replaceAtomicExpr(s), l, ostep)
+    case Counter(digits, start, offset) => e
+    case NumberMap(s, l, offset) => NumberMap(replaceAtomicExpr(s).asInstanceOf[SubStr], l, offset)
   }
   def replacePosition(e: Position)(implicit w: Identifier, k: Int): Position = e match {
     case Pos(p1, p2, t) => Pos(p1, p2, replaceIntegerExpr(t))
@@ -71,7 +72,7 @@ object Evaluator {
   }
   def replaceStringVariable(e: StringVariable)(implicit w: Identifier, k: Int): StringVariable = e match {
     case InputString(i) => InputString(replaceIntegerExpr(i))
-    case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i))
+    //case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i))
   }
   def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier, k: Int): IntegerExpr = e match {
     case Linear(k1, v, k2) if v.value == w.value => IntLiteral(k * k1 + k2)
@@ -150,8 +151,8 @@ object Evaluator {
       val index = evalProg(v1).asInt
       if(index >= input.inputs.length) return BottomValue
       val s = input.inputs(index)
-      val i1 = evalProg(p1)(IndexedSeq(s))
-      val i2 = evalProg(p2)(IndexedSeq(s))
+      val i1 = evalProg(p1)(Input_state(IndexedSeq(s), input.position))
+      val i2 = evalProg(p2)(Input_state(IndexedSeq(s), input.position))
       val res = i1 match {
         case IntValue(n1) if n1 >= 0 =>
           i2 match {
@@ -171,7 +172,7 @@ object Evaluator {
         }
         result
       } else res
-    case SubStr(PrevStringNumber(v1), p1, p2, m) =>
+    /*case SubStr(PrevStringNumber(v1), p1, p2, m) =>
       val index = evalProg(v1).asInt
       if(index >= input.prevNumberOutputs.length) return BottomValue
       val s = input.prevNumberOutputs(index)
@@ -185,7 +186,7 @@ object Evaluator {
             case _ => BottomValue
           }
         case _ => BottomValue
-      }
+      }*/
     case ConstStr(s) => StringValue(s)
     case CPos(k) if k >= 0 => IntValue(k)
     case CPos(k) if k < 0 => IntValue(input.inputs(0).length + k + 1)
@@ -202,25 +203,28 @@ object Evaluator {
        BottomValue
     }
     case IntLiteral(i) => IntValue(i)
-    case Number(a, size, (offset, step)) =>
-    val i = evalProg(size)
+    case Counter(size, start, offset) =>
+      val res = (input.position*offset + start).toString
+      StringValue("0"*(size - res.length) + res)
+    case NumberMap(a, size, offset) =>
+    val i = IntValue(size)
     val o = IntValue(offset)
-    val s = IntValue(step)
-    (i, o, s) match { case (IntValue(ii), IntValue(oo), IntValue(ss)) =>
+    (i, o) match { case (IntValue(ii), IntValue(oo)) =>
             evalProg(a) match {
               case StringValue(sv) if sv != "" =>
                 if(sv.isNumber) {
                   val p = sv.toInt
-                  val ps = (p+ss).toString
+                  val ps = (p+offset).toString
                   StringValue("0"*(ii - ps.size)+ps)
                 } else BottomValue
               case BottomValue | StringValue("") => 
-                a match {
+                BottomValue
+                /*a match {
                   case SubStr(InputString(v), _, _, _) => BottomValue
                   case SubStr(PrevStringNumber(_), _, _, _) => 
                     val ps = oo.toString
                     StringValue("0"*(ii - ps.size)+ps)
-                }
+                }*/
                 
               case _ => BottomValue
       }

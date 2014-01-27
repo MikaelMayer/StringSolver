@@ -7,12 +7,13 @@ Build using sbt 0.13 and scala 2.10.3.
 
 - Supports incremental numbering.
 - "..." continues an expression if there is a loop.
-- Automated file commands.
+- Automated file renaming commands
+- Automated file processing commands
 
 
 ## Automated Bash commands
 
-StringSolver includes a nice renaming tool and automated command.
+StringSolver includes an awesome automatic renaming tool and an automated command generalizer.
 
 Installation:
 
@@ -51,6 +52,8 @@ Adding options `-e` or `-t` along with filenames helps the system to refine the 
 
 If you experience trouble with the `mv` command, you can always run `mv --clear` to clear the history stored in a temporary file.
 
+To produce an equivalent bash script which would produce the result, add the option `-b` or `--bash`
+
 ### Automated bash commands
 
 [![ScreenShot](http://i1.ytimg.com/vi/yaNr-JDc8tA/mqdefault.jpg)](http://youtu.be/yaNr-JDc8tA)
@@ -79,13 +82,17 @@ The last two commands could be combined in a single command if you trust the sys
 auto -a Algebra2Week5.txt "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 ```
 
-#### Implicit file names
+To produce an equivalent bash script which would produce the result, add the option `-b` or `--bash`
+
+#### Implicit file names and file content
 
 The previous command can also be abbreviated by letting the program infer what is the file the command depends on. So writing this would be equivalent to the previous command:
 
 ```
 auto -a "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 ```
+
+To directs the system to use the file content line by line instead of just the filename, use the flag `-l` or `--lines`.
 
 If you do not trust the system, you can run `auto -e` before your command, or after any command having used `auto` to check what the global transformation would be. In the other hand, `auto -t` visualizes the transformation.
 

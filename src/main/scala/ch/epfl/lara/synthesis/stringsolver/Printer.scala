@@ -103,14 +103,14 @@ object Printer {
         val sv1 = v1 match {
           case InputString(IntLiteral(i)) => s"${numeral(i+1)} input"
           case InputString(Linear(i, w, j)) => s"input ${apply(Linear(i, w, j+1))}"
-          case PrevStringNumber(IntLiteral(i)) => s"numbers of previous ${numeral(i+1)} output"
-          case PrevStringNumber(o) => s"numbers of previous output $o"
+          /*case PrevStringNumber(IntLiteral(i)) => s"numbers of previous ${numeral(i+1)} output"
+          case PrevStringNumber(o) => s"numbers of previous output $o"*/
         }
         (p1, p2) match {
           case (Pos(TokenSeq(List(StartTok)), Epsilon, _) | CPos(0), Pos(Epsilon, TokenSeq(List(EndTok)), _) | CPos(-1)) =>
             t"the $sv1$m"
-          case (Pos(_, TokenSeq(List(NumTok)), IntLiteral(c1)), Pos(TokenSeq(List(NumTok)), _, IntLiteral(c2))) if c1 == c2 && v1.isInstanceOf[PrevStringNumber]=>
-            t"the ${numeral(c1)} number in previous output"
+          /*case (Pos(_, TokenSeq(List(NumTok)), IntLiteral(c1)), Pos(TokenSeq(List(NumTok)), _, IntLiteral(c2))) if c1 == c2 && v1.isInstanceOf[PrevStringNumber]=>
+            t"the ${numeral(c1)} number in previous output"*/
           case (Pos(Epsilon, r1, c1), Pos(r2, Epsilon, c2)) if r1 == r2 && c1 == c2 =>
             val cs = numeral(c1)
             t"the $cs$m occurence of $r1 in $sv1"
@@ -131,6 +131,10 @@ object Printer {
               t"the$m substring starting at [$starting] ending at [$ending] in $sv1"
             }
         }
+      case Counter(digits, start, offset) =>
+        //val s = if(digits > 1) "s" else ""
+        val increment = if(offset > 1) s" and incrementing by $offset" else ""
+        s"a $digits-digit counter starting at $start$increment"
       case Pos(r1, Epsilon, i) =>
         t"the end of the ${numeral(i)} $r1"
       case Pos(Epsilon, r2, i) =>
@@ -182,14 +186,14 @@ object Printer {
       case IntLiteral(k) => k.toString
       case Identifier(v) =>
         v
-      case Number(s@SubStr(InputString(_), r1, r2, m), size, (offset, step)) =>
-        val incrementedby = if(step == 0) "" else if(step > 0) s" incremented by $step" else s" decremented by ${-step}"
-        val default = if(offset == 0) "" else s" (default: $offset)"
-        t"a $size-digit number from $s$incrementedby$default"
-      case Number(s, size, (offset, step)) =>
+      case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
+        val incrementedby = if(offset == 0) "" else if(offset > 0) s" incremented by $offset" else s" decremented by ${-offset}"
+        //val default = if(offset == 0) "" else s" (default: $offset)"
+        t"a $size-digit number from $s$incrementedby"
+      /*case Number(s, size, (offset, step)) =>
         val by = if(step == 1) "" else s" by $step"
         val from = if(false && offset == 1) "" else s" starting at $offset"
-        t"a $size-digit number incrementing$by$from continuing $s"
+        t"a $size-digit number incrementing$by$from continuing $s"*/
       case _ =>
         s"UNKNOWN : $p"
     }

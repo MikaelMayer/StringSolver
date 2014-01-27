@@ -23,7 +23,7 @@ object StringSolver {
   private type PrevNumberString = String
   type Output_state = String //case class Output_state(value: String, position: Int)
   type S = String
-  case class Input_state(inputs: IndexedSeq[String], prevNumberOutputs: IndexedSeq[String])
+  case class Input_state(inputs: IndexedSeq[String], position: Int)
   type σ = Input_state
   type Regular_Expression = RegExp
   type W[Node] = Map[(Node, Node), Set[SAtomicExpr]]
@@ -44,7 +44,7 @@ object StringSolver {
   }
   
   
-  implicit def indexedSeqToInputState(arr: IndexedSeq[String]) = Input_state(arr, IndexedSeq[String]())
+  //implicit def indexedSeqToInputState(arr: IndexedSeq[String]) = Input_state(arr, IndexedSeq[String]())
 }
 
 /**
@@ -60,7 +60,7 @@ class StringSolver {
   private var ff = new StringSolverAlgorithms()
   private var currentPrograms: IndexedSeq[STraceExpr] = null
   private var singlePrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
-  private var previousOutputs: IndexedSeq[String] = Array[String]()
+  //private var previousOutputs: IndexedSeq[String] = Array[String]()
 
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
@@ -68,6 +68,8 @@ class StringSolver {
   private var extra_time_to_merge = 0.45f
   private var extra_time_to_compute_loop = 0.5f
   private var extra_time_to_resolve = 0.2f
+  
+  private var index_number = 0
   
   /**
    * Proportion of the original time to give to compute loops
@@ -116,13 +118,13 @@ class StringSolver {
   /**
    * @returns an indexed seq with numbers derived from the previous output.
    */
-  private def previousNumbers(str: IndexedSeq[String] = previousOutputs): IndexedSeq[String] = {
+  /*private def previousNumbers(str: IndexedSeq[String] = previousOutputs): IndexedSeq[String] = {
     if(ff.numbering) {
       str map { _.numbers }
     } else {
       IndexedSeq()
     }
-  }
+  }*/
   
   def getStatistics(): String = ff.statistics()
   
@@ -134,18 +136,19 @@ class StringSolver {
     if(!(output.exists(out => out.exists(_.isDigit)))) { // If not digit for output, we don't use numbers.
       setUseNumbers(false)
     }
-    val prevNumbers = previousNumbers()
+    //val prevNumbers = previousNumbers()
     
     inputList = inputList ++ List(input.toList)
     outputList = outputList ++ List(output.toList)
     
     val iv = input.toIndexedSeq
     val ov = output.toIndexedSeq
-    
+    val tmpIndexNumber = index_number
     val fetchPrograms = future {
       for(out <- ov) yield
-      ff.generateStr(Input_state(iv, prevNumbers), out, ff.DEFAULT_REC_LOOP_LEVEL)
+      ff.generateStr(Input_state(iv, tmpIndexNumber), out, ff.DEFAULT_REC_LOOP_LEVEL)
     }
+    index_number += 1
     var tmp = ff.DEFAULT_REC_LOOP_LEVEL
     val newProgramSets : IndexedSeq[STraceExpr] = try {
       Await.result(fetchPrograms, ff.TIMEOUT_SECONDS.seconds)
@@ -192,7 +195,7 @@ class StringSolver {
       currentPrograms = intersections
     }
     singlePrograms += newProgramSets
-    previousOutputs = output.toIndexedSeq
+    //previousOutputs = output.toIndexedSeq
     
     if(debugActive) verifyCurrentState()
     newProgramSets
@@ -305,14 +308,15 @@ class StringSolver {
       try {
         //println(s"progSet $progSet")
         val prog = progSet.takeBest
-        val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
+        val r = evalProg(prog)(Input_state(input.toIndexedSeq, index_number))
         r.asString
       } catch {
         case _: java.lang.Error => ""
         case _: Exception => ""
       }
     )
-    previousOutputs = res.toIndexedSeq
+    index_number += 1
+    //previousOutputs = res.toIndexedSeq
     res
   }
   
@@ -325,14 +329,15 @@ class StringSolver {
       try {
         //println(s"progSet $progSet")
         val prog = progSet.takeBest
-        val r = evalProg(prog)(Input_state(input.toIndexedSeq, previousNumbers()))
+        val r = evalProg(prog)(Input_state(input.toIndexedSeq, index_number))
         r.asString
       } catch {
         case _: java.lang.Error => ""
         case _: Exception => ""
       }
     )
-    previousOutputs = res.toIndexedSeq
+    index_number += 1
+    //previousOutputs = res.toIndexedSeq
     res
   }
 
@@ -342,13 +347,15 @@ class StringSolver {
    */
   private def verifyCurrentState() = {
     var previousOutputsTmp = IndexedSeq[String]()
-    for((inputs, outputs) <- (inputList zip outputList);
-        (output, progs) <- (outputs zip currentPrograms);
+    var tmpIndex = 0
+    for((inputs, outputs) <- (inputList zip outputList).view;
+        index = { val tmp = tmpIndex; tmpIndex += 1; tmp };
+        (output, progs) <- (outputs zip currentPrograms).view;
         prog = progs.takeBest
     ) {
-      val pn = previousNumbers(previousOutputsTmp)
+      //val pn = previousNumbers(previousOutputsTmp)
       previousOutputsTmp = outputs.toIndexedSeq
-      evalProg(prog)(Input_state(inputs.toIndexedSeq, pn)) match {
+      evalProg(prog)(Input_state(inputs.toIndexedSeq, index)) match {
         case StringValue(res) =>
           if(ff.useDots) {
             val reg = output.split("\\Q...\\E").map(Pattern.quote(_)).mkString(".*").r.anchored
@@ -739,32 +746,45 @@ class StringSolverAlgorithms {
         
         if(debugActive) {
           for(y1 <- Y1; y <- y1) {
-            assert(evalProg(y)(IndexedSeq(σvi)) == IntValue(k))
+            assert(evalProg(y)(Input_state(IndexedSeq(σvi), 1)) == IntValue(k))
           }
           for(y2 <- Y2; y <- y2) {
-            assert(evalProg(y)(IndexedSeq(σvi)) == IntValue(k + s.length))          
+            assert(evalProg(y)(Input_state(IndexedSeq(σvi), 1)) == IntValue(k + s.length))          
           }
         }
 
         val newResult = SSubStr(InputString(vi), Y1, Y2, m)
         result = result + newResult
       }
-      // If σvi is empty or does not contain any number, it should generate all possible numbers expressions for various sizes.
-      if(s.isNumber) {
-        for((start, end, steps) <- s subnumberIncNegativeOf σvi) { // Numbers that can be obtained from σvi by changing by steps for example.
+      
+      if(s.isNumber && numbering) {
+        for((start, end, offset) <- s subnumberIncNegativeOf σvi) { // Numbers that can be obtained from σvi by changing by steps for example.
           val Y1 = generatePosition(σvi, start)
           val Y2 = generatePosition(σvi, end+1)
           val possibleLengths = (if(s(0) != '0') {// It means that the generated length might be lower.
-            (1 to s.length).toSet
-          } else Set(s.length))
+            SIntSemiLinearSet(1, 1, s.length)
+          } else SIntSemiLinearSet(s.length, 1, s.length))
           if(!possibleLengths.isEmpty)
-          result = result + SNumber(SSubStr(InputString(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths.map(IntLiteral.apply), SAnyInt(0), SIntSet(Set(steps)))
+          result = result + SNumber(SSubStr(InputString(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths, offset)
         }
       }
     }
     // Generates numbers from previous numbers in output strings.
-    if(s.isNumber) {
-      if(σ.prevNumberOutputs.length == 0) {
+    if(s.isNumber && numbering) {
+      val numberValue = s.toInt
+      val position = σ.position
+      val possibleLengths = (if(s(0) != '0') {// It means that the generated length might be lower.
+        SIntSemiLinearSet(1, 1, s.length)
+      } else SIntSemiLinearSet(s.length, 1, s.length))
+      if(!possibleLengths.isEmpty) {
+        val possibleStarts = if(position == 0) {
+          SIntSemiLinearSet(numberValue, 1, numberValue)
+        } else {
+          SIntSemiLinearSet(numberValue % position, position, numberValue)
+        }
+        result += SCounter(possibleLengths, possibleStarts, numberValue, position)
+      }
+      /*if(σ.prevNumberOutputs.length == 0) {
         val i = s.toInt
         // For any number i, the set of matching counters are IntLiteral(i), Linear(1, i), Linear(2, i) up to Linear(i, i)
         result = result + SNumber(SAny(PrevStringNumber(0)), Set(s.length), SIntSet(Set(i)), SAnyInt(1))
@@ -787,7 +807,7 @@ class StringSolverAlgorithms {
             result = result + SNumber(SSubStr(PrevStringNumber(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths.map(IntLiteral.apply), SAnyInt(0), SIntSet(Set(steps)))
           }
         }
-      }
+      }*/
     }
     result
   }

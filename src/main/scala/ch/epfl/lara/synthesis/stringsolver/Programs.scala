@@ -38,11 +38,11 @@ object Programs {
       }
       case _ => false
     }
-    def get(args: IndexedSeq[String]): Value = {
-      evalProg(this)(args)
+    def apply(args: IndexedSeq[String], position: Int): Value = {
+      evalProg(this)(Input_state(args, position))
     }
     def apply(args: String*): String = {
-      get(args.toIndexedSeq).asString
+      apply(args.toIndexedSeq, 0).asString
     }
     def apply(args: Input_state): String = {
       evalProg(this)(args).asString
@@ -204,7 +204,7 @@ object Programs {
   
   sealed trait StringVariable extends Program
   case class InputString(i: IntegerExpr) extends StringVariable
-  case class PrevStringNumber(i: IntegerExpr) extends StringVariable
+  //case class PrevStringNumber(i: IntegerExpr) extends StringVariable
   object InputString { 
     def apply(index: Int): InputString = InputString(IntLiteral(index))
   }
@@ -266,7 +266,8 @@ object Programs {
   // Number("0001", 3, Linear(6, "w", 5)) == "007"
   // Number("0001", 3, IntLiteral(6)) = "006"
   
-  case class Number(a: AtomicExpr, length: IntegerExpr, offsetstep: (Int, Int)) extends AtomicExpr
+  case class Counter(length: Int, start: Int, step: Int) extends AtomicExpr
+  case class NumberMap(a: SubStr, length: Int, offset: Int) extends AtomicExpr
   
   sealed trait Position extends Program
   /**

@@ -42,6 +42,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
   val w = Identifier("w")
 
   import Evaluator._
+  import StringSolver._
   
   "Evaluator" should "correctly concatenate strings" in {
     concatenate(StringValue("a"), StringValue("b"), StringValue("c")) should equal (StringValue("abc"))
@@ -92,12 +93,12 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
     p6("Oege      de        Moor")  should equal ("Oege de Moor")
     p6("Kathleen         Fisher    AT&T Labs") should equal ("Kathleen Fisher AT&T Labs")
       
-    val pNumber = Concatenate(ConstStr("myFile"), Number(SubStr2(v1, NumTok, 1), 3, (5, 2)))
+    val pNumber = Concatenate(ConstStr("myFile"), NumberMap(SubStr2(v1, NumTok, 1), 3, 2))
     pNumber("My number 1 should increase") should equal ("myFile003")
     pNumber("My number 4 should increase") should equal ("myFile006")
       
     val pos = Pos(TokenSeq(StartTok, UpperTok, LowerTok), TokenSeq(NonLowerTok, NonDotTok), 1)
-    evalProg(pos)(IndexedSeq("Algorithm1.pdf")).asInt should equal(9)
+    evalProg(pos)(Input_state(IndexedSeq("Algorithm1.pdf"), 1)).asInt should equal(9)
   }
 }
 
@@ -175,7 +176,7 @@ import f._
   "StringSolver" should "correcly compute positions" in {
     val c = "AB12a.  .45? #AB"
     for(i <- 0 to c.length; spos <- f.generatePosition(c, i); pos <- spos) {
-      evalProg(pos)(IndexedSeq(c)).asInt should equal(i)
+      evalProg(pos)(Input_state(IndexedSeq(c), 0)).asInt should equal(i)
     }
   }
   
@@ -212,7 +213,7 @@ import f._
   }
   
   it should "compute atomic subexpressions" in {
-    val res = generateSubString(IndexedSeq("5555", "0abb"), "abb")
+    val res = generateSubString(Input_state(IndexedSeq("5555", "0abb"), 0), "abb")
     res.size should equal(1)
     res.headOption match {
       case Some(SSubStr(vi, spos, epos, method)) => 
@@ -244,14 +245,29 @@ import f._
   }
   
   it should "compute find first and second numbers" in {
-    val res = generateSubString(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), "178")
+    val res = generateSubString(Input_state(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), 0), "178")
     val expected = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),Set(1))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),STokenSeq(Nil),Set(1))), SSubStrFlag(List(NORMAL)))
     val c = res.map(intersectAtomicExpr(_, expected))
     c.filter(_ != SEmpty).flatten should not be 'empty
     
-    val res2 = generateSubString(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), "2813")
+    val res2 = generateSubString(Input_state(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), 0), "2813")
     val expected2 = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),Set(2))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),STokenSeq(Nil),Set(2))), SSubStrFlag(List(NORMAL)))
     res2.map(intersectAtomicExpr(_, expected2)).filter(_ != SEmpty).flatten should not be 'empty
+  }
+  
+  it should "compute compute intersection of semi-linear sets" in {
+    val s1 = SIntSemiLinearSet(1, 3, 11)
+    val s2 = SIntSemiLinearSet(0, 2, 13)
+    val s3 = SIntSemiLinearSet(0, 2, 3)
+    val s4 = SIntSemiLinearSet(-1, 3, 8)
+    intersectIntSet(s1, s2) should equal (SIntSemiLinearSet(4,6,11))
+    intersectIntSet(s1, s3) should equal (SEmpty)
+    intersectIntSet(s2, s3) should equal (s3)
+    intersectIntSet(s1, s4) should equal (SEmpty)
+    intersectIntSet(s2, s4) should equal (SIntSemiLinearSet(2,6,8))
+    val c2 = SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(1,0,1),1,0)
+    val c1 = SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(0,1,7),7,1)
+    intersectAtomicExpr(c1, c2) should equal(SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(1,0,1),7,1))
   }
   
   it should "compute loops easily" in {
@@ -260,7 +276,7 @@ import f._
     s.add(inputs, "ab...")
     val prog = s.solve()
     prog should not be 'empty
-    evalProg(prog.get)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("abcd"))
+    prog.get.apply(IndexedSeq("a", "b", "c", "d"), 0) should equal (StringValue("abcd"))
   }
   
   it should "compute loops medium" in {
@@ -270,7 +286,7 @@ import f._
     s.add(inputs, "a,a,b,b,...")
     val prog = s.solve()
     prog should not be 'empty
-    evalProg(prog.get)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("a,a,b,b,c,c,d,d,"))
+    prog.get.apply(IndexedSeq("a", "b", "c", "d"), 0) should equal (StringValue("a,a,b,b,c,c,d,d,"))
   }
   it should "compute loops medium with separator" in {
     val inputs = List("a", "b", "c", "d")
@@ -278,7 +294,7 @@ import f._
     s.add(inputs, "a,a,b,b...")
     val prog = s.solve()
     prog should not be 'empty
-    evalProg(prog.get)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("a,a,b,b,c,c,d,d"))
+    prog.get.apply(IndexedSeq("a", "b", "c", "d"), 0) should equal (StringValue("a,a,b,b,c,c,d,d"))
   }
   
   it should "compute loops hard" in {
@@ -289,7 +305,7 @@ import f._
     c.setMaxSeparatorLength(0)
     c.add(inputs, "cp a a1;rm a;cp b b1;rm b;...")
     val prog = c.solve().get
-    evalProg(prog)(IndexedSeq("a", "b", "c", "d")) should equal (StringValue("cp a a1;rm a;cp b b1;rm b;cp c c1;rm c;cp d d1;rm d;"))
+    prog(IndexedSeq("a", "b", "c", "d"), 0) should equal (StringValue("cp a a1;rm a;cp b b1;rm b;cp c c1;rm c;cp d d1;rm d;"))
   }
   
   
@@ -305,8 +321,8 @@ import f._
   
   it should "compute dag intersections with correct numbering" in {
      val f = new StringSolverAlgorithms()
-     val res1 = (f.generateStr)(IndexedSeq("000"), "001", 0)
-     val res2 = (f.generateStr)(IndexedSeq("001"), "002", 0)
+     val res1 = f.generateStr(Input_state(IndexedSeq("000"), 0), "001", 0)
+     val res2 = f.generateStr(Input_state(IndexedSeq("006"), 1), "007", 0)
      val res3 = intersect(res1, res2)
      val program = res3.takeBest
      println(Printer(program))
@@ -315,8 +331,8 @@ import f._
   
   it should "compute dag intersections with correct numbering with constants" in {
      val f = new StringSolverAlgorithms()
-     val res1 = f.generateStr(IndexedSeq("000,99"), "100,001", 0)
-     val res2 = f.generateStr(IndexedSeq("100,001"), "002,101", 0)
+     val res1 = f.generateStr(Input_state(IndexedSeq("000,99"), 0), "100,001", 0)
+     val res2 = f.generateStr(Input_state(IndexedSeq("100,001"), 0), "002,101", 0)
      val res3 = intersect(res1, res2)
      val program = res3.takeBest
      println(Printer(program))
@@ -325,10 +341,12 @@ import f._
   
   it should "compute simple number sequences" in {
     val f = StringSolver()
+    f.setTimeout(10000)
     f.add(List("AB00"), "AB-00-1")
     f.add(List("A652"), "A-652-2")
     f.add(List("C14"), "C-14-3")
     f.add(List("E56"), "E-56-4")
+    println(Printer(f.solve().get))
     f.solve(List("D3"))(0) should equal ("D-3-5")
   }
   it should "prefer numbers over strings" in {

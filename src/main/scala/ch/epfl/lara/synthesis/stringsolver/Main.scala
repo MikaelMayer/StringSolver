@@ -31,7 +31,7 @@ import Programs.Program
 object Main {
   import Implicits._
   
-  final val debug = false
+  final val debug = true
   val HISTORY_DIR = "StringSolverRenaming"
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
@@ -211,8 +211,8 @@ object Main {
   def main(args: Array[String]): Unit = {
     val cmd = args.toList
     cmd match {
-      case Auto()::q =>    parseAutoCmd(cmd, perform=true, explain=false, performAll=false, contentFlag=false)
-      case Move()::q =>    parseMvCmd(cmd)
+      case Auto()::q =>    parseAutoCmd(cmd, Options())
+      case Move()::q =>    parseMvCmd(cmd, Options())
       //case Convert()::q => automatedConvert(cmd)
       case _ =>
     }
@@ -224,7 +224,9 @@ object Main {
    * 
    * Problem: Take the last instances, then the last two, etc.
    */
-  def automatedRenaming(perform: Boolean = true, explain: Boolean = false): Unit = {
+  def automatedRenaming(opt: Options): Unit = {
+    val perform = opt.perform
+    val explain = opt.explain
     val examples = getMvHistory(new File(decodedPath))
     val c = StringSolver()
     c.setTimeout(5)
@@ -255,7 +257,7 @@ object Main {
       new File(decodedPath).listFiles().filter(_.isDirectory())
         .flatMap{ theDir =>
         theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + File.separator + file)
+        .map(file => theDir.getName() + "/" + file)
         .filter(file => !new File(decodedPath, file).isDirectory())
         .sortBy(alphaNumericalOrder)
         .filterNot(exceptions)
@@ -274,8 +276,17 @@ object Main {
           case Some(Concatenate(List(ConstStr(a)))) => true
           case Some(prog) =>
             if(debug) displayProg(prog)
+            if(opt.produceBash) {
+              // TODO : Produce bash code.
+              
+              
+              """find . \( -name '*.jpg' -o -name '*.png' \) -print  | (i=0; while read f; do 
+                  let i+=1; mv "$f" "${f%/*}/$(printf %04d "$i").${f##*.}"; 
+              done)
+              """
+            }
             if(explain) {
-             if(!debug) displayProg(prog)
+              if(!debug) displayProg(prog)
             } else {
               val mappedFiles = files map { f => solver(f) }
               val mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
@@ -300,6 +311,36 @@ object Main {
     }
   }
   
+  /**
+   * Decodes options given on the command line
+   */
+  object OptionsDecoder {
+    def unapply(l: (List[String], Options)): Option[(Options, List[String])] = {
+      l match {
+        case (command::("-e" | "--explain")::remaining, options) => // Explain the algorithm
+          Some((options.copy(explain=true, perform=false), command::remaining))
+        case (command::("-t" | "--test")::remaining, options) => // Show what the algorithm would do
+          Some((options.copy(explain=false, perform=false), command::remaining))
+        case (command::("-a" | "--auto")::remaining, options) => // Generalizes the command
+          Some((options.copy(performAll=true), command::remaining))
+        case (command::("-l" | "--lines")::remaining, options) => // Takes input from the content of the file/folder
+          Some((options.copy(contentFlag=true), command::remaining))
+        case (command::("-b" | "--bash")::remaining, options) => // Produces a bash script for the mapping.
+          Some((options.copy(produceBash=true), command::remaining))
+        case _ => None
+      }
+    }
+  }
+  
+  case class Options(
+    var perform: Boolean = true,
+    var explain: Boolean = false, 
+    var performAll: Boolean = false, 
+    var contentFlag: Boolean = false,
+    var produceBash: Boolean = false
+  ) {
+    
+  }
   
   /**Enhanced move command
    * Feature list:
@@ -309,30 +350,28 @@ object Main {
    * - "mv -e" explains
    * - "mv -t" tests the mv command.
    */
-  def parseMvCmd(cmd: List[String], perform: Boolean=true, explain: Boolean=false, doall: Boolean = false): Unit = {
-    cmd match {
-      case Move()::("-c" | "--clear")::_ => // Clears the history
+  def parseMvCmd(cmd: List[String], options: Options): Unit = {
+    (cmd, options) match {
+      case (Move()::("-c" | "--clear")::remaining, opts) => // Clears the history
         deleteMvHistory()
-      case Move()::("-e" | "--explain")::remaining => // Explain the algorithm
-        parseMvCmd(Move()::remaining, perform=false, explain=true, doall=doall)
-      case Move()::("-t" | "--test")::remaining => // Show what the algorithm would do
-        parseMvCmd(Move()::remaining, perform=false, explain=explain, doall=doall)
-      case Move()::("-a" | "--auto")::remaining => // Generalizes the command
-        parseMvCmd(Move()::remaining, perform=perform, explain=explain, doall=true)
-      case Move()::Nil => // Automated move.
-        automatedRenaming(perform, explain)
-      case Move()::sfile1::sfile2::Nil =>
+        if(remaining != Nil) {
+          println(remaining.mkString(" ") + " has been ignored")
+        }
+      case OptionsDecoder(opt2, cmd2) =>
+        parseMvCmd(cmd2, opt2)
+      case (Move()::Nil, opt) => // Automated move.
+        automatedRenaming(opt)
+      case (Move()::sfile1::sfile2::Nil, opt) =>
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
-        if(perform) move(sfile1, sfile2)
-        storeMvHistory(new File(decodedPath), perform, sfile1, sfile2)
-        if(debug) println("Explaining " + explain + " performing " + perform)
-        automatedRenaming(perform=doall, explain=explain)
-      case Move()::_ => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
-      automatedRenaming(perform=doall, explain=explain)
-        
-      case other => println("Unkown function : " + other.mkString(" "))
+        if(opt.perform) move(sfile1, sfile2)
+        storeMvHistory(new File(decodedPath), opt.perform, sfile1, sfile2)
+        if(debug) println("Explaining " + opt.explain + " performing " + opt.perform)
+        automatedRenaming(opt.copy(perform=opt.performAll))
+      case (Move()::_, opt) => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
+        //automatedRenaming(perform=opt.performAll, explain=opt.explain)
+      case _ =>
     }
   }
   
@@ -431,6 +470,31 @@ object Main {
   }
   
   /**
+   * Sets a line in the history to performed state.
+   */
+  def setHistoryAutoPerformed(folder: File, files: List[String]): Unit = {
+    val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
+    val checkDir = (s: String) => s == dir
+    try {
+      getHistoryFile(HISTORY_AUTO_FILE) foreach { history_file =>
+        val content = readFile(history_file)
+        val lines = if(content.isEmpty) Nil
+        else {
+          for(line <- content.filterNot(_ == '\r').split("\n").toList;
+            splitted = line.split("\\|\\|").toList if splitted.length >= 7;
+            time::dir::performed::contentFlag::nature::filesAndCommand = splitted) yield {
+            if(checkDir(dir) && filesAndCommand.startsWith(files) && !performed.toBoolean) {
+              (time::dir::true::contentFlag::nature::filesAndCommand).mkString("||")
+            } else line
+          }
+        }
+      }
+    } catch  {
+      case e: IOException =>println("ioexception")
+    }
+  }
+  
+  /**
    * Generic automated commands.
    * @param perform Indicates if the requested command is performed
    *   Parameter -t or --test put this variable to false
@@ -445,49 +509,50 @@ object Main {
    *   Parameter -l or --lines
    *   Default: false
    */
-  def parseAutoCmd(cmd: List[String], perform: Boolean, explain: Boolean, performAll: Boolean, contentFlag: Boolean): Unit = {
+  def parseAutoCmd(cmd: List[String], options: Options): Unit = {
     if(debug) println(s"Action $cmd")
-    cmd match {
-      case Auto()::("-c" | "--clear")::_ =>
+    (cmd, options) match {
+      case (Auto()::("-c" | "--clear")::_, opt) =>
         deleteAutoHistory()
-      case Auto()::Nil =>
-        automatedAction(performLast=perform, explain=explain, performAll=performAll)
-      case Auto()::("-e" | "--explain")::remaining =>
-        parseAutoCmd(Auto()::remaining, perform=false, explain = true, performAll=performAll, contentFlag = contentFlag)
-      case Auto()::("-t" | "--test")::remaining =>
-        parseAutoCmd(Auto()::remaining, perform=false, explain=explain, performAll=performAll, contentFlag = contentFlag)
-      case Auto()::("-a" | "--auto")::remaining => 
-        parseAutoCmd(Auto()::remaining, perform=perform, explain=explain, performAll=true, contentFlag = contentFlag)
-      case Auto()::("-l" | "--lines")::remaining => 
-        parseAutoCmd(Auto()::remaining, perform=perform, explain=explain, performAll=performAll, contentFlag = true)
+      case OptionsDecoder(opt, cmd) =>
+        parseAutoCmd(cmd, opt)
+      case (Auto()::Nil, opt) =>
+        automatedAction(opt.copy(performAll=opt.performAll || (opt.perform && !opt.explain)))
         //parseAutoCmd(Auto()::remaining, perform=perform, explain=explain, doall=true)
-      case Auto()::command:: Nil => // Automatically detect where the file is and which one it should be applied to.
+      case (Auto()::command::Nil, opt) => // Automatically detect where the file is and which one it should be applied to.
         val s = new File(decodedPath).list().toList.sortBy(alphaNumericalOrder)
+        val sNested = new File(decodedPath).list().toList.flatMap{d => 
+          val dir = new File(decodedPath, d)
+          if(dir.isDirectory)
+            dir.list().map(name => dir.getName()+"/"+name)
+          else
+            Nil
+        }
+        .sortBy(alphaNumericalOrder)
+        
         if(command.indexOf("...") != -1) {
           if(debug) println("Found '...' Going to decode the action for all present files.")
           storeAutoHistory(new File(decodedPath), performed=false, content=false, s, command::Nil)
-          parseAutoCmd(Auto()::Nil, perform, explain, performAll=performAll, contentFlag=contentFlag)
+          parseAutoCmd(Auto()::Nil, opt)
         } else {
           if(debug) println("No input provided. Going to try to extract output from file name")
-          val candidates = s.filter{ f => command.indexOf(f) != -1 }.sortBy(_.size).lastOption
+          val candidates = (s ++ sNested).filter{ f => command.indexOf(f) != -1 }.sortBy(_.size).lastOption
           candidates match {
             case Some(file) =>
-              parseAutoCmd(Auto()::file::command::Nil, perform, explain, performAll, contentFlag)
+              parseAutoCmd(Auto()::file::command::Nil, opt)
             case None =>
               // If there are three dots in the command, tries to recognize the command
           }
         }
-      case Auto()::sfile::l if l != Nil =>
+      case (Auto()::sfile::l, opt) if l != Nil =>
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         
-        storeAutoHistory(new File(decodedPath), false, contentFlag, List(sfile), l)
-        if(l.indexWhere(_.indexOf("...") != -1) != -1 && contentFlag) {
+        storeAutoHistory(new File(decodedPath), false, opt.contentFlag, List(sfile), l)
+        if(l.indexWhere(_.indexOf("...") != -1) != -1 && opt.contentFlag) {
           if(debug) println("Found '...' Going to map the action for all lines in command.")
-          automatedAction(perform, explain, performAll)
-        } else {
-          automatedAction(perform, explain, performAll)
         }
+        automatedAction(opt)
        
       case _ =>
     }
@@ -500,7 +565,11 @@ object Main {
    * @param performAll indicates if action is performed on all available examples
    * It always displays the mapping unless explain is set to true.
    */
-  def automatedAction(performLast: Boolean = true, explain: Boolean = false, performAll: Boolean): Unit = {
+  def automatedAction(opt: Options): Unit = {
+    val performLast = opt.perform
+    val explain = opt.explain
+    val performAll = opt.performAll
+    val produceBash = opt.produceBash
     
     // Retrieves examples (performed or not) from the previous launches.
     val examples = getAutoHistory(new File(decodedPath))
@@ -512,8 +581,8 @@ object Main {
     // Exceptions are files for which the action was already performed
     var exceptions = Set[String]()
     if(debug) println(s"$decodedPath $examples, $performLast; $explain, $performAll")
-    if(examples != Nil) (if(!explain && !performLast && !performAll) println("Looking for mappings...")) else {
-      println("No action to reproduce in this folder")
+    if(examples != Nil) (if(!explain && !performLast && !performAll) println("# Looking for mappings...")) else {
+      println("# No action to reproduce in this folder")
       return ();
     }
     
@@ -528,6 +597,7 @@ object Main {
     
     var previous_input: List[String] = Nil
     var previous_output: List[String] = Nil
+    var lastFilesCommand: List[String] = Nil
     // Solving the mapping based on the last two examples.
     examples.reverse.take(2).reverse foreach {
       case (nature, performed, contentFlag, files, command) =>
@@ -560,7 +630,7 @@ object Main {
         if(performed) {
           exceptions += command.last
           exceptions ++= files
-        }
+        } else lastFilesCommand = files
         nature match {
           case INPUT_FILE_LIST(n) =>
             is_input_file_list = true
@@ -592,7 +662,7 @@ object Main {
     } else if(nested_level == 1){
       new File(decodedPath).listFiles().filter(_.isDirectory()).flatMap{ theDir =>
         theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + File.separator + file)
+        .map(file => theDir.getName() + "/" + file)
         .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
         .filterNot(if(is_input_file_list) Set.empty else exceptions)
         .map(List(_))
@@ -621,7 +691,7 @@ object Main {
           case l if l.forall(_.nonEmpty) =>
             if(explain || debug) {
               for(ls <- l; prog <- ls) {
-               displayProg(prog, lines = (read_content_file != None))
+               displayProg(prog, lines = (read_content_file != None), folder = !onlyFiles)
               }
             }
             if(!explain) {
@@ -633,16 +703,27 @@ object Main {
                 }
               suggestMapping(l.map(_.get), mapping, "auto", title= !performLast)
               if(performAll) {
+                if(debug) println("Performing all of them")
                 for((file, command) <- mapping) {
                   auto(command.toList)
                 }
               } else if(performLast) {
-                mapping.toList.lastOption foreach { case (files, commands) =>
-                    auto(commands.toList)
+                if(debug) println("Performing the last one")
+                // Performs the last of the provided examples and replace in the history the action.
+                mapping find {
+                  case (files, command) if files == lastFilesCommand => true
+                  case _ => false
+                } match {
+                  case Some((files, command)) =>
+                    auto(command.toList)
+                    // Put in the history that the action has been made.
+                    setHistoryAutoPerformed(new File(decodedPath), files)
+                  case None => // Nothing to execute
+                  if(debug) println("The last one has already been done or was not found")
                 }
               }
             }
-            true
+            OK
           case _ =>
             if(debug) println(s"No program found")
             RETRY
@@ -761,8 +842,8 @@ object Main {
     //println(s"move $file $to")
   }
   
-  def displayProg(prog: Program, lines: Boolean = false): Unit = {
-    val replaceinput = if(lines) "line" else "file name"
+  def displayProg(prog: Program, lines: Boolean = false, folder: Boolean = false): Unit = {
+    val replaceinput = if(lines) "line" else if(folder) "folder name" else "file name"
     val tmp = Printer(prog)
     val first = if("(?<!first) input".r.findFirstIn(tmp) != None) "first " else ""
     val second = if(lines) "first" else "second"
