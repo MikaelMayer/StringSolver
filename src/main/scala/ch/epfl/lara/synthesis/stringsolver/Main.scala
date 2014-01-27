@@ -1,27 +1,26 @@
 package ch.epfl.lara.synthesis.stringsolver
 
-import scala.sys.process._
-import java.net.URLDecoder
-import java.io.File
-import Programs._
-import Evaluator._
-import scala.language.postfixOps
-import java.io.IOException
-import java.io.PrintWriter
-import java.io.BufferedWriter
-import java.io.FileWriter
-import java.sql.Timestamp
-import java.nio.file._
-import java.nio.charset.StandardCharsets
-import java.nio.ByteBuffer
-import scala.language.postfixOps
-import scala.sys.process._
-import Evaluator._
-import Programs._
-import scala.collection.mutable.HashMap
-import scala.collection.JavaConversions._
 import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileWriter
+import java.io.IOException
 import java.io.InputStreamReader
+import java.io.PrintWriter
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.sql.Timestamp
+
+import scala.Array.canBuildFrom
+import scala.collection.JavaConversions.mapAsScalaMap
+import scala.language.postfixOps
+
+import Implicits.AugString
+import Programs.Concatenate
+import Programs.ConstStr
+import Programs.Program
 
 /**
  * Usage
@@ -289,7 +288,7 @@ object Main {
                 suggestMapping(List(prog), mapping, "mv", title= !perform)
               }
             }
-            true
+            OK
           case None =>
             if(debug) println(s"no program found")
             RETRY
@@ -482,7 +481,7 @@ object Main {
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         
-        storeAutoHistory(new File(decodedPath), perform, contentFlag, List(sfile), l)
+        storeAutoHistory(new File(decodedPath), false, contentFlag, List(sfile), l)
         if(l.indexWhere(_.indexOf("...") != -1) != -1 && contentFlag) {
           if(debug) println("Found '...' Going to map the action for all lines in command.")
           automatedAction(perform, explain, performAll)
@@ -527,6 +526,8 @@ object Main {
     // Controls if the last example was reading the content of the file instead of the name itself.
     var read_content_file: Option[FileName] = None
     
+    var previous_input: List[String] = Nil
+    var previous_output: List[String] = Nil
     // Solving the mapping based on the last two examples.
     examples.reverse.take(2).reverse foreach {
       case (nature, performed, contentFlag, files, command) =>
@@ -537,16 +538,19 @@ object Main {
         } 
         // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
         // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
-        if(contentFlag) {
+        val (input,output) = if(contentFlag) {
           val content = readFile(files.head)
           if(!content.isEmpty) {
             val lines = readLines(content).take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)
             if(debug) println(s"Adding ${lines} (content=$contentFlag), $command")
-            c.add(files.head::lines, command)
-          }
+            (files.head::lines, command)
+          } else (Nil, Nil)
         } else {
           if(debug) println(s"Adding ${files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)} (content=$contentFlag), $command")
-          c.add(files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
+          (files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
+        }
+        if(input != previous_input) {
+          c.add(input, output)
         }
         
         // Recovers the nesting level.
@@ -767,7 +771,8 @@ object Main {
         .replaceAll("all inputs", s"all ${replaceinput}s")
         .replaceAll("second input", s"$second $replaceinput")
         .replaceAll("third input", s"$third $replaceinput")
-        .replaceAll(" input ", s" $replaceinput "))
+        .replaceAll(" input ", s" $replaceinput ")
+        .replaceAll("line ([a-z][a-z0-9]*)\\+2", "line $1+1"))
   }
   
   def alphaNumericalOrder(f: String): String = {
