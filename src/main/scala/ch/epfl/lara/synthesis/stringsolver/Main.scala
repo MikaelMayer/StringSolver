@@ -31,7 +31,7 @@ import Programs.Program
 object Main {
   import Implicits._
   
-  final val debug = true
+  final val debug = false
   val HISTORY_DIR = "StringSolverRenaming"
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
