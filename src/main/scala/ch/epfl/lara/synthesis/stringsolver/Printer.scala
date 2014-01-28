@@ -113,7 +113,7 @@ object Printer {
             t"the ${numeral(c1)} number in previous output"*/
           case (Pos(Epsilon, r1, c1), Pos(r2, Epsilon, c2)) if r1 == r2 && c1 == c2 =>
             val cs = numeral(c1)
-            t"the $cs$m occurence of $r1 in $sv1"
+            t"the $cs$m occurrence of $r1 in $sv1"
           case (CPos(0), CPos(d)) if d >= 1 =>
             val chars = if(d == 1) "char" else s"$d chars"
             t"the first$m $chars in $sv1"
@@ -131,10 +131,15 @@ object Printer {
               t"the$m substring starting at [$starting] ending at [$ending] in $sv1"
             }
         }
-      case Counter(digits, start, offset) =>
+      case Counter(digits, start, step) =>
         //val s = if(digits > 1) "s" else ""
-        val increment = if(offset > 1) s" and incrementing by $offset" else ""
-        s"a $digits-digit counter starting at $start$increment"
+        val increment = if(step > 1) s" and incrementing by $step" else ""
+        if(step == 0) {
+          val zeros = "0"*(digits - start.toString.length)
+          s"the number $zeros$start"
+        } else {
+          s"a $digits-digit counter starting at $start$increment"
+        }
       case Pos(r1, Epsilon, i) =>
         t"the end of the ${numeral(i)} $r1"
       case Pos(Epsilon, r2, i) =>
@@ -200,9 +205,9 @@ object Printer {
     // Post-processing
     
     implicit val rules = ArrayBuffer[String => String]()
-    "(.*)for all (\\w+)>=0 the (\\w+)\\+1-th occurence(.*)" ==>
+    "(.*)for all (\\w+)>=0 the (\\w+)\\+1-th occurrence(.*)" ==>
     { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>
-        prefix + "every occurence" + suffix
+        prefix + "every occurrence" + suffix
     }
     "(.*)for all (\\w+)>=0 the input (\\w+)\\+1(.*)" ==>
     { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>

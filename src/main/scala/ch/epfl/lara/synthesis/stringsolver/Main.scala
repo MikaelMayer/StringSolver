@@ -31,7 +31,7 @@ import Programs.Program
 object Main {
   import Implicits._
   
-  final val debug = false
+  var debug = false
   val HISTORY_DIR = "StringSolverRenaming"
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
@@ -160,7 +160,7 @@ object Main {
   }
   
   /**
-   * Recovesr all renaming in history which happened in this folder
+   * Recovers all renaming in history which happened in this folder
    */
   def getMvHistory(folder: File): Seq[(Performed, FileName, FileName)] = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
@@ -230,11 +230,11 @@ object Main {
     val examples = getMvHistory(new File(decodedPath))
     val c = StringSolver()
     c.setTimeout(5)
-    var exceptions = Set[String]()
+    var alreadyPerformed = Set[String]()
     if(debug) println(s"$decodedPath $examples, $perform; $explain")
     
-    if(examples != Nil) (if(!explain && !perform) println("Looking for mappings...")) else {
-      println("No action to reproduce in this folder")
+    if(examples != Nil) (if(!explain && !perform) println("# Looking for a general command...")) else {
+      println("# No action to reproduce in this folder")
       return ();
     }
     
@@ -244,14 +244,14 @@ object Main {
         if(debug) println(s"Adding $in, $out")
         c.add(List(in), List(out))(0)
         nested_level = in.count(_ == '/') + in.count(_ == '\\')
-        if(performed) exceptions += out
+        if(performed) alreadyPerformed += out
     }
-    if(debug) println(s"Exceptions: $exceptions, nested level = $nested_level")
+    if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
     val files: Array[List[FileName]] = if(nested_level == 0) {
       new File(decodedPath).list().sortBy(alphaNumericalOrder)
       .filter(file => !new File(decodedPath, file).isDirectory())
-      .filterNot(exceptions)
+      //.filterNot(alreadyPerformed)
       .map(List(_))
     } else if(nested_level == 1){
       new File(decodedPath).listFiles().filter(_.isDirectory())
@@ -260,7 +260,7 @@ object Main {
         .map(file => theDir.getName() + "/" + file)
         .filter(file => !new File(decodedPath, file).isDirectory())
         .sortBy(alphaNumericalOrder)
-        .filterNot(exceptions)
+        //.filterNot(alreadyPerformed)
         .map(List(_))
       }
     } else Array[List[FileName]]()
@@ -272,14 +272,13 @@ object Main {
       val attempts = (() => c.solve(),   (e: List[FileName]) => c.solve(e))::
                      (() => c.solveLast(), (e: List[FileName]) => c.solveLast(e))::Nil
       attempts find { case (computation, solver) => 
+        c.resetCounter()
         computation() match {
           case Some(Concatenate(List(ConstStr(a)))) => true
           case Some(prog) =>
             if(debug) displayProg(prog)
             if(opt.produceBash) {
-              // TODO : Produce bash code.
-              
-              
+              // TODO : Produce bash code like this one:
               """find . \( -name '*.jpg' -o -name '*.png' \) -print  | (i=0; while read f; do 
                   let i+=1; mv "$f" "${f%/*}/$(printf %04d "$i").${f##*.}"; 
               done)
@@ -292,7 +291,7 @@ object Main {
               val mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
               if(mapping.nonEmpty) {
                 if(perform) {
-                  for((file, to) <- mapping) {
+                  for((file, to) <- mapping if !alreadyPerformed(file.head)) {
                     move(file.head, to.head)
                   } 
                 }
@@ -327,17 +326,21 @@ object Main {
           Some((options.copy(contentFlag=true), command::remaining))
         case (command::("-b" | "--bash")::remaining, options) => // Produces a bash script for the mapping.
           Some((options.copy(produceBash=true), command::remaining))
+        case (command::("-d" | "--debug")::remaining, options) => // Produces a bash script for the mapping.
+          debug = true
+          Some((options.copy(debug=true), command::remaining))
         case _ => None
       }
     }
   }
   
   case class Options(
-    var perform: Boolean = true,
-    var explain: Boolean = false, 
-    var performAll: Boolean = false, 
-    var contentFlag: Boolean = false,
-    var produceBash: Boolean = false
+    perform: Boolean = true,
+    explain: Boolean = false, 
+    performAll: Boolean = false, 
+    contentFlag: Boolean = false,
+    produceBash: Boolean = false,
+    debug: Boolean = false
   ) {
     
   }
@@ -575,11 +578,11 @@ object Main {
     val examples = getAutoHistory(new File(decodedPath))
     
     val c = StringSolver()
-    c.setTimeout(2)
+    c.setTimeout(3)
     c.setVerbose(debug)
     
     // Exceptions are files for which the action was already performed
-    var exceptions = Set[String]()
+    var alreadyPerformed = Set[String]()
     if(debug) println(s"$decodedPath $examples, $performLast; $explain, $performAll")
     if(examples != Nil) (if(!explain && !performLast && !performAll) println("# Looking for mappings...")) else {
       println("# No action to reproduce in this folder")
@@ -603,7 +606,7 @@ object Main {
       case (nature, performed, contentFlag, files, command) =>
         // Extra time if looking for dots
         if(command.indexOf("...") != -1) {
-          c.setTimeout(3)
+          c.setTimeout(4)
           c.setExtraTimeToComputeLoops(2f)
         } 
         // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
@@ -628,8 +631,8 @@ object Main {
         
         // If the last term in the command is a file, it is in exceptions
         if(performed) {
-          exceptions += command.last
-          exceptions ++= files
+          alreadyPerformed += command.last // Assuming that the last element of the command might be a file (?)
+          alreadyPerformed ++= files
         } else lastFilesCommand = files
         nature match {
           case INPUT_FILE_LIST(n) =>
@@ -657,14 +660,14 @@ object Main {
     val files_raw: Array[List[String]] = if(nested_level == 0) {
       new File(decodedPath).list().sortBy(alphaNumericalOrder)
       .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-      .filterNot(if(is_input_file_list) Set.empty else exceptions)
+      //.filterNot(if(is_input_file_list) Set.empty else alreadyPerformed)
       .map(List(_))
     } else if(nested_level == 1){
       new File(decodedPath).listFiles().filter(_.isDirectory()).flatMap{ theDir =>
         theDir.list().sortBy(alphaNumericalOrder)
         .map(file => theDir.getName() + "/" + file)
         .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-        .filterNot(if(is_input_file_list) Set.empty else exceptions)
+        //.filterNot(if(is_input_file_list) Set.empty else alreadyPerformed)
         .map(List(_))
       }
     } else Array[List[String]]()
@@ -674,7 +677,7 @@ object Main {
       files_raw.map{listFiles => listFiles.head::readLines(readFile(listFiles.head))}
     } else files_raw
     
-    //Replacing each file by its content if the content is read.
+    //Replacing the list of singleton files by one unique input containing all files
     val input = if(is_input_file_list && read_content_file == None && onlyFiles) {
       Array(files_raw2.toList.flatten)
     } else files_raw2
@@ -686,6 +689,7 @@ object Main {
       val attempts = (() => c.solveAll(),   (e: List[FileName]) => c.solve(e))::
                      (() => c.solveLasts(), (e: List[FileName]) => c.solveLast(e))::Nil
       attempts find { case (computation, solver) => 
+        c.resetCounter() // TODO : Count the exceptions which already occurred.
         computation() match {
           case List(Some(Concatenate(List(ConstStr(a))))) => RETRY
           case l if l.forall(_.nonEmpty) =>
@@ -701,17 +705,19 @@ object Main {
                     if commandFromFile forall (_.nonEmpty)) yield {
                   f -> commandFromFile
                 }
-              suggestMapping(l.map(_.get), mapping, "auto", title= !performLast)
+              suggestMapping(l.map(_.get), mapping, "auto", title= !performAll)
               if(performAll) {
                 if(debug) println("Performing all of them")
-                for((file, command) <- mapping) {
+                for((file, command) <- mapping
+                    if is_input_file_list || !alreadyPerformed(file.head)
+                ) {
                   auto(command.toList)
                 }
               } else if(performLast) {
                 if(debug) println("Performing the last one")
                 // Performs the last of the provided examples and replace in the history the action.
                 mapping find {
-                  case (files, command) if files == lastFilesCommand => true
+                  case (files, command) if files.startsWith(lastFilesCommand) => true
                   case _ => false
                 } match {
                   case Some((files, command)) =>
@@ -719,7 +725,7 @@ object Main {
                     // Put in the history that the action has been made.
                     setHistoryAutoPerformed(new File(decodedPath), files)
                   case None => // Nothing to execute
-                  if(debug) println("The last one has already been done or was not found")
+                  if(debug) println(s"The last one $lastFilesCommand has already been done or was not found in keys of mapping.")
                 }
               }
             }
@@ -773,9 +779,9 @@ object Main {
   
   
   def suggestMapping(prog: List[Program], mapping: Array[(List[FileName], Seq[String])], command: String, title: Boolean = true) = {
-    val t = if(title) s"  (Mapping found. Type '$command' to perform it, or '$command -e' to explain)  \n" else ""
+    val t = if(title) s"#(Mapping found. Type '$command' to perform it, or '$command -e' to explain)  \n" else ""
     val mappingTrimmed = mapping//.toList.sortBy(_.##).take(5)
-    val m = (mappingTrimmed map { case (i: List[FileName], j: Seq[String]) => s"${i mkString ","} -> ${j.mkString(";")}"} mkString "\n")
+    val m = (mappingTrimmed map { case (i: List[FileName], j: Seq[String]) => s"# ${i mkString ","} -> ${j.mkString(";")}"} mkString "\n")
     println(t+m)
     if(mappingTrimmed.size < mapping.size) println("...")
     /*val question = "Apply the following transformation to all files?\n" + m
@@ -848,12 +854,13 @@ object Main {
     val first = if("(?<!first) input".r.findFirstIn(tmp) != None) "first " else ""
     val second = if(lines) "first" else "second"
     val third = if(lines) "second" else "third"
-    println(tmp.replaceAll("first input", if(lines) "file name" else s"${first}$replaceinput")
+    println("# " + tmp.replaceAll("first input", if(lines) "file name" else s"${first}$replaceinput")
         .replaceAll("all inputs", s"all ${replaceinput}s")
         .replaceAll("second input", s"$second $replaceinput")
         .replaceAll("third input", s"$third $replaceinput")
         .replaceAll(" input ", s" $replaceinput ")
-        .replaceAll("line ([a-z][a-z0-9]*)\\+2", "line $1+1"))
+        .replaceAll("line ([a-z][a-z0-9]*)\\+2", "line $1+1")
+        .replaceAll("line ([a-z][a-z0-9]*)\\+3", "line $1+2"))
   }
   
   def alphaNumericalOrder(f: String): String = {

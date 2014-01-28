@@ -55,7 +55,7 @@ object Evaluator {
   /**
    * Replace routines
    */
-  def replaceTraceExpr(e: TraceExpr)(implicit w: Identifier, k: Int): TraceExpr = e match {
+  /*def replaceTraceExpr(e: TraceExpr)(implicit w: Identifier, k: Int): TraceExpr = e match {
     case Concatenate(fs) =>    Concatenate(fs.toList map replaceAtomicExpr)
   }
   def replaceAtomicExpr(e: AtomicExpr)(implicit w: Identifier, k: Int): AtomicExpr = e match {
@@ -75,15 +75,15 @@ object Evaluator {
     //case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i))
   }
   def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier, k: Int): IntegerExpr = e match {
-    case Linear(k1, v, k2) if v.value == w.value => IntLiteral(k * k1 + k2)
+    case Linear(k1, v, k2) if v.value == w.value && (!(k2 >= 0) || k*k1+k2 >= 0) >= 0=> IntLiteral(k * k1 + k2)
     case _ => e
-  }
+  }*/
     
   /**
    * Loop routines
    */
-  def loopR(w: Identifier, e: TraceExpr, k: Int, separator: StringValue, first: Boolean = true)(implicit input: Input_state): Value = {
-    val t = evalProg(replaceTraceExpr(e)(w, k))
+  def loopR(w: Identifier, e: TraceExpr, k: Int, separator: StringValue, first: Boolean = true)(implicit input: Input_state, context: Option[Map[String, Int]]): Value = {
+    val t = evalProg(e)(input, Some(context.getOrElse(Map()) + (w.value -> k)))
     if(k > 50) {
       println("Bug in loopR?")
     }
@@ -102,7 +102,7 @@ object Evaluator {
   /**
    * Evaluates a program given an input.
    */
-  def evalProg(p: Program)(implicit input: Input_state): Value = p match {
+  def evalProg(p: Program)(implicit input: Input_state, context: Option[Map[String, Int]] = Some(Map())): Value = p match {
     case Switch(s) =>
       s.find{case (bool, expr) => evalProg(bool).asBoolFalseIfBottom} match {
         case Some((b, expr)) =>
@@ -138,40 +138,44 @@ object Evaluator {
           } else BottomValue
         case e => e
       }
-    case Loop(w, e, separator) =>
+    case l @ Loop(w, e, separator) =>
       separator map (e => evalProg(e)) match {
         case Some(s@StringValue(v)) =>
-          loopR(w, e, 0, s)
+          loopR(w, e, l.startIndex, s)
         case None =>
-          loopR(w, e, 0, StringValue(""))
+          loopR(w, e, l.startIndex, StringValue(""))
         case _ =>
           BottomValue
       }
     case e @ SubStr(InputString(v1), p1, p2, m) =>
-      val index = evalProg(v1).asInt
-      if(index >= input.inputs.length) return BottomValue
-      val s = input.inputs(index)
-      val i1 = evalProg(p1)(Input_state(IndexedSeq(s), input.position))
-      val i2 = evalProg(p2)(Input_state(IndexedSeq(s), input.position))
-      val res = i1 match {
-        case IntValue(n1) if n1 >= 0 =>
-          i2 match {
-            case IntValue(n2) if n2 <= s.length && n1 <= n2 =>
-              StringValue(m(s.substring(n1, n2)))
+      evalProg(v1) match {
+        case IntValue(index) =>
+          if(index >= input.inputs.length) return BottomValue
+          val s = input.inputs(index)
+          val i1 = evalProg(p1)(Input_state(IndexedSeq(s), input.position), context)
+          val i2 = evalProg(p2)(Input_state(IndexedSeq(s), input.position), context)
+          val res = i1 match {
+            case IntValue(n1) if n1 >= 0 =>
+              i2 match {
+                case IntValue(n2) if n2 <= s.length && n1 <= n2 =>
+                  StringValue(m(s.substring(n1, n2)))
+                case _ => BottomValue
+              }
             case _ => BottomValue
           }
+          if(res == BottomValue && !e.getAlternatives.isEmpty) {
+            var result: Value = BottomValue
+            e.getAlternatives.find { alternative =>
+              evalProg(alternative) match {
+                case BottomValue => false
+                case sv@StringValue(_) => result = sv; true
+              }
+            }
+            result
+          } else res
         case _ => BottomValue
       }
-      if(res == BottomValue && !e.getAlternatives.isEmpty) {
-        var result: Value = BottomValue
-        e.getAlternatives.find { alternative =>
-          evalProg(alternative) match {
-            case BottomValue => false
-            case sv@StringValue(_) => result = sv; true
-          }
-        }
-        result
-      } else res
+      
     /*case SubStr(PrevStringNumber(v1), p1, p2, m) =>
       val index = evalProg(v1).asInt
       if(index >= input.prevNumberOutputs.length) return BottomValue
@@ -203,6 +207,17 @@ object Evaluator {
        BottomValue
     }
     case IntLiteral(i) => IntValue(i)
+    case Linear(k1, v, k2) =>
+      //if(context contains v.value) {
+        context.head.get(v.value) match {
+          case Some(k) =>
+             if(!(k2 >= 0) || k*k1+k2 >= 0) {
+               IntValue(k * k1 + k2)
+             } else BottomValue // Do not authorize to produce negative numbers if the base is greater than zero.            
+          case None => BottomValue
+        }
+      //} else BottomValue
+    
     case Counter(size, start, offset) =>
       val res = (input.position*offset + start).toString
       StringValue("0"*(size - res.length) + res)

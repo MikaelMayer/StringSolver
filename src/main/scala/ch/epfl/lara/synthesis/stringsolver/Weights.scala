@@ -38,7 +38,8 @@ object Weights {
         case Some(_) => 1000 // Non-standard separators are penalized.
       }
       100 + weight(l) - 10 + separatorweight
-    case NumberMap(s@ SubStr(InputString(_), p1, p2, m), l, offset) =>
+    case NumberMap(s@ SubStr(InputString(vi), p1, p2, m), l, offset) =>
+      weight(vi) +
       weight(s) + (if(offset < 0) ((-offset).toString.length * 70 + 50) else if(offset == 0) 0 else offset.toString.length * 70)
     /*case Number(s@ SubStr(PrevStringNumber(_), p1, p2, m), l, (o, step)) =>
       100 + weight(s) - 10 + 100*(Math.abs(step) - 1) + (o - 1)*/
@@ -47,13 +48,13 @@ object Weights {
     case Counter(length, start, step) =>
       150 + Math.abs(step)*10
     case ConstStr(s) => 50 + s.size*100
-    case SubStr(vi, Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
-      100 + weight(r2) + method.id*10
-    case SubStr(vi, CPos(0), CPos(-1), method) => 130
-    case SubStr(vi, p, pos, method) => 100 + weight(p)(true) + weight(pos)(false) + method.id*10
+    case SubStr(InputString(vi), Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
+      100 + weight(vi) + weight(r2) + method.id*10
+    case SubStr(InputString(vi), CPos(0), CPos(-1), method) => 130 + weight(vi)
+    case SubStr(InputString(vi), p, pos, method) => 100 + weight(vi) + weight(p)(true) + weight(pos)(false) + method.id*10
     case TokenSeq(t) => t.length*10
-    case IntLiteral(i) => Math.abs(i)*10
-    case Linear(i,w,j) => i*10
+    case IntLiteral(i) => Math.abs(i)*3
+    case Linear(i,w,j) => (i-1)*10+Math.max(j-1, 0)
     case NumTok => 8
     case AlphaNumTok => 8
     case AlphaTok => 9

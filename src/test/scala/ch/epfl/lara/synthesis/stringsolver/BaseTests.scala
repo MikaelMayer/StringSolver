@@ -29,7 +29,7 @@ class PrinterTest extends FlatSpec with ShouldMatchers with PrivateMethodTester 
   "Printer" should "output correct program signification" in {
     
     val p = Loop(Identifier("w"), Concatenate(SubStr2(v1, UpperTok, w+1)), None)
-    Printer(p) should equal ("concatenates every occurence of uppercase word in first input")
+    Printer(p) should equal ("concatenates every occurrence of uppercase word in first input")
   }
 }
 
@@ -49,7 +49,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
     concatenate(StringValue("a"), BottomValue, StringValue("c")) should equal (BottomValue)
   }
   
-  it should "correctly replace TraceExprs" in {
+  /*it should "correctly replace TraceExprs" in {
     val e = replaceTraceExpr(Concatenate(List(
         SubStr(InputString(1), Pos(NumTok, AlphaTok, Linear(3, Identifier("w"), 1)), CPos(-1)),
         SubStr(InputString(1), Pos(NumTok, AlphaTok, IntLiteral(2)), CPos(-1)))))(Identifier("w"), 3)
@@ -58,7 +58,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
         SubStr(InputString(1), Pos(NumTok, AlphaTok, IntLiteral(10)), CPos(-1)),
         SubStr(InputString(1), Pos(NumTok, AlphaTok, IntLiteral(2)), CPos(-1))))
     )
-  }
+  }*/
   
   it should "correctly execute programs" in {
     val p =Concatenate(ConstStr(" + "), SubStr(v1, Pos(NumTok, AlphaTok, IntLiteral(2)), CPos(-1)))
@@ -268,6 +268,17 @@ import f._
     val c2 = SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(1,0,1),1,0)
     val c1 = SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(0,1,7),7,1)
     intersectAtomicExpr(c1, c2) should equal(SCounter(SIntSemiLinearSet(3,1,3),SIntSemiLinearSet(1,0,1),7,1))
+    
+    val t1 = SCounter.fromExample("1", 0)
+    val t2 = SCounter.fromExample("2", 1)
+    val t3 = SCounter.fromExample("3", 2)
+    val t4 = SCounter.fromExample("4", 3)
+    val t12 = intersectAtomicExpr(t1, t2)
+    t12.takeBest should equal(Counter(1, 1, 1))
+    val t123 = intersectAtomicExpr(t12, t3)
+    t123.takeBest should equal(Counter(1, 1, 1))
+    val t1234 = intersectAtomicExpr(t123, t4)
+    t1234.takeBest should equal(Counter(1, 1, 1))
   }
   
   it should "compute loops easily" in {

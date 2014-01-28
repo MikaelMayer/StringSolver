@@ -244,6 +244,8 @@ object ProgramsSet {
       for(pp1 <- p1; ppp1 <- pp1; pp2 <- p2; ppp2 <- pp2; method <- methods) f(SubStr(vi, ppp1, ppp2, method))
     }
     def takeBestRaw = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head, methods.takeBest)//.withAlternative(this.toIterable)
+    private var corresponding_string: (String, String, Int, Int) = ("", "", 0, -1)
+    def setPos(from: String, s: String, start: Int, end: Int) = corresponding_string = (from, s, start, end)
   }
   
   def isCommonSeparator(s: String) = s match {
@@ -310,6 +312,24 @@ object ProgramsSet {
   }
   
   /**
+   * Creates a counter set from a number and its position
+   */
+  object SCounter {
+    //
+    def fromExample(number: String, position: Int): SCounter = {
+      val numberValue = number.toInt
+      val possibleLengths = (if(number(0) != '0') {// It means that the generated length might be lower.
+        SIntSemiLinearSet(1, 1, number.length)
+      } else SIntSemiLinearSet(number.length, 1, number.length))
+      val possibleStarts = if(position == 0) {
+        SIntSemiLinearSet(numberValue, 1, numberValue)
+      } else {
+        SIntSemiLinearSet(numberValue % position, position, numberValue)
+      }
+       SCounter(possibleLengths, possibleStarts, numberValue, position)
+    }
+  }
+  /**
    * Step = (index - start) / count if the division is applicable
    * Except if count = 0, step can be anything from 1 to infinity.
    */
@@ -367,7 +387,7 @@ object ProgramsSet {
    * Set of regexp described in Programs.scala
    */
   case class STokenSeq(s: List[SToken]) extends SRegExp {
-    assert(s forall (_.size != 0))
+    assert(s forall (_.sizePrograms != 0))
     def map[T](f: RegExp => T): Stream[T] = {
       for(t <- combinations(s)) yield f(TokenSeq(t))
     }
@@ -583,12 +603,12 @@ object ProgramsSet {
           } else SEmpty
   }
   def notEmpty[T <: Program](a: ProgramSet[T]): Option[ProgramSet[T]] = if(a == SEmpty) None else Some(a)
-  def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = (a, b) match {
+  def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = if(a eq b) a else ((a, b) match {
     case (SLoop(i1, e1, sep1), SLoop(i2, e2, sep2)) if sep1 == sep2 =>
-      val be2 = replaceSTraceExpr(e2){ (i: Identifier) => if(i == i1) i2 else i }
-      val intersectBody = intersect(e1, e2)
+      val be2 = replaceSTraceExpr(e2){ case l@Linear(a, i, b) => if(i == i2) Linear(a, i1, b) else l }
+      val intersectBody = intersect(e1, be2)
       if(!intersectBody.isEmpty) {
-        SLoop(i2, intersect(e1, e2), sep1) 
+        SLoop(i1, intersectBody, sep1) 
       } else SEmpty
     case (SConstStr(aa), SConstStr(bb)) if aa == bb => a
     //case (SConstStr(aa), SConstStr(bb)) if aa.isNumber == bb.isNumber => a
@@ -602,6 +622,15 @@ object ProgramsSet {
           else if(i == j - 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, i)), pp1, pp2, mm)
           else if(i == j + 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, j)), pp1, pp2, mm)
           else SEmpty
+        }
+      } else SEmpty
+    case (SSubStr(InputString(vi: Linear), pj, pk, m1), SSubStr(InputString(vj: Linear), pl, pm, m2)) =>
+      if(vi == vj) {
+        val mm = m1 intersect m2
+        val pp1 = (for(p1 <- pj; p2 <- pl; res <- notEmpty(intersectPos(p1, p2))) yield res)
+        val pp2 = (for(p1 <- pk; p2 <- pm; res <- notEmpty(intersectPos(p1, p2))) yield res)
+        if(pp1.isEmpty || pp2.isEmpty || mm.isEmpty) SEmpty else {
+          SSubStr(InputString(vi), pp1, pp2, mm)
         }
       } else SEmpty
       /*case (SSubStr(PrevStringNumber(vi@IntLiteral(i)), pj, pk, m1), SSubStr(PrevStringNumber(vj@IntLiteral(j)), pl, pm, m2)) =>
@@ -641,14 +670,21 @@ object ProgramsSet {
             val newStep = Math.abs((i2 - i1)/(c1-c2))
             val newStart = i1 - c1 * newStep
             val s2 = intersectIntSet(s, SIntSemiLinearSet(newStart, 0, newStart))
-            if(c1 == 0) {
+            val newStart2 = s2 match {
+              case si @ SIntSemiLinearSet(start, step, max) => start
+              case _ =>
+                -1
+            }
+            if(c2 != 0 && newStart2 != i2) {
               SCounter(l, s2, i2, c2)
-            } else SCounter(l, s2, i1, c1)
+            } else if(c1 != 0 && newStart2 != i1)
+              SCounter(l, s2, i1, c1)
+            else SEmpty
           }
         }
       } else SEmpty
     case _ => SEmpty
-  }
+  })
   def intersectPos(p1: SPosition, p2: SPosition)(implicit unify: Option[Identifier] = None): SPosition = (p1, p2) match {
     case (SCPos(k1), SCPos(k2)) if k1 == k2 => p1
     case (SPos(r11, r12, c1), SPos(r21, r22, c2)) =>
@@ -660,8 +696,9 @@ object ProgramsSet {
         val res = ((c1 x c2) flatMap { 
           case (a, b) if a == b => List(a)
           case (IntLiteral(k1), IntLiteral(k2)) =>
-            if(k1 < k2) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
-            else if(k2 < k1) List(Linear((k1-k2), unify.get, k2):IntegerExpr)
+            if(k1 < k2 && k1 >= 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
+            //else if(k2 < k1 && k1 < 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
+            //else if(k2 < k1 && k2 >= 0) List(Linear((k1-k2), unify.get, k2):IntegerExpr)
             else Nil
           case _ => Nil
         }).toSet
@@ -735,7 +772,7 @@ object ProgramsSet {
       var res = ListBuffer[SToken]()
       while(i1 != Nil && i2 != Nil) {
         val tmp = i1.head intersect i2.head
-        if(tmp.size == 0) return SEmpty
+        if(tmp.sizePrograms == 0) return SEmpty
         res += tmp
         i1 = i1.tail
         i2 = i2.tail
@@ -795,11 +832,11 @@ object ProgramsSet {
   /**
    * Replace routines
    */
-  def replaceSTraceExpr(e: STraceExpr)(implicit w: Identifier => Identifier): STraceExpr = e match {
+  def replaceSTraceExpr(e: STraceExpr)(implicit w: Linear => Linear): STraceExpr = e match {
     case SDag(n, ns, nt, e, ww) =>  SDag(n, ns, nt, e, ww.mapValues(_.map(v => replaceSAtomicExpr(v)(w))))
     case e => e
   }
-  def replaceSAtomicExpr(e: SAtomicExpr)(implicit w: Identifier => Identifier): SAtomicExpr = e match {
+  def replaceSAtomicExpr(e: SAtomicExpr)(implicit w: Linear => Linear): SAtomicExpr = e match {
     case SSubStr(vi, p1, p2, m) => SSubStr(replaceStringVariable(vi)(w), p1.map(t=>replaceSPosition(t)(w)), p2.map(t=>replaceSPosition(t)(w)), m)
     case SConstStr(s) => e
     case SLoop(w2, _, separator) if w2 == w => e
@@ -807,18 +844,20 @@ object ProgramsSet {
     case SNumber(s, l, o) => SNumber(replaceSAtomicExpr(s)(w), l, o)
     case e => e
   }
-  def replaceSPosition(e: SPosition)(implicit w: Identifier => Identifier): SPosition = e match {
+  def replaceSPosition(e: SPosition)(implicit w: Linear => Linear): SPosition = e match {
     case SPos(p1, p2, t) => SPos(p1, p2, replaceSIntegerExpr(t)(w))
     case _ => e
   }
-  def replaceStringVariable(e: StringVariable)(implicit w: Identifier => Identifier): StringVariable = e match {
+  def replaceStringVariable(e: StringVariable)(implicit w: Linear => Linear): StringVariable = e match {
     case InputString(i) => InputString(replaceIntegerExpr(i)(w))
     //case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i)(w))
     case e => e
   }
-  def replaceSIntegerExpr(e: SIntegerExpr)(implicit w: Identifier => Identifier): SIntegerExpr = e.map(t => replaceIntegerExpr(t)(w))
-  def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier => Identifier): IntegerExpr = e match {
-    case Linear(i, v, j) => Linear(i, w(v), j)
+  def replaceSIntegerExpr(e: SIntegerExpr)(implicit w: Linear => Linear): SIntegerExpr = e.map(t => replaceIntegerExpr(t)(w))
+  def replaceIntegerExpr(e: IntegerExpr)(implicit w: Linear => Linear): IntegerExpr = e match {
+    case e @ Linear(i, v, j) => w(e)
     case e => e
   }
+ // addToEveryOccurence
+  
 }

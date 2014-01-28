@@ -65,9 +65,9 @@ class StringSolver {
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
   
-  private var extra_time_to_merge = 0.45f
+  private var extra_time_to_merge = 1f
   private var extra_time_to_compute_loop = 0.5f
-  private var extra_time_to_resolve = 0.2f
+  private var extra_time_to_resolve = 2f
   
   private var index_number = 0
   
@@ -75,6 +75,11 @@ class StringSolver {
    * Proportion of the original time to give to compute loops
    */
   def setExtraTimeToComputeLoops(f: Float) = extra_time_to_compute_loop = f
+  
+  /**
+   * Possibility to reset the counter used to number files
+   */
+  def resetCounter() = index_number = 0
   
   /**
    * Use dots ... to trigger manual loop research
@@ -165,6 +170,7 @@ class StringSolver {
               Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_resolve).seconds)
           }
         } else {
+          ff.timeoutGenerateStr = true
           ff.DEFAULT_REC_LOOP_LEVEL = 0 // No loops this time, especially if there is no
           ff.timeout = true
           Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_resolve).seconds)
@@ -322,6 +328,7 @@ class StringSolver {
   
   /**
    * Solves using the last input/output example
+   * CAREFUL: It increments the index_number, leading to undesirable results.
    */
   def solveLast(input: Seq[String]): Seq[String] = {
     //println(s"Solving for input $input")
@@ -383,8 +390,11 @@ class StringSolverAlgorithms {
   var useDots = true
   // Adds the last output number-only as input for the next program.
   var numbering = true
+  // If a substring to extract is a space, should it be extracted from the inputs
+  var extractSpaces = false
   
   final val dots = "..."
+  def dotsAtPosition(s: String, k: Int) = s.substring(k, Math.min(k + dots.length, s.length)) == dots
  
   var TIMEOUT_SECONDS = 30
   var DEFAULT_REC_LOOP_LEVEL = 1
@@ -404,7 +414,8 @@ class StringSolverAlgorithms {
     mTimeout = v
     mTimeoutPhaseGenerateStr = v
     if(v) {
-      ifTimeOut.success(SEmpty)
+      ifTimeOut.success(SEmpty) // TODO : Timeout should allow the loop to finish its iteration.
+      // So that if the loop is found, it will finish to compute it.
       ifTimeOut = promise[STraceExpr]
     }
   }
@@ -507,8 +518,6 @@ class StringSolverAlgorithms {
       }
     }
     
-    
-    
     for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout && !mTimeoutPhaseGenerateStr) {
       W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j- 1))))
     }
@@ -520,7 +529,7 @@ class StringSolverAlgorithms {
     
     
     val Wp =  generateLoop(σ, s, W, rec_loop_level)(
-        previous, preferredStart=preferredStart, preferredSeparatorStart=preferredSeparatorStart, preferredEnd = preferredEnd, preferredSeparatorEnd=preferredSeparatorEnd)
+        previous, preferredStart=preferredStart++preferredSeparatorStart, preferredSeparatorStart=preferredSeparatorStart, preferredEnd = preferredEnd++preferredSeparatorEnd, preferredSeparatorEnd=preferredSeparatorEnd)
     SDag(ñ, ns, nt, ξ, Wp): STraceExpr
   }
   
@@ -690,40 +699,82 @@ class StringSolverAlgorithms {
         val res = future{unify(e1, e2, w)}
         Await.result(first(res, ifTimeOut.future), 10.days) 
       })
+      if(s"${s.substring(k1, k2)} ${s.substring(ksep, k3)}" == "1927 1928") {
+        println("interesting")
+      }
       stats_unifications += 1
       stats_time_unifications += time
       if(sizePrograms(e) != 0) {
+        // Loops to find other data on the left
         val bestLoop =  e.takeBest
-        val prog = Loop(w, bestLoop, optionSeparator)
         if(bestLoop.uses(w)) {
-          val resulting_strings = 
-            Evaluator.evalProg(prog)(σ) match {
-              case StringValue(p) if p != "" => List(p)
-              case _ => Nil
+          var stop = false
+          val prog = Loop(w, bestLoop, optionSeparator)
+          var i = 0
+          while(!stop && (i == 0 || useDots && dotsAtPosition(s, k3))) {
+            Loop.setStartIndex(prog, i)
+            val resulting_strings = 
+              Evaluator.evalProg(prog)(σ) match {
+              case StringValue(p) if p != "" => Some(p)
+              case _ => stop = true; None
             }
-          resulting_strings.toList match {
-            case List(res) =>
-              val k4 = k1 + res.length
-              if(k4 <= s.length && s.substring(k1, k4) == res) {
-                Wp = Wp + (((k1, k4))->(Wp((k1, k4)) ++ Set(SLoop(w, e, optionSeparator))))
-                if(useDots) {
-                  if(k4 < s.length && s.substring(k4, Math.min(s.length, k4+dots.length)) == dots) {
-                    Wp = Wp + (((k1, k4+dots.length))->(Wp((k1, k4+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
+            val body = if(i != 0) {replaceSTraceExpr(e)(
+              { case l@ Linear(a, v, b) => if(w == v && a >= 0) {
+                Linear(a, v, b + a*i)  // Try with a previous step
+              } else l
+              }
+            )} else e
+            val newLoop = SLoop(w, body, optionSeparator)
+            resulting_strings match {
+              case Some(res) =>
+                val start: Int = if(i == 0) k1 else {
+                  // First matching occurence given that dots do not count.
+                  val firstOccurrence = s.indexOf(res)
+                  if(firstOccurrence != -1) {
+                    firstOccurrence
+                  } else if(useDots && s.indexOf(dots) != -1) { // Find a match until three dots
+                    (0 until s.length) find {
+                      case i =>
+                        val dotsafterI = s.indexOf(dots, i)
+                        if(dotsafterI != -1) {
+                          res.startsWith(s.substring(i, dotsafterI))
+                        } else {
+                          false
+                        }
+                    } match {
+                      case Some(i) => i
+                      case None => stop = true; s.length + 1
+                    }
+                  } else {
+                    stop = true; s.length + 1// nothing to find.
                   }
                 }
-              } else if(useDots) { // If we use dots '...' to match the remaining.
-                val positionNotMatch: Option[Int] = (k1 until k4) find { k => k < s.length && s(k) != res(k-k1) }
-                positionNotMatch match {
-                  case Some(p) if s(p) == dots(0) =>
-                    if(p + dots.length <= s.length && s.substring(p, p + dots.length) == dots) {
-                      val newLoop = SLoop(w, e, optionSeparator)
-                      Wp = Wp + (((k1, p+dots.length))->(Wp((k1, p+dots.length)) ++ Set(newLoop)))
+                val k4 = start + res.length 
+                if(k4 <= s.length && s.substring(start, k4) == res) { // The match is exact
+                  Wp = Wp + (((start, k4))->(Wp((start, k4)) ++ Set(SLoop(w, e, optionSeparator))))
+                  if(useDots) { // If dots, then the match can be extended after the dotS.
+                    if(k4 < s.length && dotsAtPosition(s, k4)) {
+                      Wp = Wp + (((start, k4+dots.length))->(Wp((start, k4+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
                       if(verbose) println(s"Found dotted loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
                     }
-                  case _ =>
+                  }
+                  // Checks if the match can be extended on the left (i.e. by changing the counters offset by -1)
+                  
+                  
+                } else if(useDots) { // If we use dots '...' to match the remaining.
+                  val positionNotMatch: Option[Int] = (start until k4) find { k => k < s.length && s(k) != res(k-start) }
+                  positionNotMatch match {
+                    case Some(p) if s(p) == dots(0) =>
+                      if(dotsAtPosition(s, p)) {
+                        Wp = Wp + (((start, p+dots.length))->(Wp((start, p+dots.length)) ++ Set(newLoop)))
+                        if(verbose) println(s"Found dotted loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
+                      }
+                    case _ =>
+                  }
                 }
-              }
-            case Nil =>
+              case None =>
+            }
+            i = i -1
           }
         }
       }
@@ -735,8 +786,9 @@ class StringSolverAlgorithms {
    * Generate all atomic expressions which can generate a string s from input states.
    */
   implicit val cacheGenerateSubstring = MMap[(Input_state, String), Set[SAtomicExpr]]()
-  def generateSubString(σ: Input_state, s: String) = cached((σ, s), cacheGenerateSubstring){
+  def generateSubString(σ: Input_state, s: String): Set[SAtomicExpr] = cached((σ, s), cacheGenerateSubstring){
     var result = Set.empty[SAtomicExpr]
+    if(!extractSpaces && s == " ") return result
     if(verbose) println(s"Going to extract $s from $σ")
     for(vi <- 0 until σ.inputs.length if !timeoutGenerateStr) {
       val σvi =  σ.inputs(vi)
@@ -754,6 +806,7 @@ class StringSolverAlgorithms {
         }
 
         val newResult = SSubStr(InputString(vi), Y1, Y2, m)
+        newResult.setPos(σvi, s, k, k + s.length)
         result = result + newResult
       }
       
@@ -771,19 +824,7 @@ class StringSolverAlgorithms {
     }
     // Generates numbers from previous numbers in output strings.
     if(s.isNumber && numbering) {
-      val numberValue = s.toInt
-      val position = σ.position
-      val possibleLengths = (if(s(0) != '0') {// It means that the generated length might be lower.
-        SIntSemiLinearSet(1, 1, s.length)
-      } else SIntSemiLinearSet(s.length, 1, s.length))
-      if(!possibleLengths.isEmpty) {
-        val possibleStarts = if(position == 0) {
-          SIntSemiLinearSet(numberValue, 1, numberValue)
-        } else {
-          SIntSemiLinearSet(numberValue % position, position, numberValue)
-        }
-        result += SCounter(possibleLengths, possibleStarts, numberValue, position)
-      }
+      result += SCounter.fromExample(s, σ.position)
       /*if(σ.prevNumberOutputs.length == 0) {
         val i = s.toInt
         // For any number i, the set of matching counters are IntLiteral(i), Linear(1, i), Linear(2, i) up to Linear(i, i)

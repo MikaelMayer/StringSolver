@@ -261,7 +261,14 @@ object Programs {
     SubStr(vi, Pos(Epsilon, r, c), Pos(r, Epsilon, c), NORMAL)
   }
   case class ConstStr(s: String) extends AtomicExpr
-  case class Loop(w: Identifier, content: TraceExpr, separator: Option[ConstStr] = None) extends AtomicExpr
+  case object Loop {
+    /** This method should never be called outside of the API.*/
+    def setStartIndex(l: Loop, i : Int): Unit = l.mStartIndex = i
+  }
+  case class Loop(w: Identifier, content: TraceExpr, separator: Option[ConstStr] = None) extends AtomicExpr {
+    private var mStartIndex: Int = 0
+    def startIndex = mStartIndex
+  }
   // Offset is an integer which helps to compute the initial number if a evaluates to nothing
   // Number("0001", 3, Linear(6, "w", 5)) == "007"
   // Number("0001", 3, IntLiteral(6)) = "006"
