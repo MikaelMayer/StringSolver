@@ -35,7 +35,8 @@ object Main {
   val HISTORY_DIR = "StringSolverRenaming"
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
-  final val NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED = 3
+  val HISTORY_PARTITION_FILE = "partition.log"
+  final val NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED = 4
   
     /**
      * Different kind of inputs
@@ -53,7 +54,9 @@ object Main {
   object INPUT_FILE_CONTENT extends ParameterInput {
     val prefix = "INPUT_FILE_CONTENT"
   }
-    
+  object INPUT_DIR_CONTENT extends ParameterInput {
+    val prefix = "INPUT_DIR_CONTENT"
+  }
   type Nature = String
   type FileName = String
   type Performed = Boolean
@@ -71,9 +74,9 @@ object Main {
     }
     def apply(): String = "mv"
   }
-  final object Convert {
+  final object Partition {
     def unapply(s: String): Option[Unit] = {
-      if(s.toLowerCase() == "convert") {
+      if(s.toLowerCase() == "partition") {
         Some(())
       } else None
     }
@@ -92,9 +95,13 @@ object Main {
     readFile(new File(decodedPath, path))
   }
   def readFile(file: File): String = {
-    val encoded = Files.readAllBytes(Paths.get(file.getAbsolutePath()));
-    val content = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(encoded)).toString();
-    content
+    if(file.isDirectory()) {
+      file.list().mkString("\n")
+    } else {
+      val encoded = Files.readAllBytes(Paths.get(file.getAbsolutePath()));
+      val content = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(encoded)).toString();
+      content
+    }
   }
   def readLines(content: String): List[String] = {
     content.split("\n").map(_.trim).toList
@@ -102,8 +109,6 @@ object Main {
   
   //val path = Main.getClass().getProtectionDomain().getCodeSource().getLocation().getPath()
   var decodedPath = System.getProperty("user.dir");//URLDecoder.decode(path, "UTF-8");
-  
-  
   
   /**
    * Returns an history file.
@@ -119,82 +124,142 @@ object Main {
       Some(history_file)
     } else None
   }
-  def deleteMvHistory() = {
-    getHistoryFile(HISTORY_MV_FILE) map { history_file =>
+  def deleteHistory(filename: String) = {
+    getHistoryFile(filename) map { history_file =>
       history_file.delete()
       println("Deleted " + history_file.getAbsolutePath())
     } getOrElse {
-      println("Could not delete temp file")
+      println("Could not delete or inexisting temp file" + filename)
     }
   }
-  def deleteAutoHistory() = {
-    getHistoryFile(HISTORY_AUTO_FILE) map { history_file =>
-      history_file.delete()
-      println("Deleted " + history_file.getAbsolutePath())
-    } getOrElse {
-      println("Could not delete temp file")
-    }
+  def deleteMvHistory() = deleteHistory(HISTORY_MV_FILE)
+  def deleteAutoHistory() = deleteHistory(HISTORY_AUTO_FILE)
+  def deletePartitionHistory() = deleteHistory(HISTORY_PARTITION_FILE)
+  
+  var timeStampGiver = () => new Timestamp(new java.util.Date().getTime).toString
+  
+  /**
+   * Logger facilities
+   */
+  trait Logger {
+    def mkString: String
+    def dir: String
+    def time: String
+    def performed: Boolean
+    def input: List[String]
+    def setPerformed(b: Boolean): Logger
+  }
+  trait LoggerFile[A <: Logger] {
+    def history_file: String
+    def extractor: String => Option[A]
   }
   
   /**
-   * Stores a renaming in the rename history
+   * Renaming log
    */
-  def storeMvHistory(dir: File, performed: Performed, file: String, to: String): Unit = {
-    getHistoryFile(HISTORY_MV_FILE) map { history_file =>
-      try {
-        if(debug) println(s"Writing in mv history")
-        val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
-          
-        val date= new java.util.Date();
-        val time = new Timestamp(date.getTime()).toString();
-   
-        //println("Timestamp")
-        val line=time + ";" + dir.getAbsolutePath() + ";" + performed.toString + ";" + file+";"+to
-        if(debug) println(s"Writing line \n$line")
-        out.println(line);
-        out.close();
-      } catch  {
-        case e: IOException =>println("ioexception")
-      }
+  object MvLog {
+    def unapply(s: String): Option[MvLog] = {
+      val a = s.split(";")
+      if(a.length == 5) {
+        Some(MvLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      } else None
     }
+  }
+  case class MvLog(dir: String, performed: Boolean, file1: String, file2: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+file2
+    def setPerformed(b: Boolean) = this.copy(performed = true)
+    def input = List(file1)
+  }
+  implicit object MvLogFile extends LoggerFile[MvLog] {
+    def history_file = HISTORY_MV_FILE
+    def extractor = MvLog.unapply(_)
   }
   
   /**
-   * Recovers all renaming in history which happened in this folder
+   * Auto log
    */
-  def getMvHistory(folder: File): Seq[(Performed, FileName, FileName)] = {
+  object AutoLog {
+    def unapply(s: String): Option[AutoLog] = {
+      val a = s.split("\\|\\|").toList
+      if(a.length >= 7) {
+        val filesAndCommand = a.drop(5)
+        val nature = a(4)
+        val (input_files, commands) = nature match {
+            case INPUT_FILE | INPUT_DIRECTORY => (List(filesAndCommand.head), filesAndCommand.tail)
+            case INPUT_FILE_LIST(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
+            case INPUT_FILE_CONTENT(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
+            case INPUT_DIR_CONTENT(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
+            case _ => throw new Error(s"Unknown nature: $nature")
+        }
+        Some(AutoLog(a(1), a(2).toBoolean, a(3).toBoolean, a(4), input_files, commands, a(0)))
+      } else None
+    }
+  }
+  case class AutoLog(dir: String, performed: Boolean, content: Boolean, nature: String, input_files: List[String], commands: List[String], time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + "||" + dir + "||" + performed.toString + "||" + content.toString + "||" + nature + "||"  + (input_files++commands).mkString("||")
+    def setPerformed(b: Boolean) = this.copy(performed = true)
+    def input = input_files
+  }
+  implicit object AutoLogFile extends LoggerFile[AutoLog] {
+    def history_file = HISTORY_AUTO_FILE
+    def extractor = AutoLog.unapply(_)
+  }
+  
+  /**
+   * Partition log
+   */
+  object PartitionLog {
+    def unapply(s: String): Option[PartitionLog] = {
+      val a = s.split(";")
+      if(a.length == 5) {
+        Some(PartitionLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      } else None
+    }
+  }
+  case class PartitionLog(dir: String, performed: Boolean, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+folder
+    def setPerformed(b: Boolean) = this.copy(performed = true)
+    def input = List(file1)
+  }
+  implicit object PartitionLogFile extends LoggerFile[PartitionLog] {
+    def history_file = HISTORY_PARTITION_FILE
+    def extractor = PartitionLog.unapply(_)
+  }
+  
+  /**
+   * Recovers all actions in history which happened in this folder
+   */
+  def getHistory[A <: Logger : LoggerFile](folder: File): Seq[A] = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s == dir
-    getHistoryFile(HISTORY_MV_FILE) map { history_file =>
+    getHistoryFile(implicitly[LoggerFile[A]].history_file) map { history_file =>
       if(debug) println(s"history file : $history_file")
       val content = readFile(history_file)
       if(content.isEmpty) Nil
       else {
       val res = 
         for(line <- readLines(content);
-            splitted = line.split(";") if splitted.length == 5;
-            Array(time, dir, performed, file1, file2) = splitted;
-            if(checkDir(dir))) yield (performed.toBoolean, file1, file2)
+            log <- implicitly[LoggerFile[A]].extractor(line);
+            if(checkDir(log.dir))) yield log
       res
       }
-    } getOrElse (List[(Performed, FileName, FileName)]())
+    } getOrElse (List[A]())
   }
   
   /**
-   * Remove the directory from a given move command.
+   * Remove the directory from a given command.
    */
-  def removeDirectoryFromMvHistory(folder: File): Unit = {
+  def removeDirectoryFromHistory[A <: Logger : LoggerFile](folder: File): Unit = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s != dir
     try {
-      getHistoryFile(HISTORY_MV_FILE) map { history_file =>
+      getHistoryFile(implicitly[LoggerFile[A]].history_file) map { history_file =>
         val content = readFile(history_file)
         val lines = if(content.isEmpty) Nil
         else {
-          for(line <- content.filterNot(_ == '\r').split("\n").toList;
-              splitted = line.split(";") if splitted.length == 5;
-              Array(time, dir, performed, file1, file2) = splitted;
-              if(checkDir(dir))) yield line
+          for(line <- readLines(content);
+              log <- implicitly[LoggerFile[A]].extractor(line);
+              if(checkDir(log.dir))) yield line
         }
          val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), false)));
          out.println(lines.mkString("\n"))
@@ -206,13 +271,77 @@ object Main {
   }
   
   /**
+   * Stores a transaction for this folder in the history
+   */
+  def storeHistory[A <: Logger : LoggerFile](log: A): Unit = {
+    getHistoryFile(implicitly[LoggerFile[A]].history_file) foreach { history_file =>
+      try {
+        if(debug) println(s"Writing in history")
+        val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
+        val line=log.mkString
+        if(debug) println(s"Writing line \n$line")
+        out.println(line);
+        out.close();
+      } catch  {
+        case e: IOException =>println("ioexception")
+      }
+    }
+  }
+  
+  /**
+   * Sets a line in the history to performed state.
+   */
+  def setHistoryPerformed[A <: Logger : LoggerFile](folder: File, files: List[String]): Unit = {
+    val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
+    val checkDir = (s: String) => s == dir
+    try {
+      getHistoryFile(implicitly[LoggerFile[A]].history_file) foreach { history_file =>
+        val content = readFile(history_file)
+        val lines = if(content.isEmpty) Nil
+        else {
+          for(line <- readLines(content);
+              log <- implicitly[LoggerFile[A]].extractor(line)) yield {
+            if(checkDir(log.dir) && log.input.startsWith(files) && !log.performed) {
+              log.setPerformed(true).mkString
+            } else line
+          }
+        }
+      }
+    } catch  {
+      case e: IOException =>println("ioexception")
+    }
+  }
+  
+  /**
+   * Renaming logging routines
+   */
+  def storeMvHistory(log: MvLog): Unit = storeHistory[MvLog](log)
+  def getMvHistory(folder: File): Seq[MvLog] = getHistory[MvLog](folder)
+  def removeDirectoryFromMvHistory(folder: File): Unit = removeDirectoryFromHistory[MvLog](folder)
+  
+  /**
+   * Auto logging routines
+   */
+  def storeAutoHistory(log: AutoLog): Unit = storeHistory[AutoLog](log)
+  def getAutoHistory(folder: File): Seq[AutoLog] = getHistory[AutoLog](folder)
+  def removeDirectoryFromAutoHistory(folder: File): Unit = removeDirectoryFromHistory[AutoLog](folder)
+  def setAutoHistoryPerformed(folder: File, input: List[String]): Unit = setHistoryPerformed[AutoLog](folder, input)
+  /**
+   * Partitioning logging routines
+   */
+  def storePartitionHistory(log: PartitionLog): Unit = storeHistory[PartitionLog](log)
+  def getPartitionHistory(folder: File): Seq[PartitionLog] = getHistory[PartitionLog](folder)
+  def removeDirectoryFromPartitionHistory(folder: File): Unit = removeDirectoryFromHistory[PartitionLog](folder)
+  
+  /**
    * Main function
    */
   def main(args: Array[String]): Unit = {
     val cmd = args.toList
     cmd match {
-      case Auto()::q =>    parseAutoCmd(cmd, Options())
-      case Move()::q =>    parseMvCmd(cmd, Options())
+      case Auto()::q =>    parseAutoCmd(q, Options())
+      case Move()::q =>    parseMvCmd(q, Options())
+      case Partition()::q => //parsePartitionCmd(q, Options())
       //case Convert()::q => automatedConvert(cmd)
       case _ =>
     }
@@ -240,7 +369,7 @@ object Main {
     
     var nested_level = 0
     examples.reverse.take(2).reverse foreach {
-      case (performed, in, out) =>
+      case MvLog(dir, performed, in, out, time) =>
         if(debug) println(s"Adding $in, $out")
         c.add(List(in), List(out))(0)
         nested_level = in.count(_ == '/') + in.count(_ == '\\')
@@ -355,24 +484,24 @@ object Main {
    */
   def parseMvCmd(cmd: List[String], options: Options): Unit = {
     (cmd, options) match {
-      case (Move()::("-c" | "--clear")::remaining, opts) => // Clears the history
+      case (("-c" | "--clear")::remaining, opts) => // Clears the history
         deleteMvHistory()
         if(remaining != Nil) {
           println(remaining.mkString(" ") + " has been ignored")
         }
       case OptionsDecoder(opt2, cmd2) =>
         parseMvCmd(cmd2, opt2)
-      case (Move()::Nil, opt) => // Automated move.
+      case (Nil, opt) => // Automated move.
         automatedRenaming(opt)
-      case (Move()::sfile1::sfile2::Nil, opt) =>
+      case (sfile1::sfile2::Nil, opt) =>
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
         if(opt.perform) move(sfile1, sfile2)
-        storeMvHistory(new File(decodedPath), opt.perform, sfile1, sfile2)
+        storeMvHistory(MvLog(new File(decodedPath).getAbsolutePath(), opt.perform, sfile1, sfile2))
         if(debug) println("Explaining " + opt.explain + " performing " + opt.perform)
         automatedRenaming(opt.copy(perform=opt.performAll))
-      case (Move()::_, opt) => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
+      case (_, opt) => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
         //automatedRenaming(perform=opt.performAll, explain=opt.explain)
       case _ =>
     }
@@ -386,92 +515,6 @@ object Main {
     }
   }*/
 
-  
-  
-  /**
-   * Stores a renaming in the rename history
-   */
-  def storeAutoHistory(dir: File, performed: Performed, content: Boolean, input_files: List[FileName], cmd: List[String]): Unit = {
-    getHistoryFile(HISTORY_AUTO_FILE) foreach { history_file =>
-      try {
-        if(debug) println(s"Writing in history")
-        val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
-          
-        val date= new java.util.Date();
-        val time = new Timestamp(date.getTime()).toString();
-        val nature = if(content) {
-          INPUT_FILE_CONTENT(input_files.length)
-        } else input_files match {
-          case List(file) => if(new File(dir, file).isDirectory()) INPUT_DIRECTORY else {
-            INPUT_FILE
-          }
-          case Nil => throw new Error("No input file provided")
-          case l => INPUT_FILE_LIST(input_files.length)
-        }
-        val line = time + "||" + dir.getAbsolutePath() + "||" + performed + "||" + content + "||" + nature + "||" + (input_files++cmd).mkString("||")
-        if(debug) println(s"Writing line \n$line")
-        out.println(line);
-        out.close();
-      } catch  {
-        case e: IOException =>println("ioexception")
-      }
-    }
-  }
-  
-  /**
-   * Recovers all renaming in history which happened in this folder
-   * Name of file, nature (DIRECTORY or FILE), and list of associated commands.
-   */
-  def getAutoHistory(folder: File): Seq[(Nature, Performed, ContentFlag, List[FileName], List[String])] = {
-    val dirFolder = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
-    val checkDir = (s: String) => s == dirFolder
-    getHistoryFile(HISTORY_AUTO_FILE) map { history_file =>
-      if(debug) println(s"history file : $history_file")
-      val content = readFile(history_file)
-      if(content.isEmpty) Nil
-      else {
-      val res = 
-        for(line <- content.filterNot(_ == '\r').split("\n").toList;
-            splitted = line.split("\\|\\|").toList if splitted.length >= 7;
-            time::dir::performed::contentFlag::nature::filesAndCommand = splitted;
-            if(checkDir(dir))) yield {
-          nature match {
-            case INPUT_FILE | INPUT_DIRECTORY => (nature, performed.toBoolean, contentFlag.toBoolean, List(filesAndCommand.head), filesAndCommand.tail)
-            case INPUT_FILE_LIST(n) => (nature, performed.toBoolean, contentFlag.toBoolean, filesAndCommand.take(n), filesAndCommand.drop(n))
-            case INPUT_FILE_CONTENT(n) => (nature, performed.toBoolean, contentFlag.toBoolean, List(filesAndCommand.head), filesAndCommand.tail)
-            case _ => throw new Error(s"Unknown nature: $nature")
-          }
-        }
-      res
-      }
-    } getOrElse (List[(Nature, Performed, ContentFlag, List[FileName], List[String])]())
-  }
-  
-  /**
-   * Remove the directory from a given move command.
-   */
-  def removeDirectoryFromAutoHistory(folder: File): Unit = {
-    val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
-    val checkDir = (s: String) => s != dir
-    try {
-      getHistoryFile(HISTORY_AUTO_FILE) map { history_file =>
-        val content = readFile(history_file)
-        val lines = if(content.isEmpty) Nil
-        else {
-          for(line <- content.filterNot(_ == '\r').split("\n").toList;
-            splitted = line.split("\\|\\|").toList if splitted.length >= 7;
-            time::dir::performed::contentFlag::nature::filesAndCommand = splitted;
-            if(checkDir(dir))) yield line
-        }
-         val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), false)));
-         out.println(lines.mkString("\n"))
-         out.close
-      }
-    } catch  {
-      case e: IOException =>println("ioexception")
-    }
-  }
-  
   /**
    * Sets a line in the history to performed state.
    */
@@ -515,14 +558,13 @@ object Main {
   def parseAutoCmd(cmd: List[String], options: Options): Unit = {
     if(debug) println(s"Action $cmd")
     (cmd, options) match {
-      case (Auto()::("-c" | "--clear")::_, opt) =>
+      case (("-c" | "--clear")::_, opt) =>
         deleteAutoHistory()
       case OptionsDecoder(opt, cmd) =>
         parseAutoCmd(cmd, opt)
-      case (Auto()::Nil, opt) =>
+      case (Nil, opt) =>
         automatedAction(opt.copy(performAll=opt.performAll || (opt.perform && !opt.explain)))
-        //parseAutoCmd(Auto()::remaining, perform=perform, explain=explain, doall=true)
-      case (Auto()::command::Nil, opt) => // Automatically detect where the file is and which one it should be applied to.
+      case (command::Nil, opt) => // Automatically detect where the file is and which one it should be applied to.
         val s = new File(decodedPath).list().toList.sortBy(alphaNumericalOrder)
         val sNested = new File(decodedPath).list().toList.flatMap{d => 
           val dir = new File(decodedPath, d)
@@ -533,25 +575,44 @@ object Main {
         }
         .sortBy(alphaNumericalOrder)
         
+        /*val nature = if(contentFlag) {
+          INPUT_FILE_CONTENT(input_files.length)
+        } else input_files match {
+          case List(file) => if(new File(dir, file).isDirectory()) INPUT_DIRECTORY else {
+            INPUT_FILE
+          }
+          case Nil => throw new Error("No input file provided")
+          case l => INPUT_FILE_LIST(input_files.length)
+        }*/
+        
         if(command.indexOf("...") != -1) {
           if(debug) println("Found '...' Going to decode the action for all present files.")
-          storeAutoHistory(new File(decodedPath), performed=false, content=false, s, command::Nil)
-          parseAutoCmd(Auto()::Nil, opt)
+          storeAutoHistory(AutoLog(dir=new File(decodedPath).getAbsolutePath(), performed=false, content=false, nature=INPUT_FILE_LIST(s.length), input_files=s, commands=command::Nil))
+          parseAutoCmd(Nil, opt)
         } else {
           if(debug) println("No input provided. Going to try to extract output from file name")
           val candidates = (s ++ sNested).filter{ f => command.indexOf(f) != -1 }.sortBy(_.size).lastOption
           candidates match {
             case Some(file) =>
-              parseAutoCmd(Auto()::file::command::Nil, opt)
+              parseAutoCmd(file::command::Nil, opt)
             case None =>
               // If there are three dots in the command, tries to recognize the command
           }
         }
-      case (Auto()::sfile::l, opt) if l != Nil =>
+      case (sfile::l, opt) if l != Nil =>
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         
-        storeAutoHistory(new File(decodedPath), false, opt.contentFlag, List(sfile), l)
+        val dir = new File(decodedPath).getAbsolutePath()
+        val nature = if(opt.contentFlag) {
+          INPUT_FILE_CONTENT(1)
+        } else if(file1.isDirectory()) {
+          INPUT_DIRECTORY
+        } else {
+          INPUT_FILE
+        }
+        
+        storeAutoHistory(AutoLog(dir, false, opt.contentFlag, nature, List(sfile), l))
         if(l.indexWhere(_.indexOf("...") != -1) != -1 && opt.contentFlag) {
           if(debug) println("Found '...' Going to map the action for all lines in command.")
         }
@@ -603,7 +664,7 @@ object Main {
     var lastFilesCommand: List[String] = Nil
     // Solving the mapping based on the last two examples.
     examples.reverse.take(2).reverse foreach {
-      case (nature, performed, contentFlag, files, command) =>
+      case AutoLog(folder, performed, contentFlag, nature, files, command, time) =>
         // Extra time if looking for dots
         if(command.indexOf("...") != -1) {
           c.setTimeout(4)
@@ -641,6 +702,9 @@ object Main {
           case INPUT_FILE_CONTENT(n) =>
             is_input_file_list = false
             read_content_file = Some(files.head) // Only read this file
+          case INPUT_DIR_CONTENT(n) =>
+            is_input_file_list = false
+            read_content_file = Some(files.head) // Only read this file
           case _ =>
             is_input_file_list = false
             read_content_file = None
@@ -650,8 +714,8 @@ object Main {
     // All files should have the same nature.
     // onlyFile represents if the files are files (true) or directories (false)
     val onlyFiles = examples.lastOption match {
-      case Some((INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_), performed, contentFlag, files, command)) => true
-      case Some((_, performed, contentFlag, files, command)) => false
+      case Some(AutoLog(dir, performed, contentFlag, (INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_)), files, command, time)) => true
+      case Some(AutoLog(dir, performed, contentFlag, (INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY), files, command, time)) => false
       case None => true
     }
     if(debug) println(s"Only files: $onlyFiles, nested level = $nested_level")
@@ -673,12 +737,12 @@ object Main {
     } else Array[List[String]]()
     
     //Replacing each file by its name and content if requested
-    val files_raw2: Array[List[String]] = if(read_content_file != None && onlyFiles) {
+    val files_raw2: Array[List[String]] = if(read_content_file != None) {
       files_raw.map{listFiles => listFiles.head::readLines(readFile(listFiles.head))}
     } else files_raw
     
     //Replacing the list of singleton files by one unique input containing all files
-    val input = if(is_input_file_list && read_content_file == None && onlyFiles) {
+    val input = if(is_input_file_list && read_content_file == None) {
       Array(files_raw2.toList.flatten)
     } else files_raw2
 
@@ -798,7 +862,70 @@ object Main {
     */
   }
   
+  /**
+   * Generic automated partitioning.
+   * @param perform Indicates if the requested command is performed
+   *   Parameter -t or --test put this variable to false
+   *   Default: true
+   * @param explain Indicates if the requested command should be explained if applied to all files
+   *   Parameter -e or --explain.
+   *   Default: false
+   * @param peformAll Indicates if the requested command should be performed for all files.
+   *   Parameter -a or --auto
+   *   Default: false
+   * @param contentFlag Indicates if the content of the file rather than the file name should be processed.
+   *   Parameter -l or --lines
+   *   Default: false
+   */
+  /*def parsePartitionCmd(cmd: List[String], options: Options): Unit = {
+    if(debug) println(s"Action $cmd")
+    (cmd, options) match {
+      case (("-c" | "--clear")::_, opt) =>
+        deletePartitionHistory()
+      case OptionsDecoder(opt, cmd) =>
+        parsePartitionCmd(cmd, opt)
+      case (Nil, opt) =>
+        automatedPartition(opt.copy(performAll=opt.performAll || (opt.perform && !opt.explain)))
+      case (command::Nil, opt) => // Automatically detect where the file is and which one it should be applied to.
+        val s = new File(decodedPath).list().toList.sortBy(alphaNumericalOrder)
+        val sNested = new File(decodedPath).list().toList.flatMap{d => 
+          val dir = new File(decodedPath, d)
+          if(dir.isDirectory)
+            dir.list().map(name => dir.getName()+"/"+name)
+          else
+            Nil
+        }
+        .sortBy(alphaNumericalOrder)
+        
+        if(command.indexOf("...") != -1) {
+          if(debug) println("Found '...' Going to decode the action for all present files.")
+          storePartitionHistory(new File(decodedPath), performed=false, content=false, s, command::Nil)
+          parsePartitionCmd(Nil, opt)
+        } else {
+          if(debug) println("No input provided. Going to try to extract output from file name")
+          val candidates = (s ++ sNested).filter{ f => command.indexOf(f) != -1 }.sortBy(_.size).lastOption
+          candidates match {
+            case Some(file) =>
+              parsePartitionCmd(file::command::Nil, opt)
+            case None =>
+              // If there are three dots in the command, tries to recognize the command
+          }
+        }
+      case (sfile::l, opt) if l != Nil =>
+        val file1 = new File(decodedPath, sfile)
+        if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
+        
+        storePartitionHistory(new File(decodedPath), false, opt.contentFlag, List(sfile), l)
+        if(l.indexWhere(_.indexOf("...") != -1) != -1 && opt.contentFlag) {
+          if(debug) println("Found '...' Going to map the action for all lines in command.")
+        }
+        automatedPartition(opt)
+       
+      case _ =>
+    }
+  }
   
+  */
   
   /**
    * Asks the user yes and no and give an explanation if necessary.
