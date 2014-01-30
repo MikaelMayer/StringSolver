@@ -427,7 +427,6 @@ object Main {
         .map(List(_))
       }
     } else Array[List[FileName]]()
-    if(debug) println(s"Files: $files")
     
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, in, out, time) =>
@@ -439,6 +438,7 @@ object Main {
         
         if(performed) alreadyPerformed += out
     }
+    if(debug) println(s"Files: ${files.mkString}")
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
     var mapping: Array[(List[String], Seq[String])] = null
@@ -890,7 +890,7 @@ object Main {
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         val dir = decodedPathFile.getAbsolutePath()
-        if(opt.perform) move(sfile,new File(new File(decodedPath, sfolder).getAbsolutePath(), sfile).getAbsolutePath())
+        if(opt.perform) move(sfile,sfolder+"/"+ sfile)
         storePartitionHistory(PartitionLog(dir, opt.perform, sfile, sfolder))
         if(remaining == Nil) {
           if(opt.generalize) automatedPartition(opt)
@@ -910,7 +910,7 @@ object Main {
    * @param options Various options to indicate how the filtering is performed.
    */
   def parseFilterCmd(cmd: List[String], options: Options = Options()): Unit = {
-    if(debug) println(s"Action $cmd")
+    if(debug) println(s"Action $cmd, options = $options")
     (cmd, options) match {
       case (("-c" | "--clear")::_, opt) =>
         deleteFilterHistory()
@@ -922,7 +922,7 @@ object Main {
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         val dir = decodedPathFile.getAbsolutePath()
-        if(opt.perform) move(sfile,new File(new File(decodedPath, sfolder).getAbsolutePath(), sfile).getAbsolutePath())
+        if(opt.perform) move(sfile,sfolder+"/"+ sfile)
         storeFilterHistory(FilterLog(dir, opt.perform, sfile, sfolder))
         if(remaining == Nil) {
           if(opt.generalize) automatedFilter(opt)
@@ -1306,10 +1306,11 @@ object Main {
   }
   
   /**
-   * Moves a file to another location.
+   * Moves a file to another relative location.
    * Creates the repository if necessary.
    */
   def move(file: String, to: String) = {
+    if(debug) println(s"Moving $file to $to")
     val directoryName = if(to.indexOf("/") != -1 || to.indexOf("\\") != -1) {
       to.getDirectory
     } else decodedPath
