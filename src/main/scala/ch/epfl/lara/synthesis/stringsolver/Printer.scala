@@ -120,6 +120,12 @@ object Printer {
           case (CPos(i), CPos(-1)) if i <= -2 =>
             val chars = if(i == -2) "char" else s"$i chars"
             t"the last$m $chars in $sv1"
+          case (CPos(i), CPos(j)) if i+1 == j && i >= 0=>
+            t"the ${numeral(i+1)} char in $sv1"
+          case (CPos(i), CPos(j)) if i+1 == j && j < 0=>
+            t"the ${numeral(-i-1)} char from the end in $sv1"
+          case (CPos(i), CPos(j)) if i < j && i >= 0 =>
+            t"the substring of size ${j-i} starting at the ${numeral(i+1)} char in $sv1"
           case (c, d) =>
             val ending = t"$d"
             val starting = t"$c"
@@ -176,13 +182,13 @@ object Printer {
       case RepeatedToken(l) =>
         t"${l}s"
       case RepeatedNotToken(l) =>
-        t"not ${l}s"
+        t"not a ${l}"
       case TokenSeq(l) =>
         l match {
           case Nil => "nothing"
           case a::Nil => t"$a"
           case _ => val ls = (l map apply)
-            def rec(l: Seq[String], res: String): String = l match { case a::b::Nil => res + a + " and " + b case a::l => rec(l, res + a + ", ")}
+            def rec(l: Seq[String], res: String): String = l match { case a::b::Nil => res + a + " followed by " + b case a::l => rec(l, res + a + ", ")}
             "(" + rec(ls, "") + ")"
         }
       case CPos(0) => "the beginning"
