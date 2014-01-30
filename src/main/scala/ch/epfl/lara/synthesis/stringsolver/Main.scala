@@ -411,16 +411,9 @@ object Main {
     }
     
     var nested_level = 0
-    examples.reverse.take(2).reverse foreach {
-      case MvLog(dir, performed, in, out, time) =>
-        if(debug) println(s"Adding $in, $out")
-        c.add(List(in), List(out))(0)
-        nested_level = in.count(_ == '/') + in.count(_ == '\\')
-        if(performed) alreadyPerformed += out
-    }
-    if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = if(nested_level == 0) {
+    
+    lazy val files: Array[List[FileName]] = if(nested_level == 0) {
       decodedPathFile.list().sortBy(alphaNumericalOrder)
       .filter(file => !new File(decodedPath, file).isDirectory())
       .map(List(_))
@@ -435,6 +428,19 @@ object Main {
       }
     } else Array[List[FileName]]()
     if(debug) println(s"Files: $files")
+    
+    examples.reverse.take(2).reverse foreach {
+      case MvLog(dir, performed, in, out, time) =>
+        if(debug) println(s"Adding $in, $out")
+        nested_level = in.count(_ == '/') + in.count(_ == '\\')
+        
+        c.setPosition(files.indexWhere(s => s.startsWith(List(in))))
+        c.add(List(in), List(out))(0)
+        
+        if(performed) alreadyPerformed += out
+    }
+    if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
+    
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
       //println("Solving problem...")
@@ -456,8 +462,9 @@ object Main {
               """
             }
             if(!explain) {
-              val mappedFiles = files map { f => solver(f) }
-              mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
+              // Removes already performed tasks from the mapping
+             val mappedFiles = files map { f => solver(f) }
+              mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") || alreadyPerformed(f.head) }
               if(mapping.nonEmpty) {
                 if(perform) {
                   for((file, to) <- mapping if !alreadyPerformed(file.head)) {
@@ -667,6 +674,38 @@ object Main {
     var previous_input: List[String] = Nil
     var previous_output: List[String] = Nil
     var lastFilesCommand: List[String] = Nil
+    // All files should have the same nature.
+    // onlyFile represents if the files are files (true) or directories (false)
+    val onlyFiles = examples.lastOption match {
+      case Some(AutoLog(dir, performed, contentFlag, (INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_)), files, command, time)) => true
+      case Some(AutoLog(dir, performed, contentFlag, (INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY), files, command, time)) => false
+      case None => true
+    }
+    
+    // files_raw is a array of singletons list of files, either nested or not.
+    lazy val files_raw: Array[List[String]] = if(nested_level == 0) {
+      decodedPathFile.list().sortBy(alphaNumericalOrder)
+      .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
+      .map(List(_))
+    } else if(nested_level == 1){
+      decodedPathFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
+        theDir.list().sortBy(alphaNumericalOrder)
+        .map(file => theDir.getName() + "/" + file)
+        .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
+        .map(List(_))
+      }
+    } else Array[List[String]]()
+    
+    //Replacing each file by its name and content if requested
+    lazy val files_raw2: Array[List[String]] = if(read_content_file != None) {
+      files_raw.map{listFiles => listFiles.head::readLines(readFile(listFiles.head))}
+    } else files_raw
+    
+    //Replacing the list of singleton files by one unique input containing all files
+    lazy val input = if(is_input_file_list && read_content_file == None) {
+      Array(files_raw2.toList.flatten)
+    } else files_raw2
+    
     // Solving the mapping based on the last two examples.
     examples.reverse.take(2).reverse foreach {
       case AutoLog(folder, performed, contentFlag, nature, files, command, time) =>
@@ -675,26 +714,8 @@ object Main {
           c.setTimeout(4)
           c.setExtraTimeToComputeLoops(2f)
         } 
-        // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
-        // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
-        val (input,output) = if(contentFlag) {
-          val content = readFile(files.head)
-          if(!content.isEmpty) {
-            val lines = readLines(content).take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)
-            if(debug) println(s"Adding ${lines} (content=$contentFlag), $command")
-            (files.head::lines, command)
-          } else (Nil, Nil)
-        } else {
-          if(debug) println(s"Adding ${files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)} (content=$contentFlag), $command")
-          (files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
-        }
-        if(input != previous_input) {
-          c.add(input, output)
-        }
-        
         // Recovers the nesting level.
         nested_level = files.head.count(_ == '/') + files.head.count(_ == '\\')
-        
         // If the last term in the command is a file, it is in exceptions
         if(performed) {
           alreadyPerformed += command.last // Assuming that the last element of the command might be a file (?)
@@ -714,40 +735,30 @@ object Main {
             is_input_file_list = false
             read_content_file = None
         }
+        
+        // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
+        // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
+        val (inputList,output) = if(contentFlag) {
+          val content = readFile(files.head)
+          if(!content.isEmpty) {
+            val lines = readLines(content).take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)
+            if(debug) println(s"Adding ${lines} (content=$contentFlag), $command")
+            (files.head::lines, command)
+          } else (Nil, Nil)
+        } else {
+          if(debug) println(s"Adding ${files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)} (content=$contentFlag), $command")
+          (files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
+        }
+        if(inputList != previous_input) {
+          c.setPosition(input.indexWhere(s => s.startsWith(inputList)))
+          c.add(inputList, output)
+        }
     }
     
-    // All files should have the same nature.
-    // onlyFile represents if the files are files (true) or directories (false)
-    val onlyFiles = examples.lastOption match {
-      case Some(AutoLog(dir, performed, contentFlag, (INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_)), files, command, time)) => true
-      case Some(AutoLog(dir, performed, contentFlag, (INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY), files, command, time)) => false
-      case None => true
-    }
+    
     if(debug) println(s"Only files: $onlyFiles, nested level = $nested_level")
     
-    // files_raw is a array of singletons list of files, either nested or not.
-    val files_raw: Array[List[String]] = if(nested_level == 0) {
-      decodedPathFile.list().sortBy(alphaNumericalOrder)
-      .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-      .map(List(_))
-    } else if(nested_level == 1){
-      decodedPathFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + "/" + file)
-        .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-        .map(List(_))
-      }
-    } else Array[List[String]]()
     
-    //Replacing each file by its name and content if requested
-    val files_raw2: Array[List[String]] = if(read_content_file != None) {
-      files_raw.map{listFiles => listFiles.head::readLines(readFile(listFiles.head))}
-    } else files_raw
-    
-    //Replacing the list of singleton files by one unique input containing all files
-    val input = if(is_input_file_list && read_content_file == None) {
-      Array(files_raw2.toList.flatten)
-    } else files_raw2
 
     if(debug) println(s"Input ${input.mkString("")}")
     var mapping: Array[(List[String], Seq[String])] = null

@@ -82,6 +82,11 @@ class StringSolver {
   def resetCounter() = index_number = 0
   
   /**
+   * Sets the current input/output position example to i
+   */
+  def setPosition(i: Int) = index_number = i
+  
+  /**
    * Use dots ... to trigger manual loop research
    */
   def setUseDots(b: Boolean) = ff.useDots = b
