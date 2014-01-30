@@ -44,8 +44,7 @@ object Main {
       case Move()::q =>    parseMvCmd(q)
       case Partition()::q => parsePartitionCmd(q)
       case Filter()::q => parseFilterCmd(q)
-      //case Convert()::q => automatedConvert(cmd)
-      case _ => println(s"Unknown command: " + cmd.mkString(" ") + "\n Try auto, mv or partition")
+      case _ => println(s"Unknown command: " + cmd.mkString(" ") + "\n Try auto, mv, filter or partition")
     }
   }
   
@@ -54,7 +53,7 @@ object Main {
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
   val HISTORY_PARTITION_FILE = "partition.log"
-  val HISTORY_FILTER_FILE = "partition.log"
+  val HISTORY_FILTER_FILE = "filter.log"
   final val NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED = 3
   
     /**
@@ -153,17 +152,12 @@ object Main {
       Some(history_file)
     } else None
   }
-  def deleteHistory(filename: String) = {
-    getHistoryFile(filename) map { history_file =>
+  def deleteHistory[A <: Logger : LoggerFile]() = {
+    getHistoryFile(implicitly[LoggerFile[A]].history_file) map { history_file =>
       history_file.delete()
       println("Deleted " + history_file.getAbsolutePath())
-    } getOrElse {
-      println("Could not delete or inexisting temp file" + filename)
     }
   }
-  def deleteMvHistory() = deleteHistory(HISTORY_MV_FILE)
-  def deleteAutoHistory() = deleteHistory(HISTORY_AUTO_FILE)
-  def deletePartitionHistory() = deleteHistory(HISTORY_PARTITION_FILE)
   
   var timeStampGiver = () => new Timestamp(new java.util.Date().getTime).toString
   
@@ -253,6 +247,27 @@ object Main {
   implicit object PartitionLogFile extends LoggerFile[PartitionLog] {
     def history_file = HISTORY_PARTITION_FILE
     def extractor = PartitionLog.unapply(_)
+  }
+  
+  /**
+   * Filter log
+   */
+  object FilterLog {
+    def unapply(s: String): Option[FilterLog] = {
+      val a = s.split(";")
+      if(a.length == 5) {
+        Some(FilterLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      } else None
+    }
+  }
+  case class FilterLog(dir: String, performed: Boolean, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+folder
+    def setPerformed(b: Boolean) = this.copy(performed = true)
+    def input = List(file1)
+  }
+  implicit object FilterLogFile extends LoggerFile[FilterLog] {
+    def history_file = HISTORY_FILTER_FILE
+    def extractor = FilterLog.unapply(_)
   }
   
   /**
@@ -347,6 +362,7 @@ object Main {
   def storeMvHistory(log: MvLog): Unit = storeHistory[MvLog](log)
   def getMvHistory(folder: File): Seq[MvLog] = getHistory[MvLog](folder)
   def removeDirectoryFromMvHistory(folder: File): Unit = removeDirectoryFromHistory[MvLog](folder)
+  def deleteMvHistory() = deleteHistory[MvLog]()
   
   /**
    * Auto logging routines
@@ -354,7 +370,9 @@ object Main {
   def storeAutoHistory(log: AutoLog): Unit = storeHistory[AutoLog](log)
   def getAutoHistory(folder: File): Seq[AutoLog] = getHistory[AutoLog](folder)
   def removeDirectoryFromAutoHistory(folder: File): Unit = removeDirectoryFromHistory[AutoLog](folder)
-  def setAutoHistoryPerformed(folder: File, input: List[String]): Unit = setHistoryPerformed[AutoLog](folder, input)
+  def setHistoryAutoPerformed(folder: File, input: List[String]): Unit = setHistoryPerformed[AutoLog](folder, input)
+  def deleteAutoHistory() = deleteHistory[AutoLog]()
+  
   /**
    * Partitioning logging routines
    */
@@ -362,6 +380,16 @@ object Main {
   def getPartitionHistory(folder: File): Seq[PartitionLog] = getHistory[PartitionLog](folder)
   def removeDirectoryFromPartitionHistory(folder: File): Unit = removeDirectoryFromHistory[PartitionLog](folder)
   def setHistoryPartitionPerformed(folder: File, input: List[String]): Unit = setHistoryPerformed[PartitionLog](folder, input)
+  def deletePartitionHistory() = deleteHistory[PartitionLog]()
+  
+  /**
+   * Filtering logging routines
+   */
+  def storeFilterHistory(log: FilterLog): Unit = storeHistory[FilterLog](log)
+  def getFilterHistory(folder: File): Seq[FilterLog] = getHistory[FilterLog](folder)
+  def removeDirectoryFromFilterHistory(folder: File): Unit = removeDirectoryFromHistory[FilterLog](folder)
+  def setHistoryFilterPerformed(folder: File, input: List[String]): Unit = setHistoryPerformed[FilterLog](folder, input)
+  def deleteFilterHistory() = deleteHistory[FilterLog]()
   
   /**
    * Performs automated renaming suggestion
@@ -525,39 +553,6 @@ object Main {
       case (_, opt) => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
         //automatedRenaming(perform=opt.performAll, explain=opt.explain)
       case _ =>
-    }
-  }
-  
-  
-  /*def automatedConvert(cmd: List[String]): Unit = {
-    cmd match {
-      case Convert()::("-c" | "--clear")::_ =>
-      case _ =>
-    }
-  }*/
-
-  /**
-   * Sets a line in the history to performed state.
-   */
-  def setHistoryAutoPerformed(folder: File, files: List[String]): Unit = {
-    val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
-    val checkDir = (s: String) => s == dir
-    try {
-      getHistoryFile(HISTORY_AUTO_FILE) foreach { history_file =>
-        val content = readFile(history_file)
-        val lines = if(content.isEmpty) Nil
-        else {
-          for(line <- content.filterNot(_ == '\r').split("\n").toList;
-            splitted = line.split("\\|\\|").toList if splitted.length >= 7;
-            time::dir::performed::contentFlag::nature::filesAndCommand = splitted) yield {
-            if(checkDir(dir) && filesAndCommand.startsWith(files) && !performed.toBoolean) {
-              (time::dir::true::contentFlag::nature::filesAndCommand).mkString("||")
-            } else line
-          }
-        }
-      }
-    } catch  {
-      case e: IOException =>println("ioexception")
     }
   }
   
@@ -815,7 +810,9 @@ object Main {
     Option(mapping)
   }
   
-  
+  /**
+   * Performs a list of command
+   */
   def auto(cmd: List[String]): Unit = {
     val cmdString_raw = "\""+cmd.mkString(";").replaceAll("\"","\\\"")+"\""
     
@@ -851,25 +848,15 @@ object Main {
       p.waitFor();
   }
   
-  
+  /**
+   * Displays a mapping with an optional title
+   */
   def suggestMapping(prog: List[Program], mapping: Array[(List[String], Seq[String])], command: String, title: Boolean = true) = {
     val t = if(title) s"#(Mapping found. Type '$command' to perform it, or '$command -e' to explain)  \n" else ""
     val mappingTrimmed = mapping//.toList.sortBy(_.##).take(5)
     val m = (mappingTrimmed map { case (i: List[FileName], j: Seq[String]) => s"# ${i mkString ","} -> ${j.mkString(";")}"} mkString "\n")
     println(t+m)
     if(mappingTrimmed.size < mapping.size) println("...")
-    /*val question = "Apply the following transformation to all files?\n" + m
-    ask(question, 
-    Seq(('y', "Continue renaming",     FINISH, () =>
-          for((file, to) <- mapping) {
-            move(file, to)
-          }),
-        ('\n',"",         FINISH,   () => ()), 
-        ('n', "Abort",    FINISH,   () => ()), 
-        ('e', "explain",  CONTINUE, () =>displayProg(prog)), 
-        ('t', "test",     CONTINUE, () => ()))
-    )
-    */
   }
   
   /**
@@ -986,7 +973,7 @@ object Main {
         case a::b::q => ((intersect(a, b) /: q){ case (s, a) => s intersect substrings(a) })
       }
       if(common_substrings.isEmpty) {
-        println("Impossible to determine the common substrings of files " + files.mkString(","))
+        println("# Impossible to determine the common substrings of files " + files.mkString(","))
         deletePartitionHistory()
         return None
       }
@@ -994,11 +981,11 @@ object Main {
     }
     val substring_to_category = ListBuffer[(String, String)]()
     val partitions_w_determining_substrings = partitions_w_substrings map {
-      case (category, (longest_substrings, partition)) =>
+      case (category, (substrings, partition)) =>
         val other_substrings = (partitions_w_substrings.toList.filter{ case (c, (l2, p)) => c != category }.flatMap{ case (c, (l2, p)) => l2 } )
-        val smallest_set = longest_substrings -- other_substrings
+        val smallest_set = substrings -- other_substrings
         if(smallest_set.isEmpty) {
-          println(s"Files in partition ${category} are too similar to other categories to be put in a different partition")
+          println(s"# Files in partition ${category} are too similar to other categories to be put in a different partition")
           deletePartitionHistory()
           return None
         }
@@ -1127,11 +1114,185 @@ object Main {
       }
     }
     if(opt.performAll) { // We remove the directory from the history.
-      removeDirectoryFromMvHistory(decodedPathFile)
+      removeDirectoryFromPartitionHistory(decodedPathFile)
     }
     Option(mapping)
   }
   
+  
+  /**
+   * Performs automated partitioning
+   * @param opt Various options for dealing with the history
+   * @return A mapping given the index
+   */
+  def automatedFilter(opt: Options, examples: Seq[FilterLog] = getFilterHistory(decodedPathFile)): Option[Array[(List[String], Seq[String])]] = {
+    val perform = opt.perform
+    val explain = opt.explain
+    val c = StringSolver()
+    c.setTimeout(5)
+    var alreadyPerformed = Set[String]()
+    if(debug) println(s"$decodedPath $examples, $perform; $explain")
+    
+    if(examples != Nil) (if(!explain && !perform) println("# Looking for a general filtering command...")) else {
+      println("# No action to reproduce in this folder")
+      return None;
+    }
+    var lastFilesCommand: List[String] = examples.last match {
+      case FilterLog(dir, performed, in, out, time) => List(in)
+    }
+    var nested_level = 0
+    var firstCategory: String = null 
+    val filterings = examples.groupBy({ case FilterLog(dir, performed, in, out, time) =>
+      if(firstCategory == null) firstCategory = out; out }).toList.sortBy({ case (key, value) => if(key == firstCategory) 1 else 2 })
+    if(filterings.length < 2 || filterings.length > 2) {
+      println("# Filtering requires exactly two output folders, where the first one is accepting. Got "+filterings.length)
+      if(debug) println(filterings)
+      return None
+    }
+    val filterings_w_substrings = filterings map { case (category, filtering) => 
+      val files = filtering map { case FilterLog(dir, performed, in, out, time) => in}
+      val common_substrings = files match {
+        case List(a) => Set.empty[String]
+        case List(a,b) => intersect(a, b)
+        case a::b::q => ((intersect(a, b) /: q){ case (s, a) => s intersect substrings(a) })
+      }
+      (category, (common_substrings, filtering))
+    }
+    //val substring_to_category = ListBuffer[(String, String)]()
+    val filterings_w_determining_substrings = filterings_w_substrings map {
+      case (category, (substrings, filtering)) =>
+        if(category == firstCategory) {
+          val other_substrings = (filterings_w_substrings.toList.filter{ case (c, (l2, p)) => c != category }.flatMap{ case (c, (l2, p)) => l2 } )
+          val smallest_set = substrings -- other_substrings
+          if(smallest_set.isEmpty) {
+            println(s"# Files in category ${category} do not share a common string not found in others.")
+            deleteFilterHistory()
+            return None
+          }
+          (category, (smallest_set.toList.sortBy(e => e.length).last, filtering))
+        } else {
+          (category, ("", filtering))
+        }
+        
+        //val representative = smallest_set.toList.sortBy(_.length).last
+        //substring_to_category += representative -> category
+    }
+    
+    /** To find out which of the substring in the smallest set is determining the filter,
+     *  we need to intersect all corresponding programs to generate each one of them. */
+    
+    // Adding mappings
+    var determiningSubstring = ""
+    var otherCategory = ""
+    filterings_w_determining_substrings.toList foreach {
+      case (category, (determining_substring, filtering)) =>
+        import ProgramsSet._
+        import Programs._
+        if(category == firstCategory) {
+          determiningSubstring = determining_substring
+          filtering foreach {
+             case FilterLog(dir, performed, in, out, time) =>
+               c.add(List(in),determining_substring)
+               nested_level = in.count(_ == '/') + in.count(_ == '\\')
+               if(performed) {
+                 alreadyPerformed += out
+                 alreadyPerformed += in
+               }
+          }
+        } else {
+          otherCategory = category
+          filtering foreach {
+             case FilterLog(dir, performed, in, out, time) =>
+               if(performed) {
+                 alreadyPerformed += out
+                 alreadyPerformed += in
+               }
+          }
+        }
+    }
+    
+    if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
+    
+    val files: Array[List[FileName]] = if(nested_level == 0) {
+      decodedPathFile.list().sortBy(alphaNumericalOrder)
+      .filter(file => !new File(decodedPath, file).isDirectory())
+      .map(List(_))
+    } else if(nested_level == 1){
+      decodedPathFile.listFiles().filter(_.isDirectory())
+        .flatMap{ theDir =>
+        theDir.list().sortBy(alphaNumericalOrder)
+        .map(file => theDir.getName() + "/" + file)
+        .filter(file => !new File(decodedPath, file).isDirectory())
+        .sortBy(alphaNumericalOrder)
+        .map(List(_))
+      }
+    } else Array[List[FileName]]()
+    if(debug) println(s"Files: $files")
+    var mapping: Array[(List[String], Seq[String])] = null
+    if(files.length != 0) {
+      //println("Solving problem...")
+      if(debug) println(s"Solving with at most 2")
+      
+      val attempts = (() => c.solve(),   (e: List[FileName]) => c.solve(e))::Nil
+      attempts find { case (computation, solver) => 
+        c.resetCounter()
+        computation() match {
+          case Some(Concatenate(List(ConstStr(a)))) => true
+          case Some(prog) =>
+            if(debug || explain) {
+              displayProg(prog, prefix = s"Moves files to $firstCategory if ", suffix = s" is equal to $determiningSubstring, and move them to $otherCategory otherwise.")
+            }
+            if(opt.produceBash) {
+              // TODO : Produce bash code like this one:
+            }
+            if(!explain) {
+              val mappedFiles = files map { f => { val tmp = solver(f); if(tmp.length == 1 && tmp.head == determiningSubstring) Seq(firstCategory) else Seq(otherCategory) } }
+              mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
+              if(mapping.nonEmpty) {
+                /*if(perform) {
+                  for((file, to) <- mapping if !alreadyPerformed(file.head)) {
+                    move(file.head, to.head)
+                  }
+                }*/
+                suggestMapping(List(prog), mapping, Filter(), title= !perform)
+                if(opt.performAll) {
+                  if(debug) println("Performing all of them")
+                  for((file, to) <- mapping
+                      if !alreadyPerformed(file.head)
+                  ) {
+                    move(file.head, to.head + "/" + file.head)
+                  }
+                } else if(opt.perform) {
+                  if(debug) println("Performing the last one")
+                  // Performs the last of the provided examples and replace in the history the action.
+                  mapping find {
+                    case (files, to) if files.startsWith(lastFilesCommand) => true
+                    case _ => false
+                  } match {
+                    case Some((file, to)) =>
+                      move(file.head, to.head + "/" + file.head)
+                      // Put in the history that the action has been made.
+                      setHistoryFilterPerformed(decodedPathFile, file)
+                    case None => // Nothing to execute
+                    if(debug) println(s"The last one $lastFilesCommand has already been done or was not found in keys of mapping.")
+                  }
+                }
+                
+                
+              }
+            }
+            OK
+          case None =>
+            if(debug) println(s"no program found")
+            RETRY
+        }
+      }
+    }
+    if(opt.performAll) { // We remove the directory from the history.
+      removeDirectoryFromFilterHistory(decodedPathFile)
+    }
+    Option(mapping)
+  }
   
   /**
    * Moves a file to another location.
@@ -1158,7 +1319,7 @@ object Main {
     //println(s"move $file $to")
   }
   
-  def displayProg(prog: Program, lines: Boolean = false, folder: Boolean = false, prefix: String = ""): Unit = {
+  def displayProg(prog: Program, lines: Boolean = false, folder: Boolean = false, prefix: String = "", suffix: String = ""): Unit = {
     val replaceinput = if(lines) "line" else if(folder) "folder name" else "file name"
     val tmp = Printer(prog)
     val first = if("(?<!first) input".r.findFirstIn(tmp) != None) "first " else ""
@@ -1170,7 +1331,8 @@ object Main {
         .replaceAll("third input", s"$third $replaceinput")
         .replaceAll(" input ", s" $replaceinput ")
         .replaceAll("line ([a-z][a-z0-9]*)\\+2", "line $1+1")
-        .replaceAll("line ([a-z][a-z0-9]*)\\+3", "line $1+2"))
+        .replaceAll("line ([a-z][a-z0-9]*)\\+3", "line $1+2")
+        + suffix)
   }
   
   def alphaNumericalOrder(f: String): String = {
