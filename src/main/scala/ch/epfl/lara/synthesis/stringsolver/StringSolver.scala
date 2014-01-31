@@ -74,67 +74,54 @@ class StringSolver {
   /**
    * Proportion of the original time to give to compute loops
    */
-  def setExtraTimeToComputeLoops(f: Float) = extra_time_to_compute_loop = f
+  def setExtraTimeToComputeLoops(f: Float) = {extra_time_to_compute_loop = f; this}
   
   /**
    * Possibility to reset the counter used to number files
    */
-  def resetCounter() = index_number = 0
+  def resetCounter() = { index_number = 0; this}
   
   /**
    * Sets the current input/output position example to i
    */
-  def setPosition(i: Int) = index_number = i
+  def setPosition(i: Int) = {index_number = i; this}
   
   /**
    * Use dots ... to trigger manual loop research
    */
-  def setUseDots(b: Boolean) = ff.useDots = b
+  def setUseDots(b: Boolean) = {ff.useDots = b; this}
   
   /**
    * Use numbering from previous input option
    */
-  def setUseNumbers(b: Boolean) = ff.numbering = b
+  def setUseNumbers(b: Boolean) = {ff.numbering = b; this}
   
   /**
    * Loop level. 0 will not look for loops
    */
-  def setLoopLevel(i: Int) = ff.DEFAULT_REC_LOOP_LEVEL = i
+  def setLoopLevel(i: Int) = {ff.DEFAULT_REC_LOOP_LEVEL = i; this}
   
   /**
    * Timeout in seconds to add a new input/output example.
    * This is approximate. Default is 30s
    */
-  def setTimeout(seconds: Int) = ff.TIMEOUT_SECONDS = seconds
+  def setTimeout(seconds: Int) = {ff.TIMEOUT_SECONDS = seconds; this}
   
   /**
    * If looking for loops, what could be the maximum separator length
    */
-  def setMaxSeparatorLength(length: Int) = ff.MAX_SEPARATOR_LENGTH = length
+  def setMaxSeparatorLength(length: Int) = {ff.MAX_SEPARATOR_LENGTH = length; this}
   
   /**
    * If only interesting positions (aka word, special chars and digit separators)
    * are considered when looking for loops
    */
-  def setOnlyInterestingPositions(b: Boolean) = ff.onlyInterestingPositions = b
+  def setOnlyInterestingPositions(b: Boolean) = {ff.onlyInterestingPositions = b; this}
   
   /**
    * Outputs programs steps. Useful for debugging an other.
    */
-  def setVerbose(b: Boolean) = ff.verbose = b
-  
-  //def setPreferCounter(b: Boolean)
-  
-  /**
-   * @returns an indexed seq with numbers derived from the previous output.
-   */
-  /*private def previousNumbers(str: IndexedSeq[String] = previousOutputs): IndexedSeq[String] = {
-    if(ff.numbering) {
-      str map { _.numbers }
-    } else {
-      IndexedSeq()
-    }
-  }*/
+  def setVerbose(b: Boolean) = {ff.verbose = b; this}
   
   def getStatistics(): String = ff.statistics()
   
@@ -146,8 +133,7 @@ class StringSolver {
     if(!(output.exists(out => out.exists(_.isDigit)))) { // If not digit for output, we don't use numbers.
       setUseNumbers(false)
     }
-    //val prevNumbers = previousNumbers()
-    
+
     inputList = inputList ++ List(input.toList)
     outputList = outputList ++ List(output.toList)
     
@@ -206,7 +192,6 @@ class StringSolver {
       currentPrograms = intersections
     }
     singlePrograms += newProgramSets
-    //previousOutputs = output.toIndexedSeq
     
     if(debugActive) verifyCurrentState()
     newProgramSets
@@ -365,7 +350,6 @@ class StringSolver {
         (output, progs) <- (outputs zip currentPrograms).view;
         prog = progs.takeBest
     ) {
-      //val pn = previousNumbers(previousOutputsTmp)
       previousOutputsTmp = outputs.toIndexedSeq
       evalProg(prog)(Input_state(inputs.toIndexedSeq, index)) match {
         case StringValue(res) =>

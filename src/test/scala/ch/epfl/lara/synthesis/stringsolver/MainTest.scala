@@ -15,6 +15,61 @@ class MainTest extends WordSpec with ShouldMatchers {
   import Implicits._
   import Evaluator._
   import Main._
+
+  "Service should filter: By extension" in {
+    val Some((c, s)) = Service.getFilter(List(("abc.txt",true), ("defg.txt",true), ("abc2.jpg",false)))
+    s should equal (".txt")
+    c.solve("file.txt") should equal (s)
+    c.solve("myotherfile.txt") should equal (s)
+    c.solve("file.pdf") should not equal (s)
+    c.solve("file.jpg") should not equal (s)
+  }
+  "Service should filter: By file name prefix" in {
+    val Some((c, s)) = Service.getFilter(List(("abc1.txt",true), ("defg1.txt",false), ("abc2.txt",true)))
+    s should equal ("abc")
+    c.solve("file.txt") should not equal (s)
+    c.solve("myotherfile.txt") should not equal (s)
+    c.solve("abc3.pdf") should equal (s)
+    c.solve("abc10.jpg") should equal (s)
+  }
+  
+  "Service should partition : Name of categories unrelated to the name of files." in {
+     //    Example 1: Name of categories unrelated to the name of files.
+     val Some((c, c2, s)) = Service.getPartition(List(("abc.txt","blue"), ("defg.txt","blue"), ("hijk.jpg","red"), ("lmnop.jpg","red")))
+     c.solve("file.txt") should equal (".txt")
+     c.solve("file.jpg") should equal (".jpg")
+     c.solve("file.pdf") should equal (".pdf")
+     c2.solve(".txt") should equal ("")
+     s(".txt") should equal ("blue")
+     s(".jpg") should equal ("red")
+     s(".pdf") should equal (".pdf")
+  }
+  
+  "Service should partition : Categories are numbered." in {
+     // Example 2: Categories are numbered
+     val Some((c, c2, s)) = Service.getPartition(List(("abc.txt","1"), ("defg.txt","1"), ("hijk.jpg","2"), ("lmnop.jpg","2")))
+     c.solve("file.txt") should equal (".txt")
+     c.solve("file.jpg") should equal (".jpg")
+     c.solve("file.pdf") should equal (".pdf")
+     //c2.solve(".txt") should equal ("3") // Do not call because else the counter will increment and the following tests would be wrong
+     s(".txt") should equal ("1")
+     s(".jpg") should equal ("2")
+     s(".pdf") should equal ("3")
+     s(".png") should equal ("4")
+  }
+  
+  "Service should partition : Name of categories related to the name of files." in {
+     //Example 3: Name of categories related to the name of files.
+     val Some((c, c2, s)) = Service.getPartition(List(("abc.txt","category-txt"), ("defg.txt","category-txt"), ("hijk.jpg","category-jpg"), ("lmnop.jpg","category-jpg")))
+     c.solve("file.txt") should equal (".txt")
+     c.solve("file.jpg") should equal (".jpg")
+     c.solve("file.pdf") should equal (".pdf")
+     c2.solve(".pdf") should equal ("category-pdf")
+     s(".txt") should equal ("category-txt")
+     s(".jpg") should equal ("category-jpg")
+     s(".pdf") should equal ("category-pdf")
+     s(".png") should equal ("category-png")
+  }
   
   "Main should keep history" in {
     Main.deleteMvHistory()
@@ -57,9 +112,9 @@ class MainTest extends WordSpec with ShouldMatchers {
       c2 = new File(decodedPath, "mathAnalyse.log")
       c3 = new File(decodedPath, "physiquePlasma.log")
       
-      cc1 = new File(decodedPath, "autocad_info_1.txt")
-      cc2 = new File(decodedPath, "analyse_math_2.txt")
-      cc3 = new File(decodedPath, "plasma_physique_3.txt")
+      cc1 = new File(decodedPath, "01_autocad_info.txt")
+      cc2 = new File(decodedPath, "02_analyse_math.txt")
+      cc3 = new File(decodedPath, "03_plasma_physique.txt")
       
       c1.createNewFile()
       c2.createNewFile()
@@ -70,10 +125,10 @@ class MainTest extends WordSpec with ShouldMatchers {
       cc3 should not be('exists)
       
       //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
-      Main.parseMvCmd(List("infoAutocad.log", "autocad_info_1.txt"), Options())
+      Main.parseMvCmd(List(c1.getName, cc1.getName), Options())
       c1 should not be 'exists
       cc1 should be('exists)
-      Main.parseMvCmd(List("mathAnalyse.log", "analyse_math_2.txt"), Options())
+      Main.parseMvCmd(List(c2.getName, cc2.getName), Options())
       c2 should not be 'exists
       cc2 should be('exists)
       cc3 should not be('exists)

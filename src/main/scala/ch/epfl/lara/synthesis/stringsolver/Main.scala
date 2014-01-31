@@ -392,6 +392,25 @@ object Main {
   def deleteFilterHistory() = deleteHistory[FilterLog]()
   
   /**
+   * Lists files or directory at a given nested level (0 or 1)
+   * 
+   */
+  def listFiles(nested_level: Int, onlyFiles: Boolean): Array[List[String]] = {
+    if(nested_level == 0) {
+      decodedPathFile.list().sortBy(alphaNumericalOrder)
+      .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
+      .map(List(_))
+    } else if(nested_level == 1){
+      decodedPathFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
+        theDir.list().sortBy(alphaNumericalOrder)
+        .map(file => theDir.getName() + "/" + file)
+        .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
+        .map(List(_))
+      }
+    } else Array[List[String]]()
+  }
+  
+  /**
    * Performs automated renaming suggestion
    * @param opt Various options for dealing with the history
    * @param examples A set of MvLogs used as example to perform the global renaming
@@ -402,7 +421,7 @@ object Main {
     val explain = opt.explain
     val c = StringSolver()
     c.setTimeout(5)
-    var alreadyPerformed = Set[String]()
+    val alreadyPerformed = (for(log <- examples if log.performed) yield log.file2).toSet
     if(debug) println(s"$decodedPath $examples, $perform; $explain")
     
     if(examples != Nil) (if(!explain && !perform) println("# Looking for a general command...")) else {
@@ -410,33 +429,17 @@ object Main {
       return None;
     }
     
-    var nested_level = 0
+    val nested_level = examples.last match { case MvLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
     
-    
-    lazy val files: Array[List[FileName]] = if(nested_level == 0) {
-      decodedPathFile.list().sortBy(alphaNumericalOrder)
-      .filter(file => !new File(decodedPath, file).isDirectory())
-      .map(List(_))
-    } else if(nested_level == 1){
-      decodedPathFile.listFiles().filter(_.isDirectory())
-        .flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + "/" + file)
-        .filter(file => !new File(decodedPath, file).isDirectory())
-        .sortBy(alphaNumericalOrder)
-        .map(List(_))
-      }
-    } else Array[List[FileName]]()
+    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=true)
     
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, in, out, time) =>
         if(debug) println(s"Adding $in, $out")
-        nested_level = in.count(_ == '/') + in.count(_ == '\\')
         
-        c.setPosition(files.indexWhere(s => s.startsWith(List(in))))
+        val index = files.indexWhere(s => s.startsWith(List(in)))
+        c.setPosition(if(index == -1) files.indexWhere(s => s.startsWith(List(out))) else index)
         c.add(List(in), List(out))(0)
-        
-        if(performed) alreadyPerformed += out
     }
     if(debug) println(s"Files: ${files.mkString}")
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
@@ -540,24 +543,28 @@ object Main {
    */
   def parseMvCmd(cmd: List[String], options: Options = Options()): Unit = {
     (cmd, options) match {
-      case (("-c" | "--clear")::remaining, opts) => // Clears the history
+      case (("-c" | "--clear")::remaining, opt) => // Clears the history
         deleteMvHistory()
+        deleteFilterHistory()
         if(remaining != Nil) {
+          parseMvCmd(remaining, opt)
           println(remaining.mkString(" ") + " has been ignored")
         }
       case OptionsDecoder(opt2, cmd2) =>
         parseMvCmd(cmd2, opt2)
       case (Nil, opt) => // Automated move.
-        if(opt.generalize) automatedRenaming(opt)
-      case (sfile1::sfile2::Nil, opt) =>
+        if(opt.generalize) automatedRenaming(opt.copy(performAll = opt.perform))
+      case (sfile1::sfile2::remaining, opt) =>
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
-        if(opt.perform) move(sfile1, sfile2)
         storeMvHistory(MvLog(decodedPathFile.getAbsolutePath(), opt.perform, sfile1, sfile2))
+        if(opt.perform) move(sfile1, sfile2)
         if(debug) println("Explaining " + opt.explain + " performing " + opt.perform)
-        if(opt.generalize) automatedRenaming(opt.copy(perform=opt.performAll))
-      case (_, opt) => println("The mv command takes exactly two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
+        if(remaining != Nil) {
+          parseMvCmd(remaining, opt)
+        } else if(opt.generalize) automatedRenaming(opt.copy(perform=opt.performAll))
+      case (_, opt) => println("The mv command takes a multiple of two parameters. Options are --clear (-c), --explain (-e), --test (-t), --auto (-a)")
         //automatedRenaming(perform=opt.performAll, explain=opt.explain)
       case _ =>
     }
@@ -655,7 +662,7 @@ object Main {
     c.setVerbose(debug)
     
     // Exceptions are files for which the action was already performed
-    var alreadyPerformed = Set[String]()
+    val alreadyPerformed = (for(log <- examples if log.performed; elem <- log.commands.last::log.input_files) yield elem).toSet
     if(debug) println(s"$decodedPath $examples, $performLast; $explain, $performAll")
     if(examples != Nil) (if(!explain && !performLast && !performAll) println("# Looking for mappings...")) else {
       println("# No action to reproduce in this folder")
@@ -663,7 +670,7 @@ object Main {
     }
     
     // Controls the file nesting level
-    var nested_level = 0
+    val nested_level = examples.last match { case AutoLog(folder, performed, contentFlag, nature, files, command, time)  => files.head.count(_ == '/') + files.head.count(_ == '\\') }
     
     // Controls if the input for the (only) command is the list of files.
     var is_input_file_list = false 
@@ -683,18 +690,7 @@ object Main {
     }
     
     // files_raw is a array of singletons list of files, either nested or not.
-    lazy val files_raw: Array[List[String]] = if(nested_level == 0) {
-      decodedPathFile.list().sortBy(alphaNumericalOrder)
-      .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-      .map(List(_))
-    } else if(nested_level == 1){
-      decodedPathFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + "/" + file)
-        .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
-        .map(List(_))
-      }
-    } else Array[List[String]]()
+    val files_raw: Array[List[String]] = listFiles(nested_level, onlyFiles)
     
     //Replacing each file by its name and content if requested
     lazy val files_raw2: Array[List[String]] = if(read_content_file != None) {
@@ -714,13 +710,8 @@ object Main {
           c.setTimeout(4)
           c.setExtraTimeToComputeLoops(2f)
         } 
-        // Recovers the nesting level.
-        nested_level = files.head.count(_ == '/') + files.head.count(_ == '\\')
         // If the last term in the command is a file, it is in exceptions
-        if(performed) {
-          alreadyPerformed += command.last // Assuming that the last element of the command might be a file (?)
-          alreadyPerformed ++= files
-        } else lastFilesCommand = files
+        if(!performed) lastFilesCommand = files
         nature match {
           case INPUT_FILE_LIST(n) =>
             is_input_file_list = true
@@ -933,27 +924,7 @@ object Main {
     }
   }
   
-  
-  
-  /**
-   * Returns a set of all common substrings
-   */
-  def intersect(s1: String, s2: String): Set[String] = {
-    (for(i <- 0 until s1.length;
-        j <- (i+1) to s1.length;
-        c = s1.substring(i, j)
-        if s2.indexOf(c) != -1) yield c).toSet
-  }
-  
-  /**
-   * Returns the set of all substrings
-   */
-  def substrings(s1: String): Set[String] = {
-    (for(i <- 0 until s1.length;
-          j <- (i+1) to s1.length;
-          c = s1.substring(i, j)) yield c).toSet
-  }   
-  
+
   /**
    * Performs automated partitioning
    * @param opt Various options for dealing with the history
@@ -962,101 +933,26 @@ object Main {
   def automatedPartition(opt: Options, examples: Seq[PartitionLog] = getPartitionHistory(decodedPathFile)): Option[Array[(List[String], Seq[String])]] = {
     val perform = opt.perform
     val explain = opt.explain
-    val c = StringSolver()
-    c.setTimeout(5)
-    var alreadyPerformed = Set[String]()
+    val alreadyPerformed = (for(ex <- examples if ex.performed) yield ex.file1).toSet
     if(debug) println(s"$decodedPath $examples, $perform; $explain")
     
     if(examples != Nil) (if(!explain && !perform) println("# Looking for a general partition command...")) else {
       println("# No action to reproduce in this folder")
       return None;
     }
-    var lastFilesCommand: List[String] = examples.last match {
-      case PartitionLog(dir, performed, in, out, time) => List(in)
+    val lastFilesCommand: List[String] = examples.last match { case PartitionLog(dir, performed, in, out, time) => List(in) }
+    val nested_level: Int = examples.head match { case PartitionLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
+
+    val examples_for_partition = examples.map { case PartitionLog(dir, performed, in, out, time) => (in, out) }
+    val (c, c2, getCategory) = Service.getPartition(examples_for_partition, StringSolver().setTimeout(5), StringSolver(), opt) getOrElse {
+       println("# No partition found.")
+       return None
     }
-    var nested_level = 0
-    val partitions = examples groupBy { case PartitionLog(dir, performed, in, out, time) => out }
-    val partitions_w_substrings = partitions map { case (category, partition) => 
-      val files = partition map { case PartitionLog(dir, performed, in, out, time) => in}
-      val common_substrings = files match {
-        case List(a) => substrings(a)
-        case List(a,b) => intersect(a, b)
-        case a::b::q => ((intersect(a, b) /: q){ case (s, a) => s intersect substrings(a) })
-      }
-      if(common_substrings.isEmpty) {
-        println("# Impossible to determine the common substrings of files " + files.mkString(","))
-        deletePartitionHistory()
-        return None
-      }
-      (category, (common_substrings, partition))
-    }
-    val substring_to_category = ListBuffer[(String, String)]()
-    val partitions_w_determining_substrings = partitions_w_substrings map {
-      case (category, (substrings, partition)) =>
-        val other_substrings = (partitions_w_substrings.toList.filter{ case (c, (l2, p)) => c != category }.flatMap{ case (c, (l2, p)) => l2 } )
-        val smallest_set = substrings -- other_substrings
-        if(smallest_set.isEmpty) {
-          println(s"# Files in partition ${category} are too similar to other categories to be put in a different partition")
-          deletePartitionHistory()
-          return None
-        }
-        val representative = smallest_set.toList.sortBy(_.length).last
-        substring_to_category += representative -> category
-        (category, (representative, partition))
-    }
-    
-    // Adding mappings
-    partitions_w_determining_substrings.toList foreach {
-      case (category, (determining_substring, partition)) =>
-        import ProgramsSet._
-        import Programs._
-        partition foreach {
-           case PartitionLog(dir, performed, in, out, time) =>
-             c.add(List(in),determining_substring)
-             nested_level = in.count(_ == '/') + in.count(_ == '\\')
-             if(performed) {
-               alreadyPerformed += out
-               alreadyPerformed += in
-             }
-        }
-    }
-    
-    /**
-     * Solver to find a mapping between the representative and the category
-     * Finds counters, but also substrings from representative
-     */
-    val c2 = StringSolver()
-    substring_to_category.sortBy({ case (a, b) => alphaNumericalOrder(a) }).distinct foreach {
-      case (representative, category) =>
-        if(debug) {
-          println(s"Add c2 $representative -> $category")
-        }
-        c2.add(List(representative), category)
-    }
-    val substring_to_category_map = MMap() ++ substring_to_category // TODO : Only one per category.
-    def getCategory(representative: String, orElse: String) = substring_to_category_map.getOrElseUpdate(representative, {
-      val tmp = c2.solve(representative)
-      val res = if(tmp == "") orElse else tmp
-      if(debug) println(s"Category of $representative is $res")
-      res
-    })
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = if(nested_level == 0) {
-      decodedPathFile.list().sortBy(alphaNumericalOrder)
-      .filter(file => !new File(decodedPath, file).isDirectory())
-      .map(List(_))
-    } else if(nested_level == 1){
-      decodedPathFile.listFiles().filter(_.isDirectory())
-        .flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + "/" + file)
-        .filter(file => !new File(decodedPath, file).isDirectory())
-        .sortBy(alphaNumericalOrder)
-        .map(List(_))
-      }
-    } else Array[List[FileName]]()
+    val files: Array[List[FileName]] = listFiles(nested_level, true)
+    
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
@@ -1082,7 +978,7 @@ object Main {
               // TODO : Produce bash code like this one:
             }
             if(!explain) {
-              val mappedFiles = files map { f => { val tmp = solver(f); if(tmp.length == 1) Seq(getCategory(tmp.head, tmp.head)) else Seq("") } }
+              val mappedFiles = files map { f => { val tmp = solver(f); if(tmp.length == 1) Seq(getCategory(tmp.head)) else Seq("") } }
               mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") }
               if(mapping.nonEmpty) {
                 /*if(perform) {
@@ -1139,105 +1035,30 @@ object Main {
   def automatedFilter(opt: Options, examples: Seq[FilterLog] = getFilterHistory(decodedPathFile)): Option[Array[(List[String], Seq[String])]] = {
     val perform = opt.perform
     val explain = opt.explain
-    val c = StringSolver()
-    c.setTimeout(5)
-    var alreadyPerformed = Set[String]()
+    
+    val alreadyPerformed = (for(ex <- examples if ex.performed) yield ex.file1).toSet
     if(debug) println(s"$decodedPath $examples, $perform; $explain")
     
     if(examples != Nil) (if(!explain && !perform) println("# Looking for a general filtering command...")) else {
       println("# No action to reproduce in this folder")
       return None;
     }
-    var lastFilesCommand: List[String] = examples.last match {
-      case FilterLog(dir, performed, in, out, time) => List(in)
+    var lastFilesCommand: List[String] = examples.last match { case FilterLog(dir, performed, in, out, time) => List(in) }
+    val (firstCategory: String, nested_level: Int) = examples.head match { case FilterLog(dir, performed, in, out, time) => (out, in.count(_ == '/') + in.count(_ == '\\')) }
+    val otherCategory: String = examples.map(_.folder) find { _ != firstCategory} match {
+      case Some(str) => str
+      case None => println("# Must provide at least one example in each filter partition"); return None
     }
-    var nested_level = 0
-    var firstCategory: String = null 
-    val filterings = examples.groupBy({ case FilterLog(dir, performed, in, out, time) =>
-      if(firstCategory == null) firstCategory = out; out }).toList.sortBy({ case (key, value) => if(key == firstCategory) 1 else 2 })
-    if(filterings.length < 2 || filterings.length > 2) {
-      println("# Filtering requires exactly two output folders, where the first one is accepting. Got "+filterings.length)
-      if(debug) println(filterings)
+    val examples_for_service = examples map { case FilterLog(dir, performed, in, out, time) => (in, out == firstCategory) }
+
+    val (c, determiningSubstring) = Service.getFilter(examples_for_service, StringSolver().setTimeout(5), opt).getOrElse{
+      println("# Unable to filter. Please perform filter --clean to reset filtering option")
       return None
-    }
-    val filterings_w_substrings = filterings map { case (category, filtering) => 
-      val files = filtering map { case FilterLog(dir, performed, in, out, time) => in}
-      val common_substrings = files match {
-        case List(a) => Set.empty[String]
-        case List(a,b) => intersect(a, b)
-        case a::b::q => ((intersect(a, b) /: q){ case (s, a) => s intersect substrings(a) })
-      }
-      (category, (common_substrings, filtering))
-    }
-    //val substring_to_category = ListBuffer[(String, String)]()
-    val filterings_w_determining_substrings = filterings_w_substrings map {
-      case (category, (substrings, filtering)) =>
-        if(category == firstCategory) {
-          val other_substrings = (filterings_w_substrings.toList.filter{ case (c, (l2, p)) => c != category }.flatMap{ case (c, (l2, p)) => l2 } )
-          val smallest_set = substrings -- other_substrings
-          if(smallest_set.isEmpty) {
-            println(s"# Files in category ${category} do not share a common string not found in others.")
-            deleteFilterHistory()
-            return None
-          }
-          (category, (smallest_set.toList.sortBy(e => e.length).last, filtering))
-        } else {
-          (category, ("", filtering))
-        }
-        
-        //val representative = smallest_set.toList.sortBy(_.length).last
-        //substring_to_category += representative -> category
-    }
-    
-    /** To find out which of the substring in the smallest set is determining the filter,
-     *  we need to intersect all corresponding programs to generate each one of them. */
-    
-    // Adding mappings
-    var determiningSubstring = ""
-    var otherCategory = ""
-    filterings_w_determining_substrings.toList foreach {
-      case (category, (determining_substring, filtering)) =>
-        import ProgramsSet._
-        import Programs._
-        if(category == firstCategory) {
-          determiningSubstring = determining_substring
-          filtering foreach {
-             case FilterLog(dir, performed, in, out, time) =>
-               c.add(List(in),determining_substring)
-               nested_level = in.count(_ == '/') + in.count(_ == '\\')
-               if(performed) {
-                 alreadyPerformed += out
-                 alreadyPerformed += in
-               }
-          }
-        } else {
-          otherCategory = category
-          filtering foreach {
-             case FilterLog(dir, performed, in, out, time) =>
-               if(performed) {
-                 alreadyPerformed += out
-                 alreadyPerformed += in
-               }
-          }
-        }
     }
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = if(nested_level == 0) {
-      decodedPathFile.list().sortBy(alphaNumericalOrder)
-      .filter(file => !new File(decodedPath, file).isDirectory())
-      .map(List(_))
-    } else if(nested_level == 1){
-      decodedPathFile.listFiles().filter(_.isDirectory())
-        .flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
-        .map(file => theDir.getName() + "/" + file)
-        .filter(file => !new File(decodedPath, file).isDirectory())
-        .sortBy(alphaNumericalOrder)
-        .map(List(_))
-      }
-    } else Array[List[FileName]]()
+    val files: Array[List[FileName]] = listFiles(nested_level, true)
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
