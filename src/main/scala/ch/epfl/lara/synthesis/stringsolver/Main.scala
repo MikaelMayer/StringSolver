@@ -393,10 +393,12 @@ object Main {
   
   /**
    * Lists files or directory at a given nested level (0 or 1)
-   * 
+   * @param nested_level How many directories can be found in front of the file
+   * @param onlyFiles if only files are listed, or only directories
+   * @param filter if the last filter -t command is used to filter the files
    */
-  def listFiles(nested_level: Int, onlyFiles: Boolean): Array[List[String]] = {
-    if(nested_level == 0) {
+  def listFiles(nested_level: Int, onlyFiles: Boolean, filter: Boolean): Array[List[String]] = {
+    val f = if(nested_level == 0) {
       decodedPathFile.list().sortBy(alphaNumericalOrder)
       .filter(file => new File(decodedPath, file).isDirectory() ^ onlyFiles)
       .map(List(_))
@@ -408,6 +410,18 @@ object Main {
         .map(List(_))
       }
     } else Array[List[String]]()
+    if(filter) {
+      val loghistory = getFilterHistory(decodedPathFile)
+      automatedFilter(Options(perform=false, performAll=false, explain=false), loghistory) match {
+        case Some(filters) =>
+          val okString = loghistory(0).folder
+          val accepted = filters.filter{ case (lin, lout) => lout.head == okString}.map(_._1).toSet
+          f filter accepted
+        case None => f
+      }
+    } else {
+      f
+    }
   }
   
   /**
@@ -431,20 +445,8 @@ object Main {
     
     val nested_level = examples.last match { case MvLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
     
-    val files: Array[List[FileName]] = { val f = listFiles(nested_level, onlyFiles=true)
-      if(opt.filter) {
-        val loghistory = getFilterHistory(decodedPathFile)
-        automatedFilter(opt.copy(perform=false, performAll=false, explain=false), loghistory) match {
-          case Some(filters) =>
-            val okString = loghistory(0).folder
-            val accepted = filters.filter{ case (lin, lout) => lout.head == okString}.map(_._1).toSet
-            f filter accepted
-          case None => f
-        }
-      } else {
-        f
-      }
-    }
+    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=true, filter=opt.filter)
+
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, in, out, time) =>
         if(debug) println(s"Adding $in, $out")
@@ -509,10 +511,10 @@ object Main {
     def unapply(l: (List[String], Options)): Option[(Options, List[String])] = {
       l match {
         case (("-e" | "--explain")::remaining, options) => // Explain the algorithm
-          Some((options.copy(explain=true, perform=false), remaining))
+          Some((options.copy(explain=true, perform=false, test=false), remaining))
         case (("-t" | "--test")::remaining, options) => // Show what the algorithm would do
-          Some((options.copy(explain=false, perform=false), remaining))
-        case (("-a" | "--auto")::remaining, options) => // Generalizes the command
+          Some((options.copy(explain=false, perform=false, test=true), remaining))
+        case (("-a" | "--auto" | "--all")::remaining, options) => // Generalizes the command
           Some((options.copy(performAll=true), remaining))
         case (("-f" | "--filter")::remaining, options) => // Generalizes the command
           Some((options.copy(filter=true), remaining))
@@ -535,7 +537,8 @@ object Main {
    */
   case class Options(
     perform: Boolean = true,
-    explain: Boolean = false, 
+    explain: Boolean = false,
+    test: Boolean = false,
     performAll: Boolean = false, 
     contentFlag: Boolean = false,
     produceBash: Boolean = false,
@@ -705,7 +708,7 @@ object Main {
     }
     
     // files_raw is a array of singletons list of files, either nested or not.
-    val files_raw: Array[List[String]] = listFiles(nested_level, onlyFiles)
+    val files_raw: Array[List[String]] = listFiles(nested_level, onlyFiles, filter=opt.filter)
     
     //Replacing each file by its name and content if requested
     lazy val files_raw2: Array[List[String]] = if(read_content_file != None) {
@@ -774,7 +777,7 @@ object Main {
       val attempts = (() => c.solveAll(),   (e: List[FileName]) => c.solve(e))::
                      (() => c.solveLasts(), (e: List[FileName]) => c.solveLast(e))::Nil
       attempts find { case (computation, solver) => 
-        c.resetCounter() // TODO : Count the exceptions which already occurred.
+        c.resetCounter()
         computation() match {
           case List(Some(Concatenate(List(ConstStr(a))))) => RETRY
           case l if l.forall(_.nonEmpty) =>
@@ -915,7 +918,7 @@ object Main {
    *   Default: true
    * @param options Various options to indicate how the filtering is performed.
    */
-  def parseFilterCmd(cmd: List[String], options: Options = Options()): Unit = {
+  def parseFilterCmd(cmd: List[String], options: Options = Options(perform=false)): Unit = {
     if(debug) println(s"Action $cmd, options = $options")
     (cmd, options) match {
       case (("-c" | "--clear")::remaining, opt) =>
@@ -926,7 +929,7 @@ object Main {
       case OptionsDecoder(opt, cmd) =>
         parseFilterCmd(cmd, opt)
       case (Nil, opt) =>
-        if(opt.generalize) automatedFilter(opt.copy(performAll=opt.performAll || (opt.perform && !opt.explain)))
+        if(opt.generalize) automatedFilter(opt.copy(performAll=opt.performAll || (!opt.explain && !opt.test)))
       case (sfile::sfolder::remaining, opt) =>
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
@@ -969,7 +972,7 @@ object Main {
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = listFiles(nested_level, true)
+    val files: Array[List[FileName]] = listFiles(nested_level, true, filter=opt.filter)
     
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
@@ -1076,7 +1079,7 @@ object Main {
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = listFiles(nested_level, true)
+    val files: Array[List[FileName]] = listFiles(nested_level, true, filter=false) // Do not take a previous filter command, it would not make any sense.
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {

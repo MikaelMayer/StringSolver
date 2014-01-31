@@ -74,12 +74,20 @@ object ProgramsSet {
   type STraceExpr = ProgramSet[TraceExpr]
   case class SDag[Node](ñ: Set[Node], ns: Node, nt: Node, ξ: Set[(Node, Node)], W: Map[(Node, Node), Set[SAtomicExpr]]) extends STraceExpr {
     def foreach[T](f: TraceExpr => T): Unit = {
-      f(takeBest)
-      // TODO : Iterate.
+      def rec(from: Node, path: List[AtomicExpr]): Unit = {
+        if(from == nt) f(Concatenate(path.reverse)) else
+        for(edge <- ξ; (n1, n2) = edge; if n1 == from; sa <- W(edge); a <- sa) {
+          rec(n2, a::path)
+        }
+      }
+      rec(ns, Nil)
     }
-    def map[T](f: TraceExpr => T): Stream[T] = { // Sort programs according to their sizes.
-      // Dynamic programming : Keep at each node all minimal programs.
-      f(takeBest) #:: Stream.empty[T]
+    def map[T](f: TraceExpr => T): Stream[T] = {
+      def rec(from: Node, path: List[AtomicExpr]): Stream[List[AtomicExpr]] = {
+        if(from == nt) Stream(path.reverse) else
+        for(edge <- ξ.toStream; (n1, n2) = edge; if n1 == from; sa <- W(edge); a: AtomicExpr <- sa; p <- rec(n2, a::path)) yield p
+      }
+      rec(ns, Nil).map(e => f(Concatenate(e)))
     }
     def neighbors(n: Node, n_weight: Int): Set[(Int, AtomicExpr, Node)] = {
       for(e <- ξ if e._1 == n;
@@ -113,7 +121,7 @@ object ProgramsSet {
       Concatenate(minProg(nt))//TODO : alternative.
     }
     def reduce: SDag[Int] = {
-      val nodeMapping = ñ.zipWithIndex.toMap
+      val nodeMapping = ñ.toList.sortBy({ case (a: Int,b: Int) => a+b case _ => 1 }).zipWithIndex.toMap
       var ñ2 = nodeMapping.values.toSet
       val ns2 = nodeMapping(ns)
       val nt2 = nodeMapping(nt)
@@ -123,7 +131,6 @@ object ProgramsSet {
       var finished = false
       while(!finished) { // Remove non reachable nodes
         finished = true
-        // TODO : Optimize this code portion
         val uselessNodes = ñ2 filter { n =>
           n != ns2 && !(ξ2 exists { case (n1, n2) => n2 == n}) ||
           n != nt2 && !(ξ2 exists { case (n1, n2) => n1 == n})
@@ -134,7 +141,7 @@ object ProgramsSet {
           finished = false
         }
       }
-      // W.flatMap 
+
       val W2 = for(((e1, e2), v) <- W;
                    edge = (nodeMapping.getOrElse(e1, -1), nodeMapping.getOrElse(e2, -1));
                    if ξ2 contains edge)
@@ -142,80 +149,6 @@ object ProgramsSet {
       SDag(ñ2, ns2, nt2, ξ2, W2)
     }
   }
-  
-  /** Nodes are from 0 to ñ */
-  /*case class SDag2(ñ: Int, ns: Int, nt: Int, ξ: BitSet, W: ArrayBuffer[Set[SAtomicExpr]]) extends STraceExpr {
-    def foreach[T](f: TraceExpr => T): Unit = {
-      ???
-      // TODO : Iterate.
-    }
-    @inline def firstNode(edge: Int): Int = {
-      edge % ñ
-    }
-    @inline def secondNode(edge: Int): Int = {
-      edge 
-    }
-    @inline def makeEdge(m: Int, n: Int): Int = {
-      (m+n)(m+n+1)2+m
-    }
-    def map[T](f: TraceExpr => T): Stream[T] = { // Sort programs according to their sizes.
-      // Dynamic programming : Keep at each node all minimal programs.
-      f(takeBest) #:: Stream.empty[T]
-    }
-    def neighbors(n: Int, n_weight: Int): Set[(Int, AtomicExpr, Int)] = {
-      for(e <- ξ if e._1 == n; atomic <- W.getOrElse(e, Set.empty).map(_.takeBest).toList.sortBy(w => weight(w)).headOption) yield {
-        (-weight(atomic) + n_weight, atomic, e._2)
-      }
-    }
-    def takeBestRaw = {
-      var minProg = Map[Int, List[AtomicExpr]]()
-      var weights = Map[Int, Int]()
-      var nodesToVisit = new PriorityQueue[(Int, List[AtomicExpr], Int)]()(Ordering.by[(Int, List[AtomicExpr], Node), Int](e => e._1))
-      nodesToVisit.enqueue((0, Nil, ns))
-      while(!(minProg contains nt) && !nodesToVisit.isEmpty) {
-        val (weight, path, node) = nodesToVisit.dequeue() // Takes the first node with the minimal path.
-        minProg += node -> path
-        for(e@(newweight, newAtomic, newNode) <- neighbors(node, weight)) {
-          nodesToVisit.find{ case (w, p, n) => n == newNode } match {
-            case Some((w, p, n)) => // New node already in nodes to visit.
-              if(newweight > w && !(minProg contains newNode)) {
-                nodesToVisit = nodesToVisit.filterNot{case (w, p, n) => n == newNode}
-                nodesToVisit.enqueue((newweight, path.asInstanceOf[List[AtomicExpr]] ++ List(newAtomic).asInstanceOf[List[AtomicExpr]], newNode))
-              } // Else we do nothing.
-            case None =>
-              nodesToVisit.enqueue((newweight, path.asInstanceOf[List[AtomicExpr]] ++ List(newAtomic).asInstanceOf[List[AtomicExpr]], newNode))
-          }
-        }
-      }
-      Concatenate(minProg(nt))
-    }
-    def reduce: SDag[Int] = {
-      val nodeMapping = ñ.zipWithIndex.toMap
-      var ñ2 = nodeMapping.values.toSet
-      val ns2 = nodeMapping(ns)
-      val nt2 = nodeMapping(nt)
-      var ξ2 = ξ map { case (n, m) => (nodeMapping(n), nodeMapping(m))}
-      var finished = false
-      while(!finished) { // Remove non reachable nodes
-        finished = true
-        val uselessNodes = ñ2 filter { n =>
-          n != ns2 && !(ξ2 exists { case (n1, n2) => n2 == n}) ||
-          n != nt2 && !(ξ2 exists { case (n1, n2) => n1 == n})
-        }
-        if(!uselessNodes.isEmpty) {
-          ñ2 = ñ2 -- uselessNodes
-          ξ2 = ξ2 filterNot { case (n1, n2) => (uselessNodes contains n1) || (uselessNodes contains n2) }
-          finished = false
-        }
-      }
-      // W.flatMap 
-      val W2 = for(((e1, e2), v) <- W;
-                   edge = (nodeMapping(e1), nodeMapping(e2));
-                   if ξ2 contains edge)
-               yield (edge -> v)
-      SDag(ñ2, ns2, nt2, ξ2, W2)
-    }
-  }*/
   
   type SAtomicExpr = ProgramSet[AtomicExpr]
   /**
@@ -249,7 +182,7 @@ object ProgramsSet {
   }
   
   def isCommonSeparator(s: String) = s match {
-    case "," | " " | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" => true
+    case "," | " " | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" => true
     case _ => false
   }
   

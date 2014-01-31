@@ -321,13 +321,13 @@ import f._
   
   
   it should "compute splits" in {
-    val inputs = List("a,b,c,d")
-    val outputs = List("a","b","...")
+    val inputs = List("a,ma,b,mb,c,md,d,ok")
+    val outputs = List("a,ma|b,mb...")
     val s = StringSolver()
     s.add(inputs, outputs)
     val prog = s.solve()
-    //s.solve("d,e,f,g") should equal ("d | e | f | g")
-    //TODO
+    println(Printer(prog.get))
+    s.solve("d,d,e,d,f,g,g,i,h,k") should equal ("d,d|e,d|f,g|g,i|h,k")
   }
   
   it should "compute dag intersections with correct numbering" in {

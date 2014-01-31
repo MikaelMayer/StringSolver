@@ -198,13 +198,17 @@ object Evaluator {
     val res1 = RegexpPositionsInString.computePositionsEndingWith(r1, s).map(_ + 1)
     val res2 = RegexpPositionsInString.computePositionsStartingWith(r2, s)
     val intersections = res1 intersect res2
-    val IntValue(i) = evalProg(c)
-    if(i >= 1 && intersections.length > i-1) {
-      IntValue(intersections(i-1))
-    } else if(i <= -1 && 0 <= intersections.length + i) {
-      IntValue(intersections(intersections.length + i))
-    } else {
-       BottomValue
+    evalProg(c) match {
+      case IntValue(i) =>
+        if(i >= 1 && intersections.length > i-1) {
+          IntValue(intersections(i-1))
+        } else if(i <= -1 && 0 <= intersections.length + i) {
+          IntValue(intersections(intersections.length + i))
+        } else {
+           BottomValue
+        }
+      case e =>
+        BottomValue
     }
     case IntLiteral(i) => IntValue(i)
     case Linear(k1, v, k2) =>

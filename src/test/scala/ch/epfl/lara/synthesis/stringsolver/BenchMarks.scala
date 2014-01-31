@@ -251,8 +251,37 @@ e_8.dat | 3.dat""", 1)
     val c = StringSolver()
     c.add("""abc.log | abc.101 """, 1)
     renderer(c)
-    c.solve("""def.log""") should equal ("""def.101""")
+    c.solve("""test.log""") should equal ("""test.101""")
     c.solve("""ghi.log""") should equal ("""ghi.101""")
   }
-  
+  "30. Rename files and moving files http://www.unix.com/unix-dummies-questions-answers/86-rename-multiple-files.html " in {
+    val c = StringSolver()
+    c.add("""arch.PROD.1_1 | /u01/TEST/arch.TEST.1_1 """, 1)
+    renderer(c)
+    c.solve("""arch.PROD.1_2""") should equal ("""/u01/TEST/arch.TEST.1_2""")
+    c.solve("""arch.PROD.1_3""") should equal ("""/u01/TEST/arch.TEST.1_3""")
+  }
+  "31. Renaming files and moving them to different subdirectories based on the location in the file name " in {
+    val c = StringSolver()
+    c.add("""pic_delhi_20121015_001.jpg  | dir\delhi\20121015-001.jpg""", 1)
+    c.add("""pic_mumbai_20121015_001.jpg | dir\mumbai\20121015-001.jpg""",1)
+    renderer(c)
+    c.solve("""pic_delhi_20121015_002.jpg""") should equal ("""dir\delhi\20121015-002.jpg""")
+    c.solve("""pic_delhi_20111013_001.jpg""") should equal ("""dir\delhi\20111013-001.jpg""")
+  }
+  "32. Renaming files and moving them to different subdirectories based on date in the filename.  " in {
+    val c = StringSolver()
+    c.add("""11022011-001.jpg  | dir\11Feb2011\001.jpg 
+11022011-002.jpg  | dir\11Feb2011\002.jpg 
+21092007-001.jpg  | dir\21Sep2007\001.jpg""",1)
+    renderer(c)
+    c.solve("""21092007-002.jpg""") should equal ("""dir\21Sep2007\002.jpg""")
+  }
+  "33. Renaming movie files and moving them to different subdirectories based on the year of the movie present in the file name." in {
+    val c = StringSolver()
+    c.add("""TheDarkNightRises[2012]BluRay.wmv | 2012\TheDarkNightRises.wmv 
+Mirror[2005]HD.wmv | 2005\Mirror.wmv""",1)
+    renderer(c)
+    c.solve("""Batman[2001]BluRay.wmv""") should equal ("""2001\Batman.wmv""")
+  }
 }

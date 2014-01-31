@@ -537,7 +537,6 @@ class StringSolverAlgorithms {
   }
   /**
    * Specializes a DAG by removing all edges except the one between k1 and k2 and other local positions
-   * // TODO: Keep the constant strings and the global inputs.
    */
   def extractDag(dag: STraceExpr, k1: Int, k2: Int, notablePositions: Set[Int], orElse: => STraceExpr): STraceExpr = dag match {
     case SDag(ñ, ns: Int, nt, ξ, a) =>
@@ -547,7 +546,7 @@ class StringSolverAlgorithms {
       def ok1(i: Int): Boolean = k1 == i  || notablePositions(i)
       def ok2(i: Int): Boolean = i == k2  || notablePositions(i)
       def ok3(ij: (Int, Int)): Boolean = ok1(ij._1) && ok2(ij._2)
-      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa.filterKeys(ok3)) // TODO : Check if the last filterKeys is necessary.
+      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa)
     case e => orElse
   }
   

@@ -6,6 +6,7 @@ import scala.Option.option2Iterable
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import java.util.regex.Pattern
 
 object Implicits {
   import Programs._
@@ -20,8 +21,8 @@ object Implicits {
     /**
      * Returns the positions of s in source.
      */
-    def substringOf(source: String): Seq[Int] = { // TODO : Make it better.
-      (0 to (source.length - s.length)).filter{ case pos => source.substring(pos, pos + s.length) == s }
+    def substringOf(source: String): Seq[Int] = {
+      Pattern.quote(s).r.findAllMatchIn(source).map(_.start(0)).toSeq
     }
     
     /**
