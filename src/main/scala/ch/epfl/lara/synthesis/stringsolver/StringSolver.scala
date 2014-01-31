@@ -508,7 +508,7 @@ class StringSolverAlgorithms {
     }
     
     for((i, j) <- longestInterestingEdges.toIterable ++ remaining_edges if !timeout && !mTimeoutPhaseGenerateStr) {
-      W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.e(i, j- 1))))
+      W += (i,j) -> (W.getOrElse((i, j), Set()) ++ (generateSubString(σ, s.substring(i, j), i)))
     }
     if(timeout && verbose) println("exited loop of generateStr because timed out")
 
@@ -687,9 +687,6 @@ class StringSolverAlgorithms {
         val res = future{unify(e1, e2, w)}
         Await.result(first(res, ifTimeOut.future), 10.days) 
       })
-      if(s"${s.substring(k1, k2)} ${s.substring(ksep, k3)}" == "1927 1928") {
-        println("interesting")
-      }
       stats_unifications += 1
       stats_time_unifications += time
       if(sizePrograms(e) != 0) {
@@ -740,11 +737,11 @@ class StringSolverAlgorithms {
                 val k4 = start + res.length 
                 if(k4 <= s.length && s.substring(start, k4) == res) { // The match is exact
                   Wp = Wp + (((start, k4))->(Wp((start, k4)) ++ Set(SLoop(w, e, optionSeparator))))
-                  if(useDots) { // If dots, then the match can be extended after the dotS.
-                    if(k4 < s.length && dotsAtPosition(s, k4)) {
-                      Wp = Wp + (((start, k4+dots.length))->(Wp((start, k4+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
-                      if(verbose) println(s"Found dotted loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
-                    }
+                  if(useDots && k4 < s.length && dotsAtPosition(s, k4)) { // If dots, then the match can be extended after the dotS.
+                    Wp = Wp + (((start, k4+dots.length))->(Wp((start, k4+dots.length)) ++ Set(SLoop(w, e, optionSeparator))))
+                    if(verbose) println(s"Found dotted loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
+                  } else {
+                    if(verbose) println(s"Found loop in ${s} (returns $res) [${Printer(newLoop.takeBest)}]")
                   }
                   // Checks if the match can be extended on the left (i.e. by changing the counters offset by -1)
                   
@@ -774,7 +771,7 @@ class StringSolverAlgorithms {
    * Generate all atomic expressions which can generate a string s from input states.
    */
   implicit val cacheGenerateSubstring = MMap[(Input_state, String), Set[SAtomicExpr]]()
-  def generateSubString(σ: Input_state, s: String): Set[SAtomicExpr] = cached((σ, s), cacheGenerateSubstring){
+  def generateSubString(σ: Input_state, s: String, pos: Int = -1): Set[SAtomicExpr] = cached((σ, s), cacheGenerateSubstring){
     var result = Set.empty[SAtomicExpr]
     if(!extractSpaces && s == " ") return result
     if(verbose) println(s"Going to extract $s from $σ")
@@ -795,6 +792,7 @@ class StringSolverAlgorithms {
 
         val newResult = SSubStr(InputString(vi), Y1, Y2, m)
         newResult.setPos(σvi, s, k, k + s.length)
+        newResult.weightMalus = if(k == pos) {-1} else {0}
         result = result + newResult
       }
       
@@ -1047,6 +1045,7 @@ class StringSolverAlgorithms {
     implicit val (tokenSet, mapping) = Reps(σ)
     for((_, _, r1@TokenSeq(t_list1), r2@TokenSeq(t_list2), intersections) <- matchingTokenSeq(σ, atPos=k, listTokens=tokenSet)) {   
         val c = intersections.indexOf(k)
+        //println(Printer(r1) + " before, " + Printer(r2) + " after")
         if( c >= 0) { // This if false for strange tokenizations.
           //val c = th_match_of(k1, _for=r12, in=s)
           val cp = intersections.length

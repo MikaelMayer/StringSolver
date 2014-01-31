@@ -47,6 +47,9 @@ object Programs {
     def apply(args: Input_state): String = {
       evalProg(this)(args).asString
     }
+    override def toString = Printer(this) 
+    var weightMalus = 0
+    def withWeightMalus(i: Int): this.type = { weightMalus = i; this }
   }
 
   
@@ -209,6 +212,10 @@ object Programs {
     def apply(index: Int): InputString = InputString(IntLiteral(index))
   }
   
+  /**
+   * Problem with alternatives: If loops are used, possibility that it leads to infinite loops.
+   * E.g if two expressions are identical, they will always share the constant alternative, and if it does not use the loop iterator, then it should not work.
+   */
   trait Alternative[A <: Program] {
     private var alternatives: Iterable[A] = SEmpty
     def withAlternative(a: Iterable[A]): this.type = {alternatives = a; this}

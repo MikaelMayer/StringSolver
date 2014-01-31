@@ -20,10 +20,10 @@ class TempTests  extends FlatSpec with ShouldMatchers {
     c.setTimeout(5)
     //c.setExtraTimeToComputeLoops(1000)
     c.setVerbose(true)
-    c.add("""Along Came Ruth(1924) | After Midnight(1927) | Our Dancing Daughters(1928, plus sequels) |  touch '1924 1927 1928...""", 3)
+    c.add("""01 01 ab 01 -> 01-01-ab-01""")
+    c.add("""01 01 08 cd -> 01-01-08-cd""")
     renderer(c)
-    c.add("""test(1933) | my test2(1917) | test3(1988) |  touch '1933 1917...""", 3)
-    println(Printer(c.solveLast().get))
+    c.solve("""02 03 ab 04""") should equal("02-03-ab-04")
     //c.add("""mathAnalyse2.log ->  math_analyse_2.txt""")
     renderer(c) // Should produce a loop.
   }

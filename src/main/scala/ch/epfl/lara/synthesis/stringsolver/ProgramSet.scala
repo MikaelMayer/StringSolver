@@ -55,6 +55,7 @@ object ProgramsSet {
     def sizePrograms = ProgramsSet.sizePrograms(this)
     override def toIterable: Iterable[A] = map((i: A) =>i)
     override def toString = this.getClass().getName().replaceAll(".*\\$","")+"("+self.productIterator.mkString(",")+")"
+    var weightMalus = 0
   }
   /**
    * Set of switch expressions described in Programs.scala
@@ -93,8 +94,8 @@ object ProgramsSet {
       for(e <- ξ if e._1 == n;
           versions = W.getOrElse(e, Set.empty);
           //alternatives = versions.toIterable.flatMap(elem => elem.toIterable);
-          alternatives = versions.collect{ case s@SConstStr(str) => ConstStr(str)};
-          atomic <- versions.map(_.takeBest.withAlternative(alternatives)).toList.sortBy(w => weight(w)).headOption) yield {
+          //alternatives = versions.collect{ case s@SConstStr(str) => ConstStr(str)};
+          atomic <- versions.map(_.takeBest/*.withAlternative(alternatives)*/).toList.sortBy(w => weight(w)).headOption) yield {
         (-weight(atomic) + n_weight, atomic, e._2)
       }
     }
@@ -176,13 +177,13 @@ object ProgramsSet {
     def foreach[T](f: AtomicExpr => T): Unit = {
       for(pp1 <- p1; ppp1 <- pp1; pp2 <- p2; ppp2 <- pp2; method <- methods) f(SubStr(vi, ppp1, ppp2, method))
     }
-    def takeBestRaw = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head, methods.takeBest)//.withAlternative(this.toIterable)
+    def takeBestRaw = SubStr(vi, p1.toList.map(_.takeBest).sortBy(weight(_)(true)).head, p2.toList.map(_.takeBest).sortBy(weight(_)(false)).head.withWeightMalus(this.weightMalus), methods.takeBest)//.withAlternative(this.toIterable)
     private var corresponding_string: (String, String, Int, Int) = ("", "", 0, -1)
     def setPos(from: String, s: String, start: Int, end: Int) = corresponding_string = (from, s, start, end)
   }
   
   def isCommonSeparator(s: String) = s match {
-    case "," | " " | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" => true
+    case "," | "/" | " " | "-"| "#" | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" => true
     case _ => false
   }
   

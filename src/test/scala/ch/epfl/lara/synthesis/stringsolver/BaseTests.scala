@@ -319,6 +319,19 @@ import f._
     prog(IndexedSeq("a", "b", "c", "d"), 0) should equal (StringValue("cp a a1;rm a;cp b b1;rm b;cp c c1;rm c;cp d d1;rm d;"))
   }
   
+  it should "compute loops of numbers" in {
+    val c = StringSolver()
+    c.setTimeout(5)
+    //c.setExtraTimeToComputeLoops(1000)
+    c.setVerbose(true)
+    c.add("""01a01c01def -> 01-01-01""")
+    c.add("""  02-- 08 /* 05 -> 02-08-05""")
+    renderer(c)
+    c.solve("""02 03 04""") should equal("02-03-04")
+    //c.add("""mathAnalyse2.log ->  math_analyse_2.txt""")
+    renderer(c) // Should produce a loop.
+  }
+  
   
   it should "compute splits" in {
     val inputs = List("a,ma,b,mb,c,md,d,ok")

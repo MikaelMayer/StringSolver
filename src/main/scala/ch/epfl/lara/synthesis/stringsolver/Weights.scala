@@ -48,10 +48,10 @@ object Weights {
     case Counter(length, start, step) =>
       150 + Math.abs(step)*10
     case ConstStr(s) => 50 + s.size*100
-    case SubStr(InputString(vi), Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
+    case s@SubStr(InputString(vi), Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
       100 + weight(vi) + weight(r2) + method.id*10
-    case SubStr(InputString(vi), CPos(0), CPos(-1), method) => 130 + weight(vi)
-    case SubStr(InputString(vi), p, pos, method) => 100 + weight(vi) + weight(p)(true) + weight(pos)(false) + method.id*10
+    case s@SubStr(InputString(vi), CPos(0), CPos(-1), method) => 130 + weight(vi)
+    case s@SubStr(InputString(vi), p, pos, method) => 100 + weight(vi) + weight(p)(true) + weight(pos)(false) + method.id*10
     case TokenSeq(t) => t.length*10
     case IntLiteral(i) => Math.abs(i)*3
     case Linear(i,w,j) => (i-1)*10+Math.max(j-1, 0)
@@ -62,4 +62,5 @@ object Weights {
     case UpperTok => 10
     case _ => 10
   }
+  def weightWithOffset(offset: Int)(p: Program)(implicit starting_pos: Boolean = true): Int = weight(p) + offset
 }

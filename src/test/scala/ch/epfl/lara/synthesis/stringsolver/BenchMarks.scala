@@ -284,4 +284,122 @@ Mirror[2005]HD.wmv | 2005\Mirror.wmv""",1)
     renderer(c)
     c.solve("""Batman[2001]BluRay.wmv""") should equal ("""2001\Batman.wmv""")
   }
+  "34. There are lots of jpg files present in a directory, all having different names (and no particular name pattern). We want to move all files created on a particular date to a different subdirectory, named as the date of file creation. We need to do this based on the file's attribute. " in {
+    val c = StringSolver()
+    c.add("""xyz.jpg | 09-12-2010  | 09122010\xyz.jpg""",2)
+    renderer(c)
+    c.solve("""abcsf.jpg | 19-11-1995""") should equal ("""19111995\abcsf.jpg""")
+    c.solve("""qwe.jpg | 09-12-2010""") should equal ("""09122010\qwe.jpg""")
+  }
+  "35. Problem: Rename and move files to different subfolders as shown below:  " in {
+    val c = StringSolver()
+    c.add("""imagetaiwan001.jpg  | taiwan\pic-001.jpg 
+imagetokyo001.jpg | tokyo\pic-001.jpg""",1)
+    renderer(c)
+    c.solve("""imagetaiwan002.jpg """) should equal ("""taiwan\pic-002.jpg""")
+    c.solve("""imagetokyo002.jpg""") should equal ("""tokyo\pic-002.jpg""")
+    c.solve("""imagelondon001.jpg""") should equal ("""london\pic-001.jpg""")
+  }
+  "36. Concatenate files into a new file and place it in a different subdirectory.   " in {
+    val c = StringSolver()
+    val input = (for(i <- 1 to 27) yield ("report_16032012_part" + i + ".pdf")) mkString(" | ")
+    
+    c.add(s"""$input | 16032012\report.pdf""",27)
+    renderer(c)
+    val input2 = (for(i <- 1 to 35) yield ("ppt_12052010_part" + i + ".pdf")) mkString(" | ")
+    c.solve(input2) should equal ("""12052010\ppt.pdf""")
+  }
+  "37. We have lots of mp3 files. we need to move each file to a different subdirectory based on the year of creating of the file, which is to be extracted from the file attribute. " in {
+    val c = StringSolver()
+    c.add(s"""breathless.mp3  | 05 Oct 2005 | 2005\breathless.mp3""",2)
+    renderer(c)
+    c.solve("untill_you.mp3  | 11 Sep 2005") should equal ("""2005\\untill_you.mp3""")
+    c.solve("no_promises.mp3 | 10 Jan 2010") should equal ("""2010\no_promises.mp3""")
+  }
+  "38. Merge files, name each merged file as '<$1>_book.pdf' and put them in different subdirectories as shown below:" in {
+    val c = StringSolver()
+    c.add(s"""microprocessor_chapter1.pdf | microprocessor_book.pdf 
+cormen_ch1.pdf  | cormen_book.pdf""", 1)
+    renderer(c)
+    c.solve("microprocessor_chapter2.mp3") should equal ("""microprocessor_book.pdf""")
+    c.solve("asrf_chap1.pdf") should equal("""asrf_book.pdf""")
+    c.solve("asrf_chap2.pdf") should equal("""asr2_book.pdf""")
+    c.solve("asdff_c1.pdf") should equal("""asdff_book.pdf""")
+    c.solve("cormen_ch40.pdf") should equal("""cormen_book.pdf""")
+  }
+  
+  "39. There are lots of different doc, jpg and mp3 files present in a directory. Move and rename all files to different subdirectories based on the creation year (from file attribute) and file type" in {
+    val files = List("""c:\solar_eclipse.jpg""", """c:\northpole.jpg""", """c:\polar_bear.jpg""", """c:\abc.doc""", """c:\xyz.doc""", """c:\abtd.doc""", """c:\melt-the-snow.mp3""", """c:\some_tears.mp3""", """c:\again.mp3""")
+    val Some((c, c2, s)) = Service.getPartition(List((files(0), "images"),(files(1), "images"),(files(3), "documents"),(files(4), "documents"),(files(6), "songs")))
+    
+    (files map (c.solve(_)) map s) should equal (List.fill(3)("images") ++ List.fill(3)("documents") ++ List.fill(3)("songs"))
+  }
+  
+  "40. Move and rename movies to different directories as shown below (based on video quality" in {
+    val c = StringSolver()
+    c.add("""Social_Network_BluRay_2009.avi    ->  BluRay\Social_Network_2009.avi """)
+    c.add("""LetMeSee_DVDRip_1995.avi -> DVDRip\LetMeSee_1995.avi """)
+    c.add("""Ice-Age_DVDScr_2011.avi -> DVDScr\Ice-Age_2011.avi""")
+    renderer(c)
+    c.solve("""PursuitOfHappiness_BluRay_2001.avi""") should equal ("""BluRay\PursuitOfHappiness_2001.avi""")
+    c.solve("""PursuitOfHappiness_DVDRip_2001.avi""") should equal ("""DVDRip\PursuitOfHappiness_2001.avi""")
+    c.solve("""PursuitOfHappiness_DVDScr_2001.avi""") should equal ("""DVDScr\PursuitOfHappiness_2001.avi""")
+  }
+  
+  "41. Move files into different subdirectories based on the month of file creation, as present in timestamp in the filename" in {
+    val c = StringSolver()
+    c.add("""16515066 Sep 18 00:57 test1.txt | sep_bkp_files\test1.txt 
+60864 Aug 18 04:34 hello.csv  | aug_bkp_files\hello.csv 
+22824 Sep 18 01:30 sample2.txt  | sep_bkp_files\sample2.txt""", 1)
+    renderer(c)
+    c.solve("22824 Mar 89 21:30 sam.txt") should equal ("""mar_bkp_files\sam.txt""")
+    c.solve("12824 Sep 19 21:10 xyz.csv") should equal ("""sep_bkp_files\xyz.csv""")
+  }
+  
+  "42.We have a lot of .txt files present in a directory. For each .txt file do the following" in {
+    val c = StringSolver()
+    c.add("""file1.txt | other.txt | more.txt | command file1.txt;lpr file1.txt;command other.txt;lpr other.txt...""", 3)
+    renderer(c)
+    c.solve(""""file1.txt | other.txt | more.txt""") should equal ("""command file1.txt;lpr file1.txt;command other.txt;lpr other.txt;command more.txt;lpr more.txt""")
+  }
+  
+  "43. We have lots of files of the form [Date]-doc-[iter].pdf. For each file, split by date, merge and print the result" in {
+    val files = for(i <- (1986 to 1995).toList; j <- 1 to 9) yield s"date$i-doc-$j.pdf"
+    val c = StringSolver()
+    c.add("""date1986-doc-1.pdf -> date1986/doc-1.pdf""")
+    c.add("""date1987-doc-5.pdf -> date1987/doc-5.pdf""")
+    c.solve("""date1991-doc-3.pdf""") should equal ("""date1991/doc-3.pdf""")
+    val files_after = for(i <- (1986 to 1995).toList) yield { s"date$i" :: (for(j <- (1 to 9).toList) yield s"doc-$j.pdf") }
+    val m = StringSolver()
+    m.add(files_after.head, "convert date1986/doc_1.pdf date1986/doc2.pdf... date1986_doc.pdf")
+    m.solve(files_after.tail.head) should equal("convert date1986/doc_1.pdf date1986/doc2.pdf date1986/doc3.pdf date1986/doc4.pdf date1986/doc5.pdf date1986/doc6.pdf date1986/doc7.pdf date1986/doc8.pdf date1986/doc9.pdf date1986_doc.pdf")
+    // ...
+    val final_pdfs = for(i <- (1986 to 1995).toList) yield s"""date${i}_doc.pdf"""
+    val n = StringSolver()
+    n.add(List(final_pdfs.head), "lpr " + final_pdfs.head)
+    n.solve(final_pdfs.tail.head) should equal ("lpr " + final_pdfs.tail.head)
+  }
+  
+  "44. There is a folder containing header.txt file, and lots of files of the form test01.txt, test02.txt,... " in {
+    val files = "header.txt" :: (for(j <- (1 to 9).toList) yield s"test$j.txt")
+    val Some((c, s)) = Service.getFilter(List(("header.txt", false), ("test1.txt", true), ("test2.txt", true)))
+    s should equal ("test")
+    c.solve("header.txt") should not equal ("test")
+    c.solve("test3.txt") should equal ("test")
+    
+    val filtered = files.tail
+    val mapping = filtered map { case file => s"cat header.txt $file > $file; lpr $file"}
+    val m = StringSolver()
+    m.add(List(files.head), mapping.head)
+    
+    for((file, map) <- (files.tail zip mapping.tail)) {
+      m.solve(file) should equal (map)
+    }
+  }
+  
+  "45. There is a folder containing lots of jpg and pdf files." in {
+    val files = (for(j <- (1 to 9).toList) yield (s"test$j" + (if(j % 2 == 0) ".jpg" else ".pdf")))
+    val Some((c, s)) = Service.getFilter(List(("test1.jpg", false), ("test2.pdf", true), ("test4.pdf", true)))
+    s should equal (".pdf")
+  }
 }
