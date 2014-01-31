@@ -431,8 +431,20 @@ object Main {
     
     val nested_level = examples.last match { case MvLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
     
-    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=true)
-    
+    val files: Array[List[FileName]] = { val f = listFiles(nested_level, onlyFiles=true)
+      if(opt.filter) {
+        val loghistory = getFilterHistory(decodedPathFile)
+        automatedFilter(opt.copy(perform=false, performAll=false, explain=false), loghistory) match {
+          case Some(filters) =>
+            val okString = loghistory(0).folder
+            val accepted = filters.filter{ case (lin, lout) => lout.head == okString}.map(_._1).toSet
+            f filter accepted
+          case None => f
+        }
+      } else {
+        f
+      }
+    }
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, in, out, time) =>
         if(debug) println(s"Adding $in, $out")
@@ -502,6 +514,8 @@ object Main {
           Some((options.copy(explain=false, perform=false), remaining))
         case (("-a" | "--auto")::remaining, options) => // Generalizes the command
           Some((options.copy(performAll=true), remaining))
+        case (("-f" | "--filter")::remaining, options) => // Generalizes the command
+          Some((options.copy(filter=true), remaining))
         case (("-l" | "--lines")::remaining, options) => // Takes input from the content of the file/folder
           Some((options.copy(contentFlag=true), remaining))
         case (("-b" | "--bash")::remaining, options) => // Produces a bash script for the mapping.
@@ -526,6 +540,7 @@ object Main {
     contentFlag: Boolean = false,
     produceBash: Boolean = false,
     debug: Boolean = false,
+    filter: Boolean = false,
     generalize: Boolean = true
   ) {
     
@@ -545,10 +560,10 @@ object Main {
     (cmd, options) match {
       case (("-c" | "--clear")::remaining, opt) => // Clears the history
         deleteMvHistory()
-        deleteFilterHistory()
+        //deleteFilterHistory()
         if(remaining != Nil) {
           parseMvCmd(remaining, opt)
-          println(remaining.mkString(" ") + " has been ignored")
+          //println(remaining.mkString(" ") + " has been ignored")
         }
       case OptionsDecoder(opt2, cmd2) =>
         parseMvCmd(cmd2, opt2)
@@ -903,8 +918,11 @@ object Main {
   def parseFilterCmd(cmd: List[String], options: Options = Options()): Unit = {
     if(debug) println(s"Action $cmd, options = $options")
     (cmd, options) match {
-      case (("-c" | "--clear")::_, opt) =>
+      case (("-c" | "--clear")::remaining, opt) =>
         deleteFilterHistory()
+        if(remaining != Nil) {
+          parseFilterCmd(remaining, opt)
+        }
       case OptionsDecoder(opt, cmd) =>
         parseFilterCmd(cmd, opt)
       case (Nil, opt) =>
@@ -1069,7 +1087,7 @@ object Main {
       attempts find { case (computation, solver) => 
         c.resetCounter()
         computation() match {
-          case Some(Concatenate(List(ConstStr(a)))) => true
+          case Some(Concatenate(List(ConstStr(a)))) => RETRY
           case Some(prog) =>
             if(debug || explain) {
               displayProg(prog, prefix = s"Moves files to $firstCategory if ", suffix = s" is equal to $determiningSubstring, and move them to $otherCategory otherwise.")
@@ -1115,9 +1133,13 @@ object Main {
             }
             OK
           case None =>
-            if(debug) println(s"no program found")
+            if(debug) println(s"no program found. Continuing")
             RETRY
         }
+      } match {
+        case Some(_) =>
+        case None =>
+          println(s"# No filter function found")
       }
     }
     if(opt.performAll) { // We remove the directory from the history.
