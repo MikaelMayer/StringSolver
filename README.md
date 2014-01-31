@@ -9,7 +9,7 @@ Build using sbt 0.13 and scala 2.10.3.
 - "..." continues an expression if there is a loop.
 - Automated file renaming commands
 - Automated file processing commands
-
+- Automated file filter and partition commands
 
 ## Automated Bash commands
 
@@ -58,6 +58,8 @@ To produce an equivalent bash script which would produce the result, add the opt
 
 [![ScreenShot](http://i1.ytimg.com/vi/yaNr-JDc8tA/mqdefault.jpg)](http://youtu.be/yaNr-JDc8tA)
 
+[![ScreenShot](http://i1.ytimg.com/vi/SRFC-Hi08-I/mqdefault.jpg)](http://youtu.be/SRFC-Hi08-I)
+
 The standard way to run bash commands is the following:
 
 ```
@@ -82,7 +84,7 @@ The last two commands could be combined in a single command if you trust the sys
 auto -a Algebra2Week5.txt "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 ```
 
-To produce an equivalent bash script which would produce the result, add the option `-b` or `--bash`
+To produce an equivalent bash script which would produce the result, add the option `-b` or `--bash` (to come soon)
 
 #### Implicit file names and file content
 
@@ -103,6 +105,37 @@ auto -t "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 ```
 
 If you experience trouble with the `auto` command, you can always run `auto --clear` to clear the history stored in a temporary file.
+
+### Partition commands
+
+If you have a set of files, by providing at least two files of each partition for at least two partitions, you can split the files into as many folders as there are partitions.
+For example:
+
+```
+partition --test myphoto1.jpg images otherpicture2.jpg images mytextfile.txt text otherdoc.txt text
+partition
+```
+
+It will move all files ending with `.jpg` to images, all files ending with `.txt` to text, and if there are files ending `.pdf`, they will be moved in a folder named `.pdf`, etc.
+
+Provided partition names can be unrelated constants (red, blue, etc.), numbers (1, 2, 3...), strings transformation from the common substring of each partition (set-TXT,set-JPG,....) or any combination of these three.
+
+### Filter commands
+
+`filter` is slightly different from the previous commands. It is similar to partition, in the sense that it can move files to different folder. The difference is that it separates files given a property, and is lazy to move files, so it can be used for the other commands.
+It has the --test option by default and can effectively move files only when using the `filter` alone or if the modifier `--auto` is set.
+
+For example:
+
+```
+filter myphoto1.jpg images otherpicture2.jpg images mytextfile.txt . otherdoc.pdf .
+filter
+```
+
+The first line considers that the `images` is the tag for accepted files. It will find out that accepted files end with `.jpg`.
+The second line asks to move accepted files to a folder `images` and keep the others in the current directory `.`
+
+`mv`, `auto` and `partition` also accept the `--filter` modifier. If set, it will perform the last `filter --test` and apply their transformation only on filtered files and not the others.
 
 ## API
 
