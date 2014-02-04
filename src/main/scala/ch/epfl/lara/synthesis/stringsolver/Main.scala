@@ -75,6 +75,15 @@ object Main {
   object INPUT_DIR_CONTENT extends ParameterInput {
     val prefix = "INPUT_DIR_CONTENT"
   }
+  implicit class NatureString(s: Logger) {
+    def onlyFiles: Boolean = {
+      s.nature match {
+        case INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_) => true
+        case INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY => false
+        case _ => true
+      }
+    }
+  }
   type Nature = String
   type FileName = String
   type Performed = Boolean
@@ -169,6 +178,7 @@ object Main {
     def dir: String
     def time: String
     def performed: Boolean
+    def nature: String
     def input: List[String]
     def setPerformed(b: Boolean): Logger
   }
@@ -183,13 +193,13 @@ object Main {
   object MvLog {
     def unapply(s: String): Option[MvLog] = {
       val a = s.split(";")
-      if(a.length == 5) {
-        Some(MvLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      if(a.length == 6) {
+        Some(MvLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
       } else None
     }
   }
-  case class MvLog(dir: String, performed: Boolean, file1: String, file2: String, time: String = timeStampGiver()) extends Logger {
-    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+file2
+  case class MvLog(dir: String, performed: Boolean, nature: String, file1: String, file2: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";"+file2
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = List(file1)
   }
@@ -234,13 +244,13 @@ object Main {
   object PartitionLog {
     def unapply(s: String): Option[PartitionLog] = {
       val a = s.split(";")
-      if(a.length == 5) {
-        Some(PartitionLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      if(a.length == 6) {
+        Some(PartitionLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
       } else None
     }
   }
-  case class PartitionLog(dir: String, performed: Boolean, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
-    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+folder
+  case class PartitionLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";" + folder
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = List(file1)
   }
@@ -255,13 +265,13 @@ object Main {
   object FilterLog {
     def unapply(s: String): Option[FilterLog] = {
       val a = s.split(";")
-      if(a.length == 5) {
-        Some(FilterLog(a(1), a(2).toBoolean, a(3), a(4), a(0)))
+      if(a.length == 6) {
+        Some(FilterLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
       } else None
     }
   }
-  case class FilterLog(dir: String, performed: Boolean, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
-    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + file1+";"+folder
+  case class FilterLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";"+folder
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = List(file1)
   }
@@ -285,6 +295,7 @@ object Main {
         for(line <- readLines(content);
             log <- implicitly[LoggerFile[A]].extractor(line);
             if(checkDir(log.dir))) yield log
+      if(debug) println(s"content : $res")
       res
       }
     } getOrElse (List[A]())
@@ -443,12 +454,12 @@ object Main {
       return None;
     }
     
-    val nested_level = examples.last match { case MvLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
-    
-    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=true, filter=opt.filter)
+    val nested_level = examples.last match { case MvLog(dir, performed, nature, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
+    val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
+    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=onlyFiles, filter=opt.filter)
 
     examples.reverse.take(2).reverse foreach {
-      case MvLog(dir, performed, in, out, time) =>
+      case MvLog(dir, performed, nature, in, out, time) =>
         if(debug) println(s"Adding $in, $out")
         
         val index = files.indexWhere(s => s.startsWith(List(in)))
@@ -576,7 +587,12 @@ object Main {
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
-        storeMvHistory(MvLog(decodedPathFile.getAbsolutePath(), opt.perform, sfile1, sfile2))
+        val nature = if(file1.isDirectory()) {
+          INPUT_DIRECTORY
+        } else {
+          INPUT_FILE
+        }
+        storeMvHistory(MvLog(decodedPathFile.getAbsolutePath(), opt.perform, nature, sfile1, sfile2))
         if(opt.perform) move(sfile1, sfile2)
         if(debug) println("Explaining " + opt.explain + " performing " + opt.perform)
         if(remaining != Nil) {
@@ -598,8 +614,12 @@ object Main {
   def parseAutoCmd(cmd: List[String], options: Options = Options()): Unit = {
     if(debug) println(s"Action $cmd")
     (cmd, options) match {
-      case (("-c" | "--clear")::_, opt) =>
+      case (("-c" | "--clear")::remaining, opt) =>
         deleteAutoHistory()
+        if(remaining != Nil) {
+          parseAutoCmd(remaining, opt)
+          //println(remaining.mkString(" ") + " has been ignored")
+        }
       case OptionsDecoder(opt, cmd) =>
         parseAutoCmd(cmd, opt)
       case (Nil, opt) =>
@@ -701,11 +721,7 @@ object Main {
     var lastFilesCommand: List[String] = Nil
     // All files should have the same nature.
     // onlyFile represents if the files are files (true) or directories (false)
-    val onlyFiles = examples.lastOption match {
-      case Some(AutoLog(dir, performed, contentFlag, (INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_)), files, command, time)) => true
-      case Some(AutoLog(dir, performed, contentFlag, (INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY), files, command, time)) => false
-      case None => true
-    }
+    val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
     
     // files_raw is a array of singletons list of files, either nested or not.
     val files_raw: Array[List[String]] = listFiles(nested_level, onlyFiles, filter=opt.filter)
@@ -899,8 +915,13 @@ object Main {
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         val dir = decodedPathFile.getAbsolutePath()
+        val nature = if(file1.isDirectory()) {
+          INPUT_DIRECTORY
+        } else {
+          INPUT_FILE
+        }
+        storePartitionHistory(PartitionLog(dir, opt.perform, nature, sfile, sfolder))
         if(opt.perform) move(sfile,sfolder+"/"+ sfile)
-        storePartitionHistory(PartitionLog(dir, opt.perform, sfile, sfolder))
         if(remaining == Nil) {
           if(opt.generalize) automatedPartition(opt)
         } else {
@@ -934,8 +955,14 @@ object Main {
         val file1 = new File(decodedPath, sfile)
         if(!file1.exists()) { println(s"file $sfile does not exist"); return(); }
         val dir = decodedPathFile.getAbsolutePath()
+        val nature = if(file1.isDirectory()) {
+          INPUT_DIRECTORY
+        } else {
+          INPUT_FILE
+        }
+        storeFilterHistory(FilterLog(dir, opt.perform, nature, sfile, sfolder))
         if(opt.perform) move(sfile,sfolder+"/"+ sfile)
-        storeFilterHistory(FilterLog(dir, opt.perform, sfile, sfolder))
+        
         if(remaining == Nil) {
           if(opt.generalize) automatedFilter(opt)
         } else {
@@ -961,18 +988,19 @@ object Main {
       println("# No action to reproduce in this folder")
       return None;
     }
-    val lastFilesCommand: List[String] = examples.last match { case PartitionLog(dir, performed, in, out, time) => List(in) }
-    val nested_level: Int = examples.head match { case PartitionLog(dir, performed, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
+    val lastFilesCommand: List[String] = examples.last match { case PartitionLog(dir, performed, nature, in, out, time) => List(in) }
+    val nested_level: Int = examples.head match { case PartitionLog(dir, performed, nature, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
 
-    val examples_for_partition = examples.map { case PartitionLog(dir, performed, in, out, time) => (in, out) }
+    val examples_for_partition = examples.map { case PartitionLog(dir, performed, nature, in, out, time) => (in, out) }
     val (c, c2, getCategory) = Service.getPartition(examples_for_partition, StringSolver().setTimeout(5), StringSolver(), opt) getOrElse {
        println("# No partition found.")
        return None
     }
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
+    val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
     
-    val files: Array[List[FileName]] = listFiles(nested_level, true, filter=opt.filter)
+    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles, filter=opt.filter)
     
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
@@ -1058,19 +1086,19 @@ object Main {
     val explain = opt.explain
     
     val alreadyPerformed = (for(ex <- examples if ex.performed) yield ex.file1).toSet
-    if(debug) println(s"$decodedPath $examples, $perform; $explain")
+    if(debug) println(s"$decodedPath, examples=$examples, perform=$perform; explain=$explain")
     
     if(examples != Nil) (if(!explain && !perform) println("# Looking for a general filtering command...")) else {
       println("# No action to reproduce in this folder")
       return None;
     }
-    var lastFilesCommand: List[String] = examples.last match { case FilterLog(dir, performed, in, out, time) => List(in) }
-    val (firstCategory: String, nested_level: Int) = examples.head match { case FilterLog(dir, performed, in, out, time) => (out, in.count(_ == '/') + in.count(_ == '\\')) }
+    var lastFilesCommand: List[String] = examples.last match { case FilterLog(dir, performed, nature, in, out, time) => List(in) }
+    val (firstCategory: String, nested_level: Int) = examples.head match { case FilterLog(dir, performed, nature, in, out, time) => (out, in.count(_ == '/') + in.count(_ == '\\')) }
     val otherCategory: String = examples.map(_.folder) find { _ != firstCategory} match {
       case Some(str) => str
       case None => println("# Must provide at least one example in each filter partition"); return None
     }
-    val examples_for_service = examples map { case FilterLog(dir, performed, in, out, time) => (in, out == firstCategory) }
+    val examples_for_service = examples map { case FilterLog(dir, performed, nature, in, out, time) => (in, out == firstCategory) }
 
     val (c, determiningSubstring) = Service.getFilter(examples_for_service, StringSolver().setTimeout(5), opt).getOrElse{
       println("# Unable to filter. Please perform filter --clean to reset filtering option")
@@ -1079,7 +1107,8 @@ object Main {
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
-    val files: Array[List[FileName]] = listFiles(nested_level, true, filter=false) // Do not take a previous filter command, it would not make any sense.
+    val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
+    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles, filter=false) // Do not take a previous filter command, it would not make any sense.
     if(debug) println(s"Files: $files")
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
@@ -1093,7 +1122,7 @@ object Main {
           case Some(Concatenate(List(ConstStr(a)))) => RETRY
           case Some(prog) =>
             if(debug || explain) {
-              displayProg(prog, prefix = s"Moves files to $firstCategory if ", suffix = s" is equal to $determiningSubstring, and move them to $otherCategory otherwise.")
+              displayProg(prog, prefix = s"Moves files to $firstCategory if ", suffix = s" is equal to '$determiningSubstring', and moves them to $otherCategory otherwise.")
             }
             if(opt.produceBash) {
               // TODO : Produce bash code like this one:
@@ -1152,7 +1181,7 @@ object Main {
   }
   
   /**
-   * Moves a file to another relative location.
+   * Moves a file/directory to another relative location.
    * Creates the repository if necessary.
    */
   def move(file: String, to: String) = {

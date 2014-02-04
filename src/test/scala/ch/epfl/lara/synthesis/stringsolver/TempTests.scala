@@ -12,19 +12,18 @@ class TempTests  extends FlatSpec with ShouldMatchers {
   import Evaluator._
   
   def renderer(c: StringSolver): Unit = {
-    println(Printer(c.solve().get))
+    c.solve() match {
+      case Some(prog) =>
+        println(Printer(prog))
+      case None =>
+        println("No corresponding program")
+    }
   }
   
   "Your test" should "work faster" in {
-    val c = StringSolver()
-    c.setTimeout(5)
-    //c.setExtraTimeToComputeLoops(1000)
-    c.setVerbose(true)
-    c.add("""01 01 ab 01 -> 01-01-ab-01""")
-    c.add("""01 01 08 cd -> 01-01-08-cd""")
-    renderer(c)
-    c.solve("""02 03 ab 04""") should equal("02-03-ab-04")
-    //c.add("""mathAnalyse2.log ->  math_analyse_2.txt""")
-    renderer(c) // Should produce a loop.
+    val f = StringSolver()
+    val c = f.add("april August mar Dec -> 4 8 03 12")
+    println(Printer(c.takeBest))
+    f.solve("february March oct May") should equal ("2 3 10 5")
   }
 }

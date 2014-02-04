@@ -187,6 +187,21 @@ object ProgramsSet {
     case _ => false
   }
   
+  /**
+   * Applies special conversion to a string
+   */
+  case class SSpecialConversion(s: SSubStr, converters: Set[SpecialConverter]) extends SAtomicExpr {
+    def map[T](f: AtomicExpr => T): Stream[T] = {
+      for(ss <- s.toStream; converter <- converters) yield f(SpecialConversion(ss.asInstanceOf[SubStr], converter))
+    }
+    def foreach[T](f: AtomicExpr => T): Unit = {
+      for(ss <- s.toStream; converter <- converters) f(SpecialConversion(ss.asInstanceOf[SubStr], converter))
+    }
+    def takeBestRaw = SpecialConversion(s.takeBest.asInstanceOf[SubStr], converters.toList.sortBy(weight(_)(true)).head)
+    private var corresponding_string: (String, String, Int, Int) = ("", "", 0, -1)
+    def setPos(from: String, s: String, start: Int, end: Int) = corresponding_string = (from, s, start, end)
+  }
+  
   
   
   /**
@@ -252,7 +267,8 @@ object ProgramsSet {
     //
     def fromExample(number: String, position: Int): SCounter = {
       val numberValue = number.toInt
-      val possibleLengths = (if(number(0) != '0') {// It means that the generated length might be lower.
+      val possibleLengths = (if(number(0) != '0' && position != 0) {// It means that the generated length might be lower.
+        // Except if the position is the first one, because counters are increasing.
         SIntSemiLinearSet(1, 1, number.length)
       } else SIntSemiLinearSet(number.length, 1, number.length))
       val possibleStarts = if(position == 0) {
@@ -268,6 +284,8 @@ object ProgramsSet {
    * Except if count = 0, step can be anything from 1 to infinity.
    */
   case class SCounter(length: SInt, starts: SInt, index: Int, count: Int) extends SAtomicExpr {
+    assert(length != SEmpty)
+    assert(starts != SEmpty)
     def map[T](f: AtomicExpr => T): Stream[T] = {
       for(l <- length.toStream; s: IntLiteral <- starts; step <- if(count == 0) Stream.from(1) else List((index - s.k)/count)) yield f(Counter(l.k, s.k, step))
     }
@@ -538,6 +556,14 @@ object ProgramsSet {
   }
   def notEmpty[T <: Program](a: ProgramSet[T]): Option[ProgramSet[T]] = if(a == SEmpty) None else Some(a)
   def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = if(a eq b) a else ((a, b) match {
+    case (SSpecialConversion(a, b), SSpecialConversion(c, d)) =>
+        val ss = intersectAtomicExpr(a, c)
+        if(sizePrograms(ss) > 0) {
+          val i = b intersect d
+          if(i.size > 0) {
+            SSpecialConversion(ss.asInstanceOf[SSubStr], i)
+          } else SEmpty
+        } else SEmpty
     case (SLoop(i1, e1, sep1), SLoop(i2, e2, sep2)) if sep1 == sep2 =>
       val be2 = replaceSTraceExpr(e2){ case l@Linear(a, i, b) => if(i == i2) Linear(a, i1, b) else l }
       val intersectBody = intersect(e1, be2)
@@ -604,16 +630,17 @@ object ProgramsSet {
             val newStep = Math.abs((i2 - i1)/(c1-c2))
             val newStart = i1 - c1 * newStep
             val s2 = intersectIntSet(s, SIntSemiLinearSet(newStart, 0, newStart))
-            val newStart2 = s2 match {
-              case si @ SIntSemiLinearSet(start, step, max) => start
+            s2 match {
+              case si @ SIntSemiLinearSet(newStart2, step, max) => 
+                if(c2 != 0 && newStart2 != i2) {
+                  SCounter(l, s2, i2, c2)
+                } else if(c1 != 0 && newStart2 != i1)
+                  SCounter(l, s2, i1, c1)
+                else SEmpty
               case _ =>
-                -1
+                SEmpty
             }
-            if(c2 != 0 && newStart2 != i2) {
-              SCounter(l, s2, i2, c2)
-            } else if(c1 != 0 && newStart2 != i1)
-              SCounter(l, s2, i1, c1)
-            else SEmpty
+            
           }
         }
       } else SEmpty
@@ -734,6 +761,7 @@ object ProgramsSet {
     case STokenSeq(tseq) => (1L /: (tseq map { (t:SToken) => t.size})) (_ * _)
     case s@ SToken(_) => s.size
     case SEmpty => 0
+    case SSpecialConversion(a, b) => sizePrograms(a) * b.size
     /*case SAny(_) => 1
     case SAnyInt(i) => 1*/
     case SIntSemiLinearSet(start, offset, max) => if(offset == 0) 1 else (max - start)/offset + 1

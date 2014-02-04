@@ -8,6 +8,15 @@ import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
+import ch.epfl.lara.synthesis.stringsolver.ProgramsSet._
+
+/**
+ * An extension delivers start and end position to which it applies,
+ * and a way to create a SSpecialConversion out of a SSubStr.
+ */
+trait Extension {
+  def apply(s: String, output: String): Seq[(Int, Int, SSubStr => SSpecialConversion)]
+}
 
 /**StringSolver object
  * Used to create a StringSolver instance to solve input/output problems.
@@ -122,6 +131,7 @@ class StringSolver {
    * Outputs programs steps. Useful for debugging an other.
    */
   def setVerbose(b: Boolean) = {ff.verbose = b; this}
+  def isVerbose = ff.verbose
   
   def getStatistics(): String = ff.statistics()
   
@@ -150,7 +160,7 @@ class StringSolver {
       Await.result(fetchPrograms, ff.TIMEOUT_SECONDS.seconds)
     } catch {
       case e: TimeoutException  => 
-        if(output.exists(_.indexOf("...") != -1 && ff.useDots)) { // Stop first phase of computing GenerateStr if there are still dots to computee.
+        if(output.exists(_.indexOf("...") != -1 && ff.useDots)) { // Stop first phase of computing GenerateStr if there are still dots to compute.
           ff.timeoutGenerateStr = true
           try {
             Await.result(fetchPrograms, (ff.TIMEOUT_SECONDS * extra_time_to_compute_loop).seconds)
@@ -170,6 +180,12 @@ class StringSolver {
     }
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
     ff.timeout = false
+    add(newProgramSets)
+  }
+  
+  /**Adds a new program set
+   **/
+  def add(newProgramSets: IndexedSeq[STraceExpr]): IndexedSeq[STraceExpr] = {
     if(currentPrograms == null) {
       currentPrograms = newProgramSets
     } else {
@@ -192,9 +208,14 @@ class StringSolver {
       currentPrograms = intersections
     }
     singlePrograms += newProgramSets
-    
     if(debugActive) verifyCurrentState()
     newProgramSets
+  }
+  
+  /**Adds a new program set
+   **/
+  def add(newProgramSets: STraceExpr): STraceExpr = {
+    add(IndexedSeq(newProgramSets))(0)
   }
  
   /**Adds a new input/output example.
@@ -279,8 +300,17 @@ class StringSolver {
     if(debugActive) verifyCurrentState()
     res
   } catch {
-    case _: java.lang.Error => None
-    case _: Exception => None
+    case e: java.lang.Error => 
+      if(isVerbose) {
+        println(e.getMessage())
+        println(e.getStackTrace().mkString("\n"))
+      }
+      None
+    case e: Exception => if(isVerbose) {
+        println(e.getMessage())
+        println(e.getStackTrace().mkString("\n"))
+      }
+    None
   } else None
   
   /** Returns the best solution to the problem for the whole output */
@@ -381,6 +411,14 @@ class StringSolverAlgorithms {
   var numbering = true
   // If a substring to extract is a space, should it be extracted from the inputs
   var extractSpaces = false
+  // Use date conversion (english)
+  def useDates: Boolean = extensions.indexOf(Dates) != -1
+  def useDates_=(b: Boolean) = {
+    if(b) extensions = (Dates::extensions).distinct else extensions = extensions.filterNot(_ ==Dates)
+  }
+  
+  var extensions = List[Extension]()
+  useDates = true
   
   final val dots = "..."
   def dotsAtPosition(s: String, k: Int) = s.substring(k, Math.min(k + dots.length, s.length)) == dots
@@ -781,21 +819,29 @@ class StringSolverAlgorithms {
         val Y1 = generatePosition(σvi, k)
         val Y2 = generatePosition(σvi, k + s.length)
         
-        if(debugActive) {
+        /*if(debugActive) {
           for(y1 <- Y1; y <- y1) {
             assert(evalProg(y)(Input_state(IndexedSeq(σvi), 1)) == IntValue(k))
           }
           for(y2 <- Y2; y <- y2) {
             assert(evalProg(y)(Input_state(IndexedSeq(σvi), 1)) == IntValue(k + s.length))          
           }
-        }
+        }*/
 
         val newResult = SSubStr(InputString(vi), Y1, Y2, m)
         newResult.setPos(σvi, s, k, k + s.length)
         newResult.weightMalus = if(k == pos) {-1} else {0}
         result = result + newResult
       }
-      
+      for(extension <- extensions; (start, end, programMaker) <- extension(σvi, s)) {
+        val Y1 = generatePosition(σvi, start)
+        val Y2 = generatePosition(σvi, end)
+        val ss = SSubStr(InputString(vi), Y1, Y2, SSubStrFlag(List(NORMAL)))
+        ss.setPos(σvi, s, start, end)
+        val program = programMaker(ss)
+        result += program
+      }
+      // TODO : Put this into an extension.
       if(s.isNumber && numbering) {
         for((start, end, offset) <- s subnumberIncNegativeOf σvi) { // Numbers that can be obtained from σvi by changing by steps for example.
           val Y1 = generatePosition(σvi, start)
@@ -811,30 +857,6 @@ class StringSolverAlgorithms {
     // Generates numbers from previous numbers in output strings.
     if(s.isNumber && numbering) {
       result += SCounter.fromExample(s, σ.position)
-      /*if(σ.prevNumberOutputs.length == 0) {
-        val i = s.toInt
-        // For any number i, the set of matching counters are IntLiteral(i), Linear(1, i), Linear(2, i) up to Linear(i, i)
-        result = result + SNumber(SAny(PrevStringNumber(0)), Set(s.length), SIntSet(Set(i)), SAnyInt(1))
-      } else {
-        for(vi <- 0 until σ.prevNumberOutputs.length) {
-          val σvi =  σ.prevNumberOutputs(vi)
-          for((start, end, steps) <- s addedNumberFrom σvi) { // Numbers that can be obtained from σvi by incrementing by steps for example.
-            val Y1 = generatePosition(σvi, start)
-            val Y2 = generatePosition(σvi, end+1)
-            val sourceLength = end+1 - start
-            val sourceLengthPossibilities = if(σvi(start) == '0') {
-              Set(sourceLength)
-            } else {
-              (1 to sourceLength).toSet
-            }
-            val possibleLengths = sourceLengthPossibilities intersect (if(s(0) != '0') {// It means that the generated length might be lower.
-            (1 to s.length).toSet
-          } else Set(s.length))
-            if(!possibleLengths.isEmpty)
-            result = result + SNumber(SSubStr(PrevStringNumber(vi), Y1, Y2, SSubStrFlag(List(NORMAL))), possibleLengths.map(IntLiteral.apply), SAnyInt(0), SIntSet(Set(steps)))
-          }
-        }
-      }*/
     }
     result
   }
@@ -926,35 +948,12 @@ class StringSolverAlgorithms {
         addMapping(start, end, TokenSeq(tokseq.t ++ List(EndTok)), (List(liststart.last), List(listend.last)))
       }
     }
-    // Remove single NonDotTok anywhere.
-    //removeMapping(TokenSeq(NonDotTok))
-    //removeMapping(TokenSeq(NonDotTok, NonDotTok))
-    //removeMapping(TokenSeq(NonDotTok, NonDotTok, NonDotTok))
     cacheComputeTokenSeq = res
     computedForString = s
     computedForList = listTokens
     res
   }
-  
-  /**
-   * Returns a set of matching tokens before the end of the string or after the start of it beginning.
-   * The first integer is the start or the end of the matching token.
-   * The second integer is n such that the token is the nth one.
-   */
-  /*def before = true
-  def after = false
-  def matchingTokenSeq(s: String, atPos: Int, beforeOrAfter: Boolean=false, listTokens: List[Token]=Programs.listTokens): Iterable[(Start, TokenSeq, Index)] = {
-    // Iterates from smaller tokenseq to bigger ones.
-    if(beforeOrAfter) {
-      val ms = computetokenSeq(s, listTokens) 
-      for(i <- atPos to 0 by -1;
-          (tokseq, index) <- ms.getOrElse((i, atPos), Set.empty)) yield (i, tokseq, index)
-    } else {
-      val ms = computetokenSeq(s, listTokens)
-      for(j <- atPos to (s.length-1);
-          (tokseq, index) <- ms.getOrElse((atPos, j), Set())) yield (j, tokseq, index)
-    }
-  }*/
+
   /**
    * Returns a list of (Start, End) for tokens matching at the position, with the common index)
    */
@@ -1009,32 +1008,6 @@ class StringSolverAlgorithms {
     }
     cache.getOrElseUpdate(s, f)
   }
-  /*def cached[U, T](f: U => T)(implicit cache: MMap[U, T]): U => T = u => {
-    cache_call += 1
-    if(cache contains u) {
-      cache_hit += 1
-      if(advanced_stats) advanced_cache = advanced_cache + (u -> (advanced_cache.getOrElse(u, 0) + 1))
-    }
-    
-    cache.getOrElseUpdate(u, f(u))
-  }
-  def cached[U, V, T](f: (U, V) => T)(implicit cache: MMap[(U, V), T]): (U, V) => T = (u, v) => {
-    cache_call += 1
-    if(cache contains (u, v)) {
-      cache_hit += 1
-      if(advanced_stats) advanced_cache = advanced_cache + ((u, v) -> (advanced_cache.getOrElse((u, v), 0) + 1))
-    }
-    cache.getOrElseUpdate((u, v), f(u, v))
-  }
-  def cached[U, V, W, T](f: (U, V, W) => T)(implicit cache: MMap[(U, V, W), T]): (U, V, W) => T = (u, v, w) => {
-    cache_call += 1
-    if(cache contains (u, v, w)) {
-      cache_hit += 1
-      if(advanced_stats) advanced_cache = advanced_cache + ((u, v, w) -> (advanced_cache.getOrElse((u, v, w), 0) + 1))
-    }
-    cache.getOrElseUpdate((u, v, w), f(u, v, w))
-  }*/
-  
   /**
    * Generates a set of algebraic positions for a given position and a string.
    */

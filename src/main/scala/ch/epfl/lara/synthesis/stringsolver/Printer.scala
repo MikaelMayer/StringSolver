@@ -205,6 +205,8 @@ object Printer {
         val by = if(step == 1) "" else s" by $step"
         val from = if(false && offset == 1) "" else s" starting at $offset"
         t"a $size-digit number incrementing$by$from continuing $s"*/
+      case SpecialConversion(s, p) =>
+        t"*special from $s*"
       case _ =>
         s"UNKNOWN : $p"
     }

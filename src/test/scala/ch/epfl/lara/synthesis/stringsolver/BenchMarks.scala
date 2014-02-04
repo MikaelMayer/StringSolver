@@ -165,6 +165,7 @@ asdx.dat  | 3.dat.txt""", 1)
     val c = StringSolver()
     c.add("""Image401.jpg -> Image001.jpg""")
     c.add("""Image500.jpg -> Image100.jpg""")
+    c.add("""Image732.jpg -> Image332.jpg""")
     //c.add("""Image501.jpg -> Image101.jpg""")
     renderer(c)
     c.solve("""Image402.jpg""") should equal ("Image002.jpg")
@@ -172,7 +173,9 @@ asdx.dat  | 3.dat.txt""", 1)
   }
   "19. Rename files by -1  http://www.unix.com/shell-programming-scripting/197485-multiple-file-rename.html " in {
     val c = StringSolver()
+    c.setPosition(2)
     c.add("""file02.dat -> file01.jpg""")
+    c.setPosition(10)
     c.add("""file10.jpg -> file09.jpg""")
     renderer(c)
     c.solve("""file14.jpg""") should equal ("file13.jpg")
@@ -304,16 +307,16 @@ imagetokyo001.jpg | tokyo\pic-001.jpg""",1)
     val c = StringSolver()
     val input = (for(i <- 1 to 27) yield ("report_16032012_part" + i + ".pdf")) mkString(" | ")
     
-    c.add(s"""$input | 16032012\report.pdf""",27)
+    c.add(s"""$input | 16032012\\report.pdf""",27)
     renderer(c)
     val input2 = (for(i <- 1 to 35) yield ("ppt_12052010_part" + i + ".pdf")) mkString(" | ")
     c.solve(input2) should equal ("""12052010\ppt.pdf""")
   }
   "37. We have lots of mp3 files. we need to move each file to a different subdirectory based on the year of creating of the file, which is to be extracted from the file attribute. " in {
     val c = StringSolver()
-    c.add(s"""breathless.mp3  | 05 Oct 2005 | 2005\breathless.mp3""",2)
+    c.add(s"""breathless.mp3  | 05 Oct 2005 | 2005\\breathless.mp3""",2)
     renderer(c)
-    c.solve("untill_you.mp3  | 11 Sep 2005") should equal ("""2005\\untill_you.mp3""")
+    c.solve("until_you.mp3  | 11 Sep 2005") should equal ("2005"+"\\"+"until_you.mp3")
     c.solve("no_promises.mp3 | 10 Jan 2010") should equal ("""2010\no_promises.mp3""")
   }
   "38. Merge files, name each merged file as '<$1>_book.pdf' and put them in different subdirectories as shown below:" in {
@@ -321,9 +324,9 @@ imagetokyo001.jpg | tokyo\pic-001.jpg""",1)
     c.add(s"""microprocessor_chapter1.pdf | microprocessor_book.pdf 
 cormen_ch1.pdf  | cormen_book.pdf""", 1)
     renderer(c)
-    c.solve("microprocessor_chapter2.mp3") should equal ("""microprocessor_book.pdf""")
+    c.solve("microprocessor_chapter2.pdf") should equal ("""microprocessor_book.pdf""")
     c.solve("asrf_chap1.pdf") should equal("""asrf_book.pdf""")
-    c.solve("asrf_chap2.pdf") should equal("""asr2_book.pdf""")
+    c.solve("asr2_chap2.pdf") should equal("""asr2_book.pdf""")
     c.solve("asdff_c1.pdf") should equal("""asdff_book.pdf""")
     c.solve("cormen_ch40.pdf") should equal("""cormen_book.pdf""")
   }
@@ -331,7 +334,8 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
   "39. There are lots of different doc, jpg and mp3 files present in a directory. Move and rename all files to different subdirectories based on the creation year (from file attribute) and file type" in {
     val files = List("""c:\solar_eclipse.jpg""", """c:\northpole.jpg""", """c:\polar_bear.jpg""", """c:\abc.doc""", """c:\xyz.doc""", """c:\abtd.doc""", """c:\melt-the-snow.mp3""", """c:\some_tears.mp3""", """c:\again.mp3""")
     val Some((c, c2, s)) = Service.getPartition(List((files(0), "images"),(files(1), "images"),(files(3), "documents"),(files(4), "documents"),(files(6), "songs")))
-    
+    renderer(c)
+    renderer(c2)
     (files map (c.solve(_)) map s) should equal (List.fill(3)("images") ++ List.fill(3)("documents") ++ List.fill(3)("songs"))
   }
   
@@ -360,7 +364,7 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
     val c = StringSolver()
     c.add("""file1.txt | other.txt | more.txt | command file1.txt;lpr file1.txt;command other.txt;lpr other.txt...""", 3)
     renderer(c)
-    c.solve(""""file1.txt | other.txt | more.txt""") should equal ("""command file1.txt;lpr file1.txt;command other.txt;lpr other.txt;command more.txt;lpr more.txt""")
+    c.solve("""file1.txt | other.txt | more.txt""") should equal ("""command file1.txt;lpr file1.txt;command other.txt;lpr other.txt;command more.txt;lpr more.txt""")
   }
   
   "43. We have lots of files of the form [Date]-doc-[iter].pdf. For each file, split by date, merge and print the result" in {
@@ -401,5 +405,7 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
     val files = (for(j <- (1 to 9).toList) yield (s"test$j" + (if(j % 2 == 0) ".jpg" else ".pdf")))
     val Some((c, s)) = Service.getFilter(List(("test1.jpg", false), ("test2.pdf", true), ("test4.pdf", true)))
     s should equal (".pdf")
+    val pdf = files filter (c.solve(_) == ".pdf")
+    
   }
 }

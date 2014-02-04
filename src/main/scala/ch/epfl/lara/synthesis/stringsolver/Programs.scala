@@ -250,6 +250,15 @@ object Programs {
   case object CONVERT_LOWERCASE extends SubStrFlag { def id = 1 ; def apply(s: String) = s.toLowerCase() }
   case object CONVERT_UPPERCASE extends SubStrFlag { def id = 2 ; def apply(s: String) = s.toUpperCase() }
   case object UPPERCASE_INITIAL extends SubStrFlag { def id = 3 ; def apply(s: String) = if(s.length == 0) "" else s(0).toUpper.toString + s.substring(1, s.length)}
+
+  
+  case class SpecialConverter(f: String => String, acceptor: String => Boolean) extends Program {
+    def accepts(s: String): Boolean = acceptor(s)
+    def apply(s: String): String = f(s)
+  }
+  case class SpecialConversion(s: SubStr, p: SpecialConverter) extends AtomicExpr {
+    override def toString = "*Special*"
+  }
   
    /**
       The SubStr(vi; p1; p2) constructor makes use of two position expressions
@@ -263,7 +272,9 @@ object Programs {
       of regular expression r in vi, i.e., SubStr(vi; Pos(; r; c); Pos(r; ; c)).
       We often denote SubStr(vi; CPos(0); CPos(-1)) by simply vi.
    */
-  case class SubStr(vi: StringVariable, p1: Position, p2: Position, flag: SubStrFlag = NORMAL) extends AtomicExpr
+  case class SubStr(vi: StringVariable, p1: Position, p2: Position, flag: SubStrFlag = NORMAL) extends AtomicExpr {
+    assert(p2 != CPos(0))
+  }
   def SubStr2(vi: StringVariable, r: RegExp, c: IntegerExpr): SubStr = {
     SubStr(vi, Pos(Epsilon, r, c), Pos(r, Epsilon, c), NORMAL)
   }

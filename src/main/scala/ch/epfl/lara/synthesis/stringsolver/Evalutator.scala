@@ -247,7 +247,15 @@ object Evaluator {
                 
               case _ => BottomValue
       }
+  }
+    case SpecialConversion(e, c) =>
+      val res = evalProg(e)
+      res match {
+        case StringValue(e) =>
+          StringValue(c(e))
+        case _ =>
+          BottomValue
+      }
     case _ =>  BottomValue
     }
-  }
 }

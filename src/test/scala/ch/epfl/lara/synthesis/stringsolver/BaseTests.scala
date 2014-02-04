@@ -379,5 +379,24 @@ import f._
     println(Printer(c.takeBest))
     f.solve("Algorithm10.txt") should equal ("Algorithm10.txt")
   }
+  
+  it should "prefer constants over counters" in {
+    val f = StringSolver()
+    val c = f.add("Algorithm.txt -> 001.txt")
+    println(Printer(c.takeBest))
+    f.solve("Math.txt") should equal ("Math001.txt")
+  }
+  it should "convert number to months" in {
+    val f = StringSolver()
+    val c = f.add("4 8 03 12 -> april August mar Dec")
+    println(Printer(c.takeBest))
+    f.solve("2 3 10 5") should equal ("february March oct May")
+  }
+  it should "convert months to numbers" in {
+    val f = StringSolver()
+    val c = f.add("april August mar Dec -> 4 8 03 12")
+    println(Printer(c.takeBest))
+    f.solve("february March oct May") should equal ("2 3 10 5")
+  }
 }
 

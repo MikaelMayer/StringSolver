@@ -46,7 +46,7 @@ object Weights {
     /*case NumberMap(s, l, (o, step)) =>
       100 + weight(s) - 10 + (step-1)*10*/ // if s is smaller, the better.
     case Counter(length, start, step) =>
-      150 + Math.abs(step)*10
+      50 + length * 100 + Math.abs(step)*10
     case ConstStr(s) => 50 + s.size*100
     case s@SubStr(InputString(vi), Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
       100 + weight(vi) + weight(r2) + method.id*10
@@ -55,6 +55,7 @@ object Weights {
     case TokenSeq(t) => t.length*10
     case IntLiteral(i) => Math.abs(i)*3
     case Linear(i,w,j) => (i-1)*10+Math.max(j-1, 0)
+    case SpecialConversion(s, p) => weight(s)/10
     case NumTok => 8
     case AlphaNumTok => 8
     case AlphaTok => 9

@@ -75,11 +75,11 @@ class MainTest extends WordSpec with ShouldMatchers {
     Main.deleteMvHistory()
     val path = new File(Main.decodedPath).getAbsolutePath()
     Main.timeStampGiver = () => "T1"
-    Main.storeMvHistory(MvLog(path, true, "test.txt", "tist.txt"))
+    Main.storeMvHistory(MvLog(path, true, INPUT_FILE, "test.txt", "tist.txt"))
     Main.timeStampGiver = () => "T2"
-    Main.storeMvHistory(MvLog(path, false, "tost.txt", "tust.txt"))
+    Main.storeMvHistory(MvLog(path, false, INPUT_FILE, "tost.txt", "tust.txt"))
     println(Main.decodedPath)
-    Main.getMvHistory(new File(Main.decodedPath)) should equal (List(MvLog(path, true, "test.txt", "tist.txt", "T1"), MvLog(path, false, "tost.txt", "tust.txt", "T2")))
+    Main.getMvHistory(new File(Main.decodedPath)) should equal (List(MvLog(path, true, INPUT_FILE, "test.txt", "tist.txt", "T1"), MvLog(path, false, INPUT_FILE, "tost.txt", "tust.txt", "T2")))
     Main.deleteMvHistory()
     Main.getMvHistory(new File(Main.decodedPath)) should equal (Nil)
   }
