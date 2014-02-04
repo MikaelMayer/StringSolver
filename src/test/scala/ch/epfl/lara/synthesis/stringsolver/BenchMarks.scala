@@ -372,15 +372,18 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
     val c = StringSolver()
     c.add("""date1986-doc-1.pdf -> date1986/doc-1.pdf""")
     c.add("""date1987-doc-5.pdf -> date1987/doc-5.pdf""")
+    renderer(c)
     c.solve("""date1991-doc-3.pdf""") should equal ("""date1991/doc-3.pdf""")
     val files_after = for(i <- (1986 to 1995).toList) yield { s"date$i" :: (for(j <- (1 to 9).toList) yield s"doc-$j.pdf") }
     val m = StringSolver()
-    m.add(files_after.head, "convert date1986/doc_1.pdf date1986/doc2.pdf... date1986_doc.pdf")
-    m.solve(files_after.tail.head) should equal("convert date1986/doc_1.pdf date1986/doc2.pdf date1986/doc3.pdf date1986/doc4.pdf date1986/doc5.pdf date1986/doc6.pdf date1986/doc7.pdf date1986/doc8.pdf date1986/doc9.pdf date1986_doc.pdf")
+    m.add(files_after.head, "convert date1986/doc-1.pdf date1986/doc-2.pdf... date1986-doc.pdf")
+    renderer(m)
+    m.solve(files_after.tail.head)(0) should equal("convert date1987/doc-1.pdf date1987/doc-2.pdf date1987/doc-3.pdf date1987/doc-4.pdf date1987/doc-5.pdf date1987/doc-6.pdf date1987/doc-7.pdf date1987/doc-8.pdf date1987/doc-9.pdf date1987-doc.pdf")
     // ...
-    val final_pdfs = for(i <- (1986 to 1995).toList) yield s"""date${i}_doc.pdf"""
+    val final_pdfs = for(i <- (1986 to 1995).toList) yield s"""date${i}-doc.pdf"""
     val n = StringSolver()
     n.add(List(final_pdfs.head), "lpr " + final_pdfs.head)
+    renderer(n)
     n.solve(final_pdfs.tail.head) should equal ("lpr " + final_pdfs.tail.head)
   }
   
@@ -395,17 +398,26 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
     val mapping = filtered map { case file => s"cat header.txt $file > $file; lpr $file"}
     val m = StringSolver()
     m.add(List(files.head), mapping.head)
-    
+    renderer(m)
     for((file, map) <- (files.tail zip mapping.tail)) {
       m.solve(file) should equal (map)
     }
   }
   
-  "45. There is a folder containing lots of jpg and pdf files." in {
+  "45. There is a folder containing lots of jpg and pdf files. Delete pdf, Convert jpg to pdf, Print all pdf files." in {
     val files = (for(j <- (1 to 9).toList) yield (s"test$j" + (if(j % 2 == 0) ".jpg" else ".pdf")))
     val Some((c, s)) = Service.getFilter(List(("test1.jpg", false), ("test2.pdf", true), ("test4.pdf", true)))
     s should equal (".pdf")
-    val pdf = files filter (c.solve(_) == ".pdf")
+    val pdfs = files filter (c.solve(_) == ".pdf")
+    val n = StringSolver()
+    // Delete pdfs
+    n.add(pdfs, "rm " + pdfs.head + " " + pdfs.tail.head + "...")
+    renderer(n)
+    n.solve(pdfs)(0) should equal ("rm " + pdfs.mkString(" "))
     
+    val m = StringSolver()
+    m.add("test1.jpg -> convert test1.jpg test1.pdf;lpr test4.pdf")
+    renderer(m)
+    m.solve("test4.jpg") should equal ("convert test4.jpg test4.pdf;lpr test4.pdf")
   }
 }

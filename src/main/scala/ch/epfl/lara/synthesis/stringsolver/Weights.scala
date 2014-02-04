@@ -52,7 +52,7 @@ object Weights {
       100 + weight(vi) + weight(r2) + method.id*10
     case s@SubStr(InputString(vi), CPos(0), CPos(-1), method) => 130 + weight(vi)
     case s@SubStr(InputString(vi), p, pos, method) => 100 + weight(vi) + weight(p)(true) + weight(pos)(false) + method.id*10
-    case TokenSeq(t) => t.length*10
+    case TokenSeq(t) => t.map(token => weight(token)(true)).sum
     case IntLiteral(i) => Math.abs(i)*3
     case Linear(i,w,j) => (i-1)*10+Math.max(j-1, 0)
     case SpecialConversion(s, p) => weight(s)/10

@@ -65,6 +65,15 @@ object Main {
     def apply(n: Int) = prefix+n.toString
     def unapply(s: String): Option[Int] = if(s.startsWith(prefix)) Some(s.substring(prefix.length).toInt) else None
   }
+  object MultipleInputs {
+    def unapply(s: String): Option[Int] = s match {
+      case INPUT_FILE_LIST(n) => Some(n)
+      case INPUT_FILE_CONTENT(n) => Some(n)
+      case INPUT_DIR_CONTENT(n) => Some(n)
+      case INPUT_FILE_PROPERTIES(n) => Some(n)
+      case _ => None
+    }
+  }
     
   object INPUT_FILE_LIST extends ParameterInput{
     val prefix = "INPUT_FILE_LIST"
@@ -75,12 +84,21 @@ object Main {
   object INPUT_DIR_CONTENT extends ParameterInput {
     val prefix = "INPUT_DIR_CONTENT"
   }
+  object INPUT_FILE_PROPERTIES extends ParameterInput {
+    val prefix = "INPUT_FILE_PROPERTIES"
+  }
   implicit class NatureString(s: Logger) {
     def onlyFiles: Boolean = {
       s.nature match {
-        case INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_) => true
+        case INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_) | INPUT_FILE_PROPERTIES(_) => true
         case INPUT_DIR_CONTENT(_) | INPUT_DIRECTORY => false
         case _ => true
+      }
+    }
+    def isProperties: Boolean = {
+      s.nature match {
+        case INPUT_FILE_PROPERTIES(_) => true
+        case _ => false
       }
     }
   }
@@ -125,6 +143,25 @@ object Main {
       } else None
     }
     def apply(): String = "filter"
+  }
+  
+  def readProperties(path: String): List[String] = {
+    readProperties(new File(decodedPath, path))
+  }
+  
+  def readProperties(file: File): List[String] = {
+    Files.getOwner(Paths.get(file.getAbsolutePath())).getName().replaceAll(".*\\\\", "")::
+    getDate(file.lastModified, "yyyy"):: 
+    getDate(file.lastModified, "MM"):: 
+    getDate(file.lastModified, "dd")::
+    getDate(file.lastModified, "hh")::
+    getDate(file.lastModified, "mm")::
+    getDate(file.lastModified, "ss")::Nil
+  }
+  
+  def getDate(milliseconds: Long, format: String): String = {
+    val sdf = new java.text.SimpleDateFormat(format)
+    return sdf.format(milliseconds)
   }
   
   def readFile(path: String): String = {
@@ -193,15 +230,23 @@ object Main {
   object MvLog {
     def unapply(s: String): Option[MvLog] = {
       val a = s.split(";")
-      if(a.length == 6) {
-        Some(MvLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
-      } else None
+      val nature = a(3)
+      val filesAndOutput = a.drop(4).toList
+      val (input_files, output): (List[String], String) = nature match {
+        case MultipleInputs(n) => (filesAndOutput.take(n), filesAndOutput.drop(n).head)
+        case _ => (List(filesAndOutput.head), filesAndOutput.tail.head)
+      }
+      try {
+        Some(MvLog(a(1), a(2).toBoolean, nature, input_files, output, a(0)))
+      } catch {
+        case e: java.lang.ArrayIndexOutOfBoundsException => None
+      }
     }
   }
-  case class MvLog(dir: String, performed: Boolean, nature: String, file1: String, file2: String, time: String = timeStampGiver()) extends Logger {
-    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";"+file2
+  case class MvLog(dir: String, performed: Boolean, nature: String, file1AndProperties: List[String], file2: String, time: String = timeStampGiver()) extends Logger {
+    override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1AndProperties.mkString(";") +";"+file2
     def setPerformed(b: Boolean) = this.copy(performed = true)
-    def input = List(file1)
+    def input = file1AndProperties
   }
   implicit object MvLogFile extends LoggerFile[MvLog] {
     def history_file = HISTORY_MV_FILE
@@ -214,18 +259,17 @@ object Main {
   object AutoLog {
     def unapply(s: String): Option[AutoLog] = {
       val a = s.split("\\|\\|").toList
-      if(a.length >= 7) {
+      try {
         val filesAndCommand = a.drop(5)
         val nature = a(4)
         val (input_files, commands) = nature match {
-            case INPUT_FILE | INPUT_DIRECTORY => (List(filesAndCommand.head), filesAndCommand.tail)
-            case INPUT_FILE_LIST(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
-            case INPUT_FILE_CONTENT(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
-            case INPUT_DIR_CONTENT(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
-            case _ => throw new Error(s"Unknown nature: $nature")
+          case MultipleInputs(n) => (filesAndCommand.take(n), filesAndCommand.drop(n))
+          case _ => (List(filesAndCommand.head), filesAndCommand.tail)
         }
         Some(AutoLog(a(1), a(2).toBoolean, a(3).toBoolean, a(4), input_files, commands, a(0)))
-      } else None
+      } catch {
+	    case e: java.lang.ArrayIndexOutOfBoundsException => None
+	  }
     }
   }
   case class AutoLog(dir: String, performed: Boolean, content: Boolean, nature: String, input_files: List[String], commands: List[String], time: String = timeStampGiver()) extends Logger {
@@ -244,9 +288,11 @@ object Main {
   object PartitionLog {
     def unapply(s: String): Option[PartitionLog] = {
       val a = s.split(";")
-      if(a.length == 6) {
+      try {
         Some(PartitionLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
-      } else None
+      } catch {
+	    case e: java.lang.ArrayIndexOutOfBoundsException => None
+	  }
     }
   }
   case class PartitionLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
@@ -265,9 +311,11 @@ object Main {
   object FilterLog {
     def unapply(s: String): Option[FilterLog] = {
       val a = s.split(";")
-      if(a.length == 6) {
+      try {
         Some(FilterLog(a(1), a(2).toBoolean, a(3), a(4), a(5), a(0)))
-      } else None
+      } catch {
+	      case e: java.lang.ArrayIndexOutOfBoundsException => None
+	    }
     }
   }
   case class FilterLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
@@ -456,7 +504,12 @@ object Main {
     
     val nested_level = examples.last match { case MvLog(dir, performed, nature, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
     val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
-    val files: Array[List[FileName]] = listFiles(nested_level, onlyFiles=onlyFiles, filter=opt.filter)
+    val properties = opt.properties | examples.lastOption.map(_.isProperties).getOrElse(false)
+    val files_raw: Array[List[FileName]] = listFiles(nested_level, onlyFiles=onlyFiles, filter=opt.filter)
+    
+    val files = if(opt.properties) {
+      files_raw.map{listFiles => listFiles.head::readProperties(listFiles.head)}
+    } else files_raw
 
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, nature, in, out, time) =>
@@ -464,24 +517,25 @@ object Main {
         
         val index = files.indexWhere(s => s.startsWith(List(in)))
         c.setPosition(if(index == -1) files.indexWhere(s => s.startsWith(List(out))) else index)
-        c.add(List(in), List(out))(0)
+        c.add(in, List(out))(0)
     }
     if(debug) println(s"Files: ${files.mkString}")
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
-      //println("Solving problem...")
       if(debug) println(s"Solving with at most 2")
       
       val attempts = (() => c.solve(),   (e: List[FileName]) => c.solve(e))::
                      (() => c.solveLast(), (e: List[FileName]) => c.solveLast(e))::Nil
       attempts find { case (computation, solver) => 
         c.resetCounter()
+        if(debug) println(s"Finding computation")
         computation() match {
-          case Some(Concatenate(List(ConstStr(a)))) => true
+          case Some(Concatenate(List(ConstStr(a)))) => println(s"No generalization found. Aborting")
+            true
           case Some(prog) =>
-            if(debug || explain) displayProg(prog)
+            if(debug || explain) displayProg(prog, properties=properties)
             if(opt.produceBash) {
               // TODO : Produce bash code like this one:
               """find . \( -name '*.jpg' -o -name '*.png' \) -print  | (i=0; while read f; do 
@@ -492,6 +546,7 @@ object Main {
             if(!explain) {
               // Removes already performed tasks from the mapping
              val mappedFiles = files map { f => solver(f) }
+             println(mappedFiles)
               mapping = files zip mappedFiles filterNot { case (f, m) => m.exists(_ == "") || alreadyPerformed(f.head) }
               if(mapping.nonEmpty) {
                 if(perform) {
@@ -533,6 +588,8 @@ object Main {
           Some((options.copy(contentFlag=true), remaining))
         case (("-b" | "--bash")::remaining, options) => // Produces a bash script for the mapping.
           Some((options.copy(produceBash=true), remaining))
+        case (("-p" | "--properties")::remaining, options) => // Includes the file's properties as the input (not compatible with content)
+          Some((options.copy(properties=true), remaining))
         case (("-s" | "--simple")::remaining, options) => // do not perform suggestions
           Some((options.copy(generalize=false), remaining))
         case (("-d" | "--debug")::remaining, options) => // activates debug
@@ -552,6 +609,7 @@ object Main {
     test: Boolean = false,
     performAll: Boolean = false, 
     contentFlag: Boolean = false,
+    properties: Boolean = false,
     produceBash: Boolean = false,
     debug: Boolean = false,
     filter: Boolean = false,
@@ -587,12 +645,16 @@ object Main {
         val file1 = if(sfile1.indexOf("\\") != -1 || sfile1.indexOf("/") != -1) new File(sfile1) else new File(decodedPath, sfile1)
         val file2 = if(sfile2.indexOf("\\") != -1 || sfile2.indexOf("/") != -1) new File(sfile2) else new File(decodedPath, sfile2)
         if(!file1.exists()) { println(s"file $sfile1 does not exist"); return(); }
+        var properties: List[String] = Nil
         val nature = if(file1.isDirectory()) {
           INPUT_DIRECTORY
         } else {
-          INPUT_FILE
+          if(opt.properties) {
+            properties = readProperties(file1)
+            INPUT_FILE_PROPERTIES(1+properties.length)
+          } else INPUT_FILE
         }
-        storeMvHistory(MvLog(decodedPathFile.getAbsolutePath(), opt.perform, nature, sfile1, sfile2))
+        storeMvHistory(MvLog(decodedPathFile.getAbsolutePath(), opt.perform, nature, sfile1::properties, sfile2))
         if(opt.perform) move(sfile1, sfile2)
         if(debug) println("Explaining " + opt.explain + " performing " + opt.perform)
         if(remaining != Nil) {
@@ -634,16 +696,7 @@ object Main {
             Nil
         }
         .sortBy(alphaNumericalOrder)
-        
-        /*val nature = if(contentFlag) {
-          INPUT_FILE_CONTENT(input_files.length)
-        } else input_files match {
-          case List(file) => if(new File(dir, file).isDirectory()) INPUT_DIRECTORY else {
-            INPUT_FILE
-          }
-          case Nil => throw new Error("No input file provided")
-          case l => INPUT_FILE_LIST(input_files.length)
-        }*/
+
         
         if(command.indexOf("...") != -1) {
           if(debug) println("Found '...' Going to decode the action for all present files.")
@@ -1206,16 +1259,40 @@ object Main {
     //println(s"move $file $to")
   }
   
-  def displayProg(prog: Program, lines: Boolean = false, folder: Boolean = false, prefix: String = "", suffix: String = ""): Unit = {
+  def displayProg(prog: Program, lines: Boolean = false, folder: Boolean = false, properties: Boolean = false, prefix: String = "", suffix: String = ""): Unit = {
     val replaceinput = if(lines) "line" else if(folder) "folder name" else "file name"
     val tmp = Printer(prog)
-    val first = if("(?<!first) input".r.findFirstIn(tmp) != None) "first " else ""
+    val first = if("(?<!first) input".r.findFirstIn(tmp) != None && !properties) "first " else ""
     val second = if(lines) "first" else "second"
     val third = if(lines) "second" else "third"
+    val fourth = if(lines) "third" else "fourth"
+    val fifth = if(lines) "fourth" else "fifth"
+    val sixth = if(lines) "fifth" else "sixth"
+    val seventh = if(lines) "sixth" else "seventh"
+    val eighth = if(lines) "seventh" else "eighth"
+    val secondinput = if(properties) "owner" else s"$second $replaceinput"
+    val thirdinput = if(properties) "year" else s"$third $replaceinput"
+    val fourthinput = if(properties) "month" else s"$fourth $replaceinput"
+    val fifthinput = if(properties) "day" else s"$fifth $replaceinput"
+    val sixthinput = if(properties) "hour" else s"$sixth $replaceinput"
+    val seventhinput = if(properties) "minut" else s"$seventh $replaceinput"
+    val eighthinput = if(properties) "second" else s"$eighth $replaceinput"
+    val lastinput = if(properties) "second" else s"last $replaceinput"
+    val penultimateinput = if(properties) "minut" else s"penultimate $replaceinput"
+    val antepenultimateinput = if(properties) "hour" else s"antepenultimate $replaceinput"
+    
     println("# " +prefix+ tmp.replaceAll("first input", if(lines) "file name" else s"${first}$replaceinput")
         .replaceAll("all inputs", s"all ${replaceinput}s")
-        .replaceAll("second input", s"$second $replaceinput")
-        .replaceAll("third input", s"$third $replaceinput")
+        .replaceAll("second input", s"$secondinput")
+        .replaceAll("third input", s"$thirdinput")
+        .replaceAll("4th input", s"$fourthinput")
+        .replaceAll("5th input", s"$fifthinput")
+        .replaceAll("6th input", s"$sixthinput")
+        .replaceAll("7th input", s"$seventhinput")
+        .replaceAll("8th input", s"$eighthinput")
+        .replaceAll("last input", s"$lastinput")
+        .replaceAll("antepenultimateinput input", s"$antepenultimateinput")
+        .replaceAll("penultimate input", s"$penultimateinput")
         .replaceAll(" input ", s" $replaceinput ")
         .replaceAll("line ([a-z][a-z0-9]*)\\+2", "line $1+1")
         .replaceAll("line ([a-z][a-z0-9]*)\\+3", "line $1+2")
