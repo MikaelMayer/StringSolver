@@ -183,7 +183,7 @@ object ProgramsSet {
   }
   
   def isCommonSeparator(s: String) = s match {
-    case "," | "/" | " " | "-"| "#" | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" => true
+    case "," | "/" | " " | "-"| "#" | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" | "_" => true
     case _ => false
   }
   
@@ -575,13 +575,17 @@ object ProgramsSet {
     case (SSubStr(InputString(vi@IntLiteral(i)), pj, pk, m1), SSubStr(InputString(vj@IntLiteral(j)), pl, pm, m2)) =>
       if(i == j || (unify.isDefined && ((i == j + 1) || (i == j - 1)))) {
         val mm = m1 intersect m2
+        if(mm.isEmpty) SEmpty else {
         val pp1 = (for(p1 <- pj; p2 <- pl; res <- notEmpty(intersectPos(p1, p2))) yield res)
-        val pp2 = (for(p1 <- pk; p2 <- pm; res <- notEmpty(intersectPos(p1, p2))) yield res)
-        if(pp1.isEmpty || pp2.isEmpty || mm.isEmpty) SEmpty else {
-          if(i == j) SSubStr(InputString(vi), pp1, pp2, mm)
-          else if(i == j - 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, i)), pp1, pp2, mm)
-          else if(i == j + 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, j)), pp1, pp2, mm)
-          else SEmpty
+          if(pp1.isEmpty) SEmpty else {
+            val pp2 = (for(p1 <- pk; p2 <- pm; res <- notEmpty(intersectPos(p1, p2))) yield res)
+            if(pp2.isEmpty) SEmpty else {
+              if(i == j) SSubStr(InputString(vi), pp1, pp2, mm)
+              else if(i == j - 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, i)), pp1, pp2, mm)
+              else if(i == j + 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, j)), pp1, pp2, mm)
+              else SEmpty
+            }
+          }
         }
       } else SEmpty
     case (SSubStr(InputString(vi: Linear), pj, pk, m1), SSubStr(InputString(vj: Linear), pl, pm, m2)) =>

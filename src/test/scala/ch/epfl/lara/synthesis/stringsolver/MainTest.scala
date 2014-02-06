@@ -35,11 +35,11 @@ class MainTest extends WordSpec with ShouldMatchers {
   
   "Service should partition : Name of categories unrelated to the name of files." in {
      //    Example 1: Name of categories unrelated to the name of files.
-     val Some((c, c2, s)) = Service.getPartition(List(("abc.txt","blue"), ("defg.txt","blue"), ("hijk.jpg","red"), ("lmnop.jpg","red")))
+     val Some((c, optsolv, s)) = Service.getPartition(List(("abc.txt","blue"), ("defg.txt","blue"), ("hijk.jpg","red"), ("lmnop.jpg","red")))
      c.solve("file.txt") should equal (".txt")
      c.solve("file.jpg") should equal (".jpg")
      c.solve("file.pdf") should equal (".pdf")
-     c2.solve(".txt") should equal ("")
+     optsolv match {case Some(c2) => c2.solve(".txt") should equal ("") case _ => }
      s(".txt") should equal ("blue")
      s(".jpg") should equal ("red")
      s(".pdf") should equal (".pdf")
@@ -51,7 +51,7 @@ class MainTest extends WordSpec with ShouldMatchers {
      c.solve("file.txt") should equal (".txt")
      c.solve("file.jpg") should equal (".jpg")
      c.solve("file.pdf") should equal (".pdf")
-     //c2.solve(".txt") should equal ("3") // Do not call because else the counter will increment and the following tests would be wrong
+     //c2.get.solve(".txt") should equal ("3") // Do not call because else the counter will increment and the following tests would be wrong
      s(".txt") should equal ("1")
      s(".jpg") should equal ("2")
      s(".pdf") should equal ("3")
@@ -60,11 +60,11 @@ class MainTest extends WordSpec with ShouldMatchers {
   
   "Service should partition : Name of categories related to the name of files." in {
      //Example 3: Name of categories related to the name of files.
-     val Some((c, c2, s)) = Service.getPartition(List(("abc.txt","category-txt"), ("defg.txt","category-txt"), ("hijk.jpg","category-jpg"), ("lmnop.jpg","category-jpg")))
+     val Some((c, optsolv, s)) = Service.getPartition(List(("abc.txt","category-txt"), ("defg.txt","category-txt"), ("hijk.jpg","category-jpg"), ("lmnop.jpg","category-jpg")))
      c.solve("file.txt") should equal (".txt")
      c.solve("file.jpg") should equal (".jpg")
      c.solve("file.pdf") should equal (".pdf")
-     c2.solve(".pdf") should equal ("category-pdf")
+     optsolv match {case Some(c2) => c2.solve(".pdf") should equal ("category-pdf") case _ => }
      s(".txt") should equal ("category-txt")
      s(".jpg") should equal ("category-jpg")
      s(".pdf") should equal ("category-pdf")
@@ -73,15 +73,15 @@ class MainTest extends WordSpec with ShouldMatchers {
   
   "Main should keep history" in {
     Main.deleteMvHistory()
-    val path = new File(Main.decodedPath).getAbsolutePath()
+    val path = new File(Main.workingDirAbsFile).getAbsolutePath()
     Main.timeStampGiver = () => "T1"
-    Main.storeMvHistory(MvLog(path, true, INPUT_FILE, "test.txt", "tist.txt"))
+    Main.storeMvHistory(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt"))
     Main.timeStampGiver = () => "T2"
-    Main.storeMvHistory(MvLog(path, false, INPUT_FILE, "tost.txt", "tust.txt"))
-    println(Main.decodedPath)
-    Main.getMvHistory(new File(Main.decodedPath)) should equal (List(MvLog(path, true, INPUT_FILE, "test.txt", "tist.txt", "T1"), MvLog(path, false, INPUT_FILE, "tost.txt", "tust.txt", "T2")))
+    Main.storeMvHistory(MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt"))
+    println(Main.workingDirAbsFile)
+    Main.getMvHistory(new File(Main.workingDirAbsFile)) should equal (List(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt", "T1"), MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt", "T2")))
     Main.deleteMvHistory()
-    Main.getMvHistory(new File(Main.decodedPath)) should equal (Nil)
+    Main.getMvHistory(new File(Main.workingDirAbsFile)) should equal (Nil)
   }
   
   "Main should suggest renaming" in {
@@ -104,17 +104,17 @@ class MainTest extends WordSpec with ShouldMatchers {
     
     try {
       import Main._
-      Main.decodedPath = tmpDir.getAbsolutePath()
+      Main.workingDirAbsFile = tmpDir.getAbsolutePath()
       Main.deleteMvHistory()
       
       
-      c1 = new File(decodedPath, "infoAutocad.log")
-      c2 = new File(decodedPath, "mathAnalyse.log")
-      c3 = new File(decodedPath, "physiquePlasma.log")
+      c1 = new File(workingDirAbsFile, "infoAutocad.log")
+      c2 = new File(workingDirAbsFile, "mathAnalyse.log")
+      c3 = new File(workingDirAbsFile, "physiquePlasma.log")
       
-      cc1 = new File(decodedPath, "01_autocad_info.txt")
-      cc2 = new File(decodedPath, "02_analyse_math.txt")
-      cc3 = new File(decodedPath, "03_plasma_physique.txt")
+      cc1 = new File(workingDirAbsFile, "01_autocad_info.txt")
+      cc2 = new File(workingDirAbsFile, "02_analyse_math.txt")
+      cc3 = new File(workingDirAbsFile, "03_plasma_physique.txt")
       
       c1.createNewFile()
       c2.createNewFile()
@@ -157,7 +157,7 @@ class MainTest extends WordSpec with ShouldMatchers {
     }
     tmpDir.list() foreach { e => new File(tmpDir, e).delete()}
     
-    Main.decodedPath = tmpDir.getAbsolutePath()
+    Main.workingDirAbsFile = tmpDir.getAbsolutePath()
     Main.auto(List("touch file.txt"))
     val f = new File(tmpDir, "file.txt")
     val p = new File(tmpDir, "file.pdf")
@@ -202,23 +202,23 @@ class MainTest extends WordSpec with ShouldMatchers {
     
     try {
       import Main._
-      decodedPath = tmpDir.getAbsolutePath()
+      workingDirAbsFile = tmpDir.getAbsolutePath()
       Main.deleteAutoHistory()
       
-      c1 = new File(decodedPath, "Algorithms")
-      c2 = new File(decodedPath, "Maths")
-      c3 = new File(decodedPath, "Algebras")
+      c1 = new File(workingDirAbsFile, "Algorithms")
+      c2 = new File(workingDirAbsFile, "Maths")
+      c3 = new File(workingDirAbsFile, "Algebras")
       
-      a1 = for(i <- 1 to 3) yield new File(decodedPath, s"Algorithm$i.txt")
-      a2 = for(i <- 1 to 5) yield new File(decodedPath, s"Math$i.txt")
-      a3 = for(i <- 1 to 11) yield new File(decodedPath, s"Algebra$i.txt")
-      b1 = for(i <- 1 to 3) yield new File(decodedPath, s"Algorithms/Algorithm$i.pdf")
-      b2 = for(i <- 1 to 5) yield new File(decodedPath, s"Maths/Math$i.pdf")
-      b3 = for(i <- 1 to 11) yield new File(decodedPath, s"Algebras/Algebra$i.pdf")
+      a1 = for(i <- 1 to 3) yield new File(workingDirAbsFile, s"Algorithm$i.txt")
+      a2 = for(i <- 1 to 5) yield new File(workingDirAbsFile, s"Math$i.txt")
+      a3 = for(i <- 1 to 11) yield new File(workingDirAbsFile, s"Algebra$i.txt")
+      b1 = for(i <- 1 to 3) yield new File(workingDirAbsFile, s"Algorithms/Algorithm$i.pdf")
+      b2 = for(i <- 1 to 5) yield new File(workingDirAbsFile, s"Maths/Math$i.pdf")
+      b3 = for(i <- 1 to 11) yield new File(workingDirAbsFile, s"Algebras/Algebra$i.pdf")
       
-      cc1 = new File(decodedPath, "AlgorithmsBook.pdf")
-      cc2 = new File(decodedPath, "MathsBook.pdf")
-      cc3 = new File(decodedPath, "AlgebrasBook.pdf")
+      cc1 = new File(workingDirAbsFile, "AlgorithmsBook.pdf")
+      cc2 = new File(workingDirAbsFile, "MathsBook.pdf")
+      cc3 = new File(workingDirAbsFile, "AlgebrasBook.pdf")
       
       for(a <- as; f <- a) f.createNewFile()
 

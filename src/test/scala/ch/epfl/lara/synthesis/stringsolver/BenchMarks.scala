@@ -335,7 +335,7 @@ cormen_ch1.pdf  | cormen_book.pdf""", 1)
     val files = List("""c:\solar_eclipse.jpg""", """c:\northpole.jpg""", """c:\polar_bear.jpg""", """c:\abc.doc""", """c:\xyz.doc""", """c:\abtd.doc""", """c:\melt-the-snow.mp3""", """c:\some_tears.mp3""", """c:\again.mp3""")
     val Some((c, c2, s)) = Service.getPartition(List((files(0), "images"),(files(1), "images"),(files(3), "documents"),(files(4), "documents"),(files(6), "songs")))
     renderer(c)
-    renderer(c2)
+    c2.foreach(renderer(_))
     (files map (c.solve(_)) map s) should equal (List.fill(3)("images") ++ List.fill(3)("documents") ++ List.fill(3)("songs"))
   }
   

@@ -98,6 +98,7 @@ object Printer {
           case NORMAL => ""
           case CONVERT_UPPERCASE => " uppercase"
           case CONVERT_LOWERCASE => " lowercase"
+          case UPPERCASE_INITIAL => " first-letter-uppercase"
           case _ => mm.toString
         }
         val sv1 = v1 match {
@@ -116,14 +117,14 @@ object Printer {
             t"the $cs$m occurrence of $r1 in $sv1"
           case (CPos(0), CPos(d)) if d >= 1 =>
             val chars = if(d == 1) "char" else s"$d chars"
-            t"the first$m $chars in $sv1"
+            t"the first$m $chars of $sv1"
           case (CPos(i), CPos(-1)) if i <= -2 =>
             val chars = if(i == -2) "char" else s"$i chars"
-            t"the last$m $chars in $sv1"
+            t"the last$m $chars of $sv1"
           case (CPos(i), CPos(j)) if i+1 == j && i >= 0=>
-            t"the ${numeral(i+1)} char in $sv1"
+            t"the ${numeral(i+1)} char of $sv1"
           case (CPos(i), CPos(j)) if i+1 == j && j < 0=>
-            t"the ${numeral(-i-1)} char from the end in $sv1"
+            t"the ${numeral(-i-1)} char from the end of $sv1"
           case (CPos(i), CPos(j)) if i < j && i >= 0 =>
             t"the substring of size ${j-i} starting at the ${numeral(i+1)} char in $sv1"
           case (c, d) =>

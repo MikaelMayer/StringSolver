@@ -135,7 +135,7 @@ object Service {
      s(".pdf") should equal ("category-pdf")
      s(".png") should equal ("category-png")
    */
-  def getPartition(examples: Seq[(String, String)], c: StringSolver = StringSolver(), c2: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, StringSolver, String => String)] = {
+  def getPartition(examples: Seq[(String, String)], c: StringSolver = StringSolver(), c2: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, Option[StringSolver], String => String)] = {
     val debug = opt.debug || c.isVerbose
     c.setUseNumbers(false)
     c.setUseDots(false)
@@ -256,7 +256,8 @@ object Service {
         }
         c2.add(List(representative), category)
     }
-    Some((final_c, c2, new (String => String) {
+    val extractor = if(c2.solve() != None) Some(c2) else None
+    Some((final_c, extractor, new (String => String) {
       val substring_to_category_map = MMap() ++ substring_to_category
       def apply(representative: String): String = {
         substring_to_category_map.getOrElseUpdate(representative, {

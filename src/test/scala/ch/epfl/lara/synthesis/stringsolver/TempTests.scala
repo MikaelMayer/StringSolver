@@ -21,9 +21,14 @@ class TempTests  extends FlatSpec with ShouldMatchers {
   }
   
   "Your test" should "work faster" in {
-    val f = StringSolver()
-    val c = f.add("april August mar Dec -> 4 8 03 12")
-    println(Printer(c.takeBest))
-    f.solve("february March oct May") should equal ("2 3 10 5")
+    val c = StringSolver()
+    c.setVerbose(true)
+    c.setTimeout(10)
+    c.setLoopLevel(0)
+    c.add(List("birthday",".txt"), "birthday01.txt")
+    renderer(c)
+    c.add(List("log",".txt"), "log02.txt")
+    renderer(c)
+    c.solve("truc | .avi") should equal ("""truc03.avi""")
   }
 }

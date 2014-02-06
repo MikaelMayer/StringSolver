@@ -7,9 +7,9 @@ Build using sbt 0.13 and scala 2.10.3.
 
 - Supports incremental numbering.
 - "..." continues an expression if there is a loop.
-- Automated file renaming commands
-- Automated file processing commands
-- Automated file filter and partition commands
+- Semi-automated file renaming commands
+- Semi-automated file processing commands
+- Semi-automated file filter and partition commands
 
 ## Automated Bash commands
 
@@ -24,7 +24,7 @@ alias mv='java -jar "[/path/to/target/scala/]stringsolver_2.10-1.0-one-jar.jar" 
 alias auto='java -jar "[/path/to/target/scala/]/stringsolver_2.10-1.0-one-jar.jar" auto'
 ```
 
-### Automated Renaming
+### Semi-automated Renaming
 
 [![ScreenShot](http://i1.ytimg.com/vi/F9mUIPK7h-I/mqdefault.jpg)](http://youtu.be/F9mUIPK7h-I)
 
@@ -46,15 +46,20 @@ This is equivalent to perform the global transformation in a single line using `
 mv -a file1 file2
 ```
 
-For testing, you can use `mv -e` alone to have an high-level overview of the transformation, or `mv -t` alone to visualize the transformation.
+There are other commands after a renaming is done:
 
-Adding options `-e` or `-t` along with filenames helps the system to refine the request without touching any files.
+* `mv -e` or `--explain` provides a high-level english explanation of the transformation
+* `mv -t` or `--test` provides a visualization of the transformation if applied.
 
-If you experience trouble with the `mv` command, you can always run `mv --clear` to clear the history stored in a temporary file.
+Adding options `-e` or `-t` along with filenames helps the system to refine the request without modifying any files.
+
+* `-p or --properties` provides owner name and last modification date.
+
+If you experience trouble with the `mv` command, you can always use the `-c` or `--clear` option to clear the history stored in a temporary file.
 
 To produce an equivalent bash script which would produce the result, add the option `-b` or `--bash`
 
-### Automated bash commands
+### Semi-automated bash commands
 
 [![ScreenShot](http://i1.ytimg.com/vi/yaNr-JDc8tA/mqdefault.jpg)](http://youtu.be/yaNr-JDc8tA)
 
@@ -106,7 +111,7 @@ auto -t "convert Algebra2Week5.txt Week5/Algebra2.pdf;rm Algebra2Week5.txt"
 
 If you experience trouble with the `auto` command, you can always run `auto --clear` to clear the history stored in a temporary file.
 
-### Partition commands
+### Semi-automated partition commands
 
 If you have a set of files, by providing at least two files of each partition for at least two partitions, you can split the files into as many folders as there are partitions.
 For example:
@@ -120,7 +125,7 @@ It will move all files ending with `.jpg` to images, all files ending with `.txt
 
 Provided partition names can be unrelated constants (red, blue, etc.), numbers (1, 2, 3...), strings transformation from the common substring of each partition (set-TXT,set-JPG,....) or any combination of these three.
 
-### Filter commands
+### Semi-automated filter commands
 
 `filter` is slightly different from the previous commands. It is similar to partition, in the sense that it can move files to different folder. The difference is that it separates files given a property, and is lazy to move files, so it can be used for the other commands.
 It has the --test option by default and can effectively move files only when using the `filter` alone or if the modifier `--auto` is set.

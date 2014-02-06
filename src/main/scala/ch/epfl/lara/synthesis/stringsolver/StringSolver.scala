@@ -74,7 +74,7 @@ class StringSolver {
   private var inputList = List[List[String]]()
   private var outputList = List[List[String]]()
   
-  private var extra_time_to_merge = 1f
+  private var extra_time_to_merge = 2f
   private var extra_time_to_compute_loop = 0.5f
   private var extra_time_to_resolve = 2f
   
@@ -189,7 +189,8 @@ class StringSolver {
     if(currentPrograms == null) {
       currentPrograms = newProgramSets
     } else {
-      if(ff.verbose) println("Computing intersection with previous programs...")
+      val waiting_seconds =  (ff.TIMEOUT_SECONDS * extra_time_to_merge).toInt
+      if(ff.verbose) println(s"Computing intersection with previous programs... (waiting $waiting_seconds seconds)")
       val intersectionsFuture = future {
         for(i <-0 until currentPrograms.length) yield {
           //println(s"Intersecting programs $i")
@@ -198,7 +199,7 @@ class StringSolver {
         //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
       }
       val intersections = try {
-        Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * extra_time_to_merge).seconds)
+        Await.result(intersectionsFuture, waiting_seconds.seconds)
       } catch {
         case e: TimeoutException  => 
           if(ff.verbose) println("Intersection took too much time! Returning empty")
@@ -717,7 +718,7 @@ class StringSolverAlgorithms {
         //dummy8 = (if(verbose) println(s"k1 $k1") else ());
         e1 = subDag(k1, k2, liteOrFull)) {
       if(timeout) {if(verbose) println("exited loop of generateLoop because timed out"); return Wp }
-      if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
+      //if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
       val (e, time) = timedScope(if(liteOrFull == LITE) {
         unify(e1, e2, w)  // If unify results only in constants
       } else {
@@ -812,7 +813,7 @@ class StringSolverAlgorithms {
   def generateSubString(σ: Input_state, s: String, pos: Int = -1): Set[SAtomicExpr] = cached((σ, s), cacheGenerateSubstring){
     var result = Set.empty[SAtomicExpr]
     if(!extractSpaces && s == " ") return result
-    if(verbose) println(s"Going to extract $s from $σ")
+    //if(verbose) println(s"Going to extract $s from $σ")
     for(vi <- 0 until σ.inputs.length if !timeoutGenerateStr) {
       val σvi =  σ.inputs(vi)
       for((k, m) <- s substringWithCaseOf σvi if !timeoutGenerateStr) {
