@@ -24,3 +24,9 @@ seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 libraryDependencies += "commons-lang" % "commons-lang" % "2.6"
 
 libraryDependencies +=  "org.scalatest" % "scalatest_2.10.0-RC5" % "2.0.M5-B1" 
+
+resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
+ 
+libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.2.3"
+  
+libraryDependencies += "com.typesafe.akka" %% "akka-remote" % "2.2.3"

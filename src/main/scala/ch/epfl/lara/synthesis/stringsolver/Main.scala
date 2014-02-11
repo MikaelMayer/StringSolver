@@ -121,7 +121,7 @@ object Main {
   
   final object Move {
     def unapply(s: String): Option[Unit] = {
-      if(s == "mv" || s.toLowerCase() == "move") {
+      if(s.toLowerCase() == apply() || s.toLowerCase() == "move") {
         Some(())
       } else None
     }
@@ -231,11 +231,21 @@ object Main {
     def history_file: String
     def extractor: String => Option[A]
   }
+  trait Companion[T] {
+    type C
+    def apply() : C
+  }
+  object Companion {
+    implicit def companion[T](implicit comp : Companion[T]) = comp()
+  }
+  trait LoggerCompanion[C <: Logger] {
+    implicit def companion: Companion[C]
+  }
   
   /**
    * Renaming log
    */
-  object MvLog {
+  object MvLog extends LoggerCompanion[MvLog] {
     def unapply(s: String): Option[MvLog] = {
       val a = s.split(";")
       try {
@@ -250,11 +260,21 @@ object Main {
         case e: java.lang.ArrayIndexOutOfBoundsException => None
       }
     }
+    // Per-companion boilerplate for access via implicit resolution
+    implicit def companion = new Companion[MvLog] {
+      type C = MvLog.type
+      def apply() = MvLog
+    }
   }
   case class MvLog(dir: String, performed: Boolean, nature: String, file1AndProperties: List[String], file2: String, time: String = timeStampGiver()) extends Logger {
     override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1AndProperties.mkString(";") +";"+file2
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = file1AndProperties
+    def file1 = nature match {
+      case INPUT_FILE => file1AndProperties.head
+      case INPUT_FILE_EXTENSION => file1AndProperties.head + file1AndProperties.tail.head
+      case INPUT_FILE_PROPERTIES(n) => file1AndProperties.head
+    }
   }
   implicit object MvLogFile extends LoggerFile[MvLog] {
     def history_file = HISTORY_MV_FILE
@@ -264,7 +284,7 @@ object Main {
   /**
    * Auto log
    */
-  object AutoLog {
+  object AutoLog extends LoggerCompanion[AutoLog]{
     def unapply(s: String): Option[AutoLog] = {
       val a = s.split("\\|\\|").toList
       try {
@@ -276,8 +296,13 @@ object Main {
         }
         Some(AutoLog(a(1), a(2).toBoolean, a(3).toBoolean, a(4), input_files, commands, a(0)))
       } catch {
-	    case e: java.lang.ArrayIndexOutOfBoundsException => None
+	    case e: java.lang.IndexOutOfBoundsException => None
 	  }
+    }
+    // Per-companion boilerplate for access via implicit resolution
+    implicit def companion = new Companion[AutoLog] {
+      type C = AutoLog.type
+      def apply() = AutoLog
     }
   }
   case class AutoLog(dir: String, performed: Boolean, content: Boolean, nature: String, input_files: List[String], commands: List[String], time: String = timeStampGiver()) extends Logger {
@@ -293,7 +318,7 @@ object Main {
   /**
    * Partition log
    */
-  object PartitionLog {
+  object PartitionLog extends LoggerCompanion[PartitionLog] {
     def unapply(s: String): Option[PartitionLog] = {
       val a = s.split(";")
       try {
@@ -301,6 +326,11 @@ object Main {
       } catch {
 	    case e: java.lang.ArrayIndexOutOfBoundsException => None
 	  }
+    }
+    // Per-companion boilerplate for access via implicit resolution
+    implicit def companion = new Companion[PartitionLog] {
+      type C = PartitionLog.type
+      def apply() = PartitionLog
     }
   }
   case class PartitionLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
@@ -316,7 +346,7 @@ object Main {
   /**
    * Filter log
    */
-  object FilterLog {
+  object FilterLog extends LoggerCompanion[FilterLog] {
     def unapply(s: String): Option[FilterLog] = {
       val a = s.split(";")
       try {
@@ -324,6 +354,11 @@ object Main {
       } catch {
 	      case e: java.lang.ArrayIndexOutOfBoundsException => None
 	    }
+    }
+    // Per-companion boilerplate for access via implicit resolution
+    implicit def companion = new Companion[FilterLog] {
+      type C = FilterLog.type
+      def apply() = FilterLog
     }
   }
   case class FilterLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
@@ -467,25 +502,30 @@ object Main {
   
   /**
    * Lists files or directory at a given nested level (0 or 1)
+   * 
+   * Sorts the files by alphanumerical order, mapping files 
+   * 
    * @param nested_level How many directories can be found in front of the file
    * @param onlyFiles if only files are listed, or only directories
    * @param filter if the last filter -t command is used to filter the files
    * @param extension If set, will split each file into its base name and its extension.
+   * 
+   * 
    */
-  def listFiles(nested_level: Int, onlyFiles: Boolean, filter: Boolean, extension: Boolean): Array[List[String]] = {
+  def listFiles(nested_level: Int, onlyFiles: Boolean, filter: Boolean, extension: Boolean, maybePrevious: String => String = (s: String) => s): Array[List[String]] = {
     val f = if(nested_level == 0) {
-      workingDirAbsFileFile.list().sortBy(alphaNumericalOrder)
+      workingDirAbsFileFile.list().sortBy(f => alphaNumericalOrder(maybePrevious(f)))
       .filter(file => new File(workingDirAbsFile, file).isDirectory() ^ onlyFiles)
       .map(file => if(extension) splitExtension(file) else List(file))
     } else if(nested_level == 1){
       workingDirAbsFileFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
-        theDir.list().sortBy(alphaNumericalOrder)
+        theDir.list().sortBy(f => alphaNumericalOrder(maybePrevious(f)))
         .map(file => theDir.getName() + "/" + file)
         .filter(file => new File(workingDirAbsFile, file).isDirectory() ^ onlyFiles)
         .map(file => if(extension) splitExtension(file) else List(file))
       }
     } else Array[List[String]]()
-    if(filter) {
+    val res = if(filter) {
       val loghistory = getFilterHistory(workingDirAbsFileFile)
       automatedFilter(Options(perform=false, performAll=false, explain=false), loghistory) match {
         case Some(filters) =>
@@ -497,6 +537,7 @@ object Main {
     } else {
       f
     }
+    res
   }
   
   /**
@@ -505,10 +546,10 @@ object Main {
    * @param examples A set of MvLogs used as example to perform the global renaming
    * Problem: Take the last instances, then the last two, etc.
    */
-  def automatedRenaming(opt: Options, examples: Seq[MvLog] = getMvHistory(workingDirAbsFileFile)): Option[Array[(List[String], Seq[String])]] = {
+  def automatedRenaming(opt: Options, examples: Seq[MvLog] = getMvHistory(workingDirAbsFileFile), solver: Option[StringSolver] = None): Option[StringSolver] = {
     val perform = opt.perform
     val explain = opt.explain
-    val c = StringSolver()
+    val c = solver.getOrElse(StringSolver())
     c.setTimeout(5)
     c.setVerbose(opt.debug)
     val alreadyPerformed = (for(log <- examples if log.performed) yield log.file2).toSet
@@ -522,16 +563,24 @@ object Main {
       return None;
     }
     
+    val reverse_mapping = (for(log <- examples if log.performed) yield log.file2 -> log.file1).toMap
+    
     val nested_level = examples.last match { case MvLog(dir, performed, nature, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
     val onlyFiles = examples.lastOption.map(_.onlyFiles).getOrElse(true)
     val properties = opt.properties | examples.lastOption.map(_.isProperties).getOrElse(false)
     val withExtension = opt.properties | examples.lastOption.map(_.isExtension).getOrElse(false)
-    val files_raw: Array[List[String]] = listFiles(nested_level, onlyFiles=onlyFiles, filter=opt.filter, extension=withExtension)
+    val files_raw: Array[List[String]] =
+      listFiles(nested_level,
+                onlyFiles=onlyFiles,
+                filter=opt.filter,
+                extension=withExtension,
+                maybePrevious=(s: String) => reverse_mapping.getOrElse(s, s))
     
     val files = if(opt.properties) {
       files_raw.map{listFiles => listFiles.mkString("")::readProperties(listFiles.head)}
     } else files_raw
 
+    if(solver == None)
     examples.reverse.take(2).reverse foreach {
       case MvLog(dir, performed, nature, in, out, time) =>
         
@@ -543,13 +592,13 @@ object Main {
     }
     if(debug) println(s"Files: ${files.mkString}")
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
-    
+
     var mapping: Array[(List[String], Seq[String])] = null
     if(files.length != 0) {
       if(debug) println(s"Solving with at most 2")
       
-      val attempts = (() => c.solve(),   (e: List[FileName]) => c.solve(e))::(if(!opt.minTwoExamples)
-                     (() => c.solveLast(), (e: List[FileName]) => c.solveLast(e))::Nil else Nil)
+      val attempts = (() => c.solve(),   (e: List[FileName]) => {c.solve(e)})::(if(!opt.minTwoExamples)
+                     (() => c.solveLast(), (e: List[FileName]) => {c.solveLast(e)})::Nil else Nil)
       attempts find { case (computation, solver) => 
         c.resetCounter()
         if(debug) println(s"Finding computation")
@@ -557,7 +606,7 @@ object Main {
           case Some(Concatenate(List(ConstStr(a)))) => println(s"No generalization found. Aborting")
             true
           case Some(prog) =>
-            if(debug || explain) displayProg(prog, properties=properties)
+            if(!debug && (explain && !opt.test)) displayProg(prog, properties=properties)
             if(opt.produceBash) {
               // TODO : Produce bash code like this one:
               """find . \( -name '*.jpg' -o -name '*.png' \) -print  | (i=0; while read f; do 
@@ -566,9 +615,9 @@ object Main {
               """
             }
             if(!explain || opt.test) {
-              // Removes already performed tasks from the mapping
+             // Solves the mapping for all files, even for those who were already done.
              val mappedFiles = files map { f => solver(f) }
-             //println(mappedFiles)
+             // Removes already performed tasks from the mapping
               mapping = files zip mappedFiles filterNot { case (file, m) => m.exists(_ == "") || alreadyPerformed(file.head + file.tail.head) }
               if(mapping.nonEmpty) {
                 if(perform) {
@@ -579,6 +628,7 @@ object Main {
                 suggestMapping(List(prog), mapping map { case (a::b::l, e) => ((a+b)::l, e) case e => e }, "mv", title= !perform && !explain)
               }
             }
+            if((opt.test && explain) || debug) displayProg(prog, properties=properties)
             OK
           case None =>
             if(debug) println(s"no program found")
@@ -589,7 +639,7 @@ object Main {
     if(perform) { // We remove the directory from the history.
       removeDirectoryFromMvHistory(workingDirAbsFileFile)
     }
-    Option(mapping)
+    Option(c)
   }
   
   /**

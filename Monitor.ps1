@@ -1,4 +1,19 @@
-# File monitoring:
+# Name  :   Monitor.ps1
+# Org   :   LARA - MPI
+# Date  :   11.02.2014
+# Author:   Mikaël Mayer
+# Function: Semi-automatic File renaming Monitoring as Windows
+#           Run it after running "Powershell -sta" on Powershell
+#           To stop monitoring event, run:
+#           "Get-EventSubscriber | Unregister-Event"
+
+# Enter the root path you want to monitor. 
+$folder = 'C:\Users\Mikael\Dropbox\workspace\StringSolver' 
+# Enter the location of the StringSolver-jar
+$stringsolver = "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"
+
+
+
 #[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") 
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
@@ -7,33 +22,26 @@
 # Unregister all other events
 Get-EventSubscriber | Unregister-Event
 
-$folder = 'C:\Users\Mikael\Dropbox\workspace\StringSolver' # Enter the root path you want to monitor. 
+
 $filter = '*' # You can enter a wildcard filter here.
-
-<# This is probably not the best code I've ever written, but
-   I think it should be readable for most (advanced) users.
-
-   I will wrap this function into a Cmdlet when I have time to do it.
-   Feel free to edit this answer and improve it!
-#>
-
-
 # In the following line, you can change 'IncludeSubdirectories to $true if required. 
 $fsw = New-Object IO.FileSystemWatcher $folder, $filter -Property @{
   IncludeSubdirectories = $true;
   NotifyFilter = [System.IO.NotifyFilters]'FileName, LastWrite'}
 $fsw.EnableRaisingEvents = $true
 
-$AutoAction = {
-	"Event fired" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-	$ie = New-Object -com InternetExplorer.Application
-	$ie.navigate2("https://intranet.mydomain.com/")
-	$ie.visible = $true
-}
+	
+$global:workingdir = "Global value of workingdir"
+$global:tmpworkingdir = $null
+$global:watchingsystem = $null
+$global:balloon = $null
+Set-Variable -Name watchingsystem -Value $fsw -Scope Global
 
 $RenamedAction = {
   function getRelativePath([string]$from, [string]$to) {
-    return python -c "import os.path; print os.path.relpath('$to', '$from')" ;
+    $pathto = $to -replace "\\", "/"
+    $pathfrom = $from -replace "\\", "/"
+    return python -c "import os.path; print os.path.relpath('$pathto', '$pathfrom')" ;
   }
 
   $tmpwdir = Get-Location
@@ -43,24 +51,24 @@ $RenamedAction = {
   $wdir = Split-Path -parent $oldabspath
   Set-Location $wdir
   
-  "Started writing... $wdir $oldabspath, $newabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "Started writing... $wdir $oldabspath, $newabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   $oldpath = getRelativePath -From $wdir -To $oldabspath
   $newpath = getRelativePath -From $wdir -To $newabspath
   
-  "old abs path: $oldabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  "old rel path: $oldpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  "Java command:" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "old abs path: $oldabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "old rel path: $oldpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "Java command:" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   
-  "java -jar ""c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"" move --mintwoexamples --explain --test $oldpath $newpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  $out = java -jar "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar" move --mintwoexamples --explain --test $oldpath $newpath 2>&1 | Out-String # | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  "Finished writing" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "java -jar ""$stringsolver"" move --mintwoexamples --explain --test $oldpath $newpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  $out = java -jar $stringsolver move --mintwoexamples --explain --test $oldpath $newpath 2>&1 | Out-String # | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "Finished writing" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
 
   $OUTPUT = "NO" #[System.Windows.Forms.MessageBox]::Show("Do you want to rename the files according to the following pattern:`r`n $out ?" , "File renaming suggestion" , 4)
   Set-Location $tmpwdir
   
   if($out.Contains("->")) {
-	"Out event found" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+	# "Out event found" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
     $title = "File renaming suggestion" 
 	$msg = "Rename?`r`n $out" 
 	$timeout = 10000
@@ -69,12 +77,31 @@ $RenamedAction = {
 	$Balloon.Icon = [System.Drawing.SystemIcons]::Question
 	$Balloon.Visible = $true; 
 	Unregister-Event -SourceIdentifier click_event -ErrorAction SilentlyContinue 
-    Register-ObjectEvent -InputObject $Balloon -EventName BalloonTipClicked -sourceIdentifier click_event -Action $AutoAction
+	Set-Variable -Name workingdir -Value $wdir -Scope Global
+	Set-Variable -Name tmpworkingdir -Value $tmpwdir -Scope Global
+	Set-Variable -Name balloon -Value $Balloon -Scope Global
+
+    Register-ObjectEvent -InputObject $Balloon -EventName BalloonTipClicked -sourceIdentifier click_event `
+	-Action {
+	    $tmpwdir = $global:tmpworkingdir
+	    $wdir = $global:workingdir
+	    $fsw = $global:watchingsystem
+
+        #[System.Windows.Forms.MessageBox]::Show("Going to perform the mapping in $wdir with $tmpwdir","Info - $fsw");
+	    Set-Location $wdir;
+		$fsw.EnableRaisingEvents = $false;
+     	java -jar $stringsolver move --mintwoexamples --all;
+     	$fsw.EnableRaisingEvents = $true;
+    	Set-Location $tmpwdir;
+		$balloon.dispose()
+		#[System.Windows.Forms.MessageBox]::Show("java -jar ""c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"" move --mintwoexamples --all (in $wdir )","Mapping done");
+   }.GetNewClosure() 
+
     $Balloon.ShowBalloonTip($timeout, $title, $msg, $icon); 
-	
+	#$Balloon.dispose()
 	#sleep(1)
-    "Waiting for click event" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-    wait-event -timeout 10 -sourceIdentifier click_event > $null
+    # "Waiting for click event" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+    wait-event -timeout 1 -sourceIdentifier click_event > $null
     Remove-Event click_event -ea SilentlyContinue
 	#sleep(1000)
     #"Event click removed" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
@@ -89,7 +116,7 @@ $RenamedAction = {
 #	"Going back to reality" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
 #	} | Out-Null 
   }
-  "Back to $tmpwdir `r`n Script finished" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # "Back to $tmpwdir `r`n Script finished" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   Set-Location $tmpwdir
 }
 
