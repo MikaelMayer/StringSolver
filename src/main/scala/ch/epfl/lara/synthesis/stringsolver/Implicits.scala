@@ -43,7 +43,7 @@ object Implicits {
     
     
     
-    def isNumber: Boolean = s.length >= 1 && (s forall (_.isDigit))
+    def isNumber: Boolean = s.length >= 1 && (s forall (_.isDigit)) && (try{Integer.parseInt(s); true}catch{case e: java.lang.NumberFormatException => false})
     /** Returns a sequence of substrings which are numbers, with a certain number of digit and offset
      *  Returns the start and ending positions in string, and the increment from the given string.
      *  Returns only positions where the source is a token
@@ -60,10 +60,13 @@ object Implicits {
      *  Returns only positions where the source is a token
      **/
     def subnumberIncNegativeOf(source: String): Seq[(Int, Int, Int)] = {
+      try {
       val num = s.toInt
       for((i, j) <- ScalaRegExp.computePositionsOfTokenSimple(NumTok, source);
           step <- source.e(i, j) reaching num) yield {
         (i, j, step)
+      }} catch {
+        case e: java.lang.NumberFormatException => Seq()
       }
     }
     
