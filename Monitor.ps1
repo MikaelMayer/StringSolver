@@ -2,19 +2,18 @@
 # Org   :   LARA - MPI
 # Date  :   11.02.2014
 # Author:   Mikaël Mayer
+# website:  http://lara.epfl.ch
 # Function: Semi-automatic File renaming Monitoring as Windows
 #           Run it after running "Powershell -sta" on Powershell
 #           To stop monitoring event, run:
 #           "Get-EventSubscriber | Unregister-Event"
+#           It requires python installed and available at the command line.
 
 # Enter the root path you want to monitor. 
 $folder = 'C:\Users\Mikael\Dropbox\workspace\StringSolver' 
 # Enter the location of the StringSolver-jar
 $stringsolver = "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"
 
-
-
-#[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") 
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
 [void] [System.Reflection.assembly]::loadwithpartialname("System.Drawing")
@@ -30,7 +29,6 @@ $fsw = New-Object IO.FileSystemWatcher $folder, $filter -Property @{
   NotifyFilter = [System.IO.NotifyFilters]'FileName, LastWrite'}
 $fsw.EnableRaisingEvents = $true
 
-	
 $global:workingdir = "Global value of workingdir"
 $global:tmpworkingdir = $null
 $global:watchingsystem = $null
@@ -45,30 +43,20 @@ $RenamedAction = {
   }
 
   $tmpwdir = Get-Location
-  #if ($enableEvent -eq $true) {
   $oldabspath = $Event.SourceEventArgs.OldFullPath
   $newabspath = $Event.SourceEventArgs.FullPath
   $wdir = Split-Path -parent $oldabspath
   Set-Location $wdir
   
-  # "Started writing... $wdir $oldabspath, $newabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   $oldpath = getRelativePath -From $wdir -To $oldabspath
   $newpath = getRelativePath -From $wdir -To $newabspath
   
-  # "old abs path: $oldabspath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  # "old rel path: $oldpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  # "Java command:" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  
-  # "java -jar ""$stringsolver"" move --mintwoexamples --explain --test $oldpath $newpath" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   $out = java -jar $stringsolver move --mintwoexamples --explain --test $oldpath $newpath 2>&1 | Out-String # | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  # $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-  # "Finished writing" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
 
   $OUTPUT = "NO" #[System.Windows.Forms.MessageBox]::Show("Do you want to rename the files according to the following pattern:`r`n $out ?" , "File renaming suggestion" , 4)
   Set-Location $tmpwdir
   
   if($out.Contains("->")) {
-	# "Out event found" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
     $title = "File renaming suggestion" 
 	$msg = "Rename?`r`n $out" 
 	$timeout = 10000
@@ -87,36 +75,18 @@ $RenamedAction = {
 	    $wdir = $global:workingdir
 	    $fsw = $global:watchingsystem
 
-        #[System.Windows.Forms.MessageBox]::Show("Going to perform the mapping in $wdir with $tmpwdir","Info - $fsw");
 	    Set-Location $wdir;
 		$fsw.EnableRaisingEvents = $false;
      	java -jar $stringsolver move --mintwoexamples --all;
      	$fsw.EnableRaisingEvents = $true;
     	Set-Location $tmpwdir;
 		$balloon.dispose()
-		#[System.Windows.Forms.MessageBox]::Show("java -jar ""c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"" move --mintwoexamples --all (in $wdir )","Mapping done");
    }.GetNewClosure() 
 
     $Balloon.ShowBalloonTip($timeout, $title, $msg, $icon); 
-	#$Balloon.dispose()
-	#sleep(1)
-    # "Waiting for click event" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
     wait-event -timeout 1 -sourceIdentifier click_event > $null
     Remove-Event click_event -ea SilentlyContinue
-	#sleep(1000)
-    #"Event click removed" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-		
-#{ 
-#	"Going to perform the global change" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-#    $fsw.EnableRaisingEvents = $false
-#	Set-Location $wdir
-#	java -jar "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar" move --mintwoexamples --all
-#	$fsw.EnableRaisingEvents = $true
-#	Set-Location $tmpwdir
-#	"Going back to reality" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
-#	} | Out-Null 
   }
-  # "Back to $tmpwdir `r`n Script finished" | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
   Set-Location $tmpwdir
 }
 

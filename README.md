@@ -26,9 +26,22 @@ alias auto='java -jar "[/path/to/target/scala/]/stringsolver_2.10-1.0-one-jar.ja
 
 ### Semi-automated Renaming
 
-[![ScreenShot](http://i1.ytimg.com/vi/F9mUIPK7h-I/mqdefault.jpg)](http://youtu.be/F9mUIPK7h-I)
+## Windows Shell extension (requires python)
 
-The standard way to rename files is still the following:
+[![ScreenShot](http://i1.ytimg.com/vi/rbhAv3uBFqw/mqdefault.jpg)](http://youtu.be/rbhAv3uBFqw)
+
+After editing the two lines of `Monitor.ps1` to indicate which root folder to monitor (it could be `c:\`) and where to find the jar file,
+run Powershell and within it run `powershell -Sta`.
+Then start
+
+    .\Monitor.ps1
+
+And within the explorer, rename two files or two folders in the same folder.
+A balloon should appear with the suggestion. Click it and voilà!
+
+## Bash version:
+
+The semi-automatic rename tool overrides the actual one:
 
 ```
 mv file1 file2
