@@ -1,3 +1,15 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * 
+ *  File:   ProgramSet.scala
+ *  Author: Mikaël Mayer
+ *  Date:   27.11.2013
+ *  Purpose:Represent multiple programs in a single structure.
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
 import scala.collection.GenTraversableOnce
@@ -6,8 +18,8 @@ import scala.collection.immutable.BitSet
 import scala.collection.mutable.Queue
 import scala.collection.mutable.ListBuffer
 
-object ProgramsSet {
-  import Programs._
+object ProgramSet {
+  import Program._
   import scala.language._
   import SubStrFlag._
   import Weights._
@@ -51,8 +63,8 @@ object ProgramsSet {
     private var cacheBest: Option[Any] = None
     def takeBest: A = { if(cacheBest.isEmpty) cacheBest = Some(takeBestRaw); cacheBest.get.asInstanceOf[A]}
     def takeBestRaw: A
-    override def isEmpty: Boolean = this == SEmpty || ProgramsSet.sizePrograms(this) == 0
-    def sizePrograms = ProgramsSet.sizePrograms(this)
+    override def isEmpty: Boolean = this == SEmpty || ProgramSet.sizePrograms(this) == 0
+    def sizePrograms = ProgramSet.sizePrograms(this)
     override def toIterable: Iterable[A] = map((i: A) =>i)
     override def toString = this.getClass().getName().replaceAll(".*\\$","")+"("+self.productIterator.mkString(",")+")"
     var weightMalus = 0

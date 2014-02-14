@@ -1,6 +1,18 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|                              
+ *       
+ * File name: Evaluator.scala
+ * Author   : Mikaël Mayer
+ * Date     : 14.02.2014
+ * Function : Provides an interpreter for Program.
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
-import Programs._
+import Program._
 
 trait ComputePositionsInString {
   /**
@@ -51,33 +63,6 @@ object Evaluator {
     }
   }
   def concatenate(s: Value*): Value = concatenate(s.toList)
-  
-  /**
-   * Replace routines
-   */
-  /*def replaceTraceExpr(e: TraceExpr)(implicit w: Identifier, k: Int): TraceExpr = e match {
-    case Concatenate(fs) =>    Concatenate(fs.toList map replaceAtomicExpr)
-  }
-  def replaceAtomicExpr(e: AtomicExpr)(implicit w: Identifier, k: Int): AtomicExpr = e match {
-    case SubStr(vi, p1, p2, m) => SubStr(replaceStringVariable(vi), replacePosition(p1), replacePosition(p2), m)
-    case ConstStr(s) => e
-    case Loop(w2, _, separator) if w2 == w => e
-    case Loop(w2, e, separator) => Loop(w2, replaceTraceExpr(e), separator)
-    case Counter(digits, start, offset) => e
-    case NumberMap(s, l, offset) => NumberMap(replaceAtomicExpr(s).asInstanceOf[SubStr], l, offset)
-  }
-  def replacePosition(e: Position)(implicit w: Identifier, k: Int): Position = e match {
-    case Pos(p1, p2, t) => Pos(p1, p2, replaceIntegerExpr(t))
-    case _ => e
-  }
-  def replaceStringVariable(e: StringVariable)(implicit w: Identifier, k: Int): StringVariable = e match {
-    case InputString(i) => InputString(replaceIntegerExpr(i))
-    //case PrevStringNumber(i) => PrevStringNumber(replaceIntegerExpr(i))
-  }
-  def replaceIntegerExpr(e: IntegerExpr)(implicit w: Identifier, k: Int): IntegerExpr = e match {
-    case Linear(k1, v, k2) if v.value == w.value && (!(k2 >= 0) || k*k1+k2 >= 0) >= 0=> IntLiteral(k * k1 + k2)
-    case _ => e
-  }*/
     
   /**
    * Loop routines
@@ -175,22 +160,7 @@ object Evaluator {
           } else res
         case _ => BottomValue
       }
-      
-    /*case SubStr(PrevStringNumber(v1), p1, p2, m) =>
-      val index = evalProg(v1).asInt
-      if(index >= input.prevNumberOutputs.length) return BottomValue
-      val s = input.prevNumberOutputs(index)
-      val i1 = evalProg(p1)(IndexedSeq(s)) // Handle s as a regular input for computing the position
-      val i2 = evalProg(p2)(IndexedSeq(s))
-      i1 match {
-        case IntValue(n1) if n1 >= 0 =>
-          i2 match {
-            case IntValue(n2) if n2 <= s.length && n1 <= n2 =>
-              StringValue(m(s.substring(n1, n2)))
-            case _ => BottomValue
-          }
-        case _ => BottomValue
-      }*/
+
     case ConstStr(s) => StringValue(s)
     case CPos(k) if k >= 0 => IntValue(k)
     case CPos(k) if k < 0 => IntValue(input.inputs(0).length + k + 1)

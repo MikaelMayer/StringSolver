@@ -1,5 +1,18 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * 
+ *  File:   Stringsolver.scala
+ *  Author: Mikaël Mayer
+ *  Date:   27.11.2013
+ *  Purpose;Provides all algorithms related to synthesis
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
+ 
 import java.util.regex.Pattern
 
 import scala.collection.mutable.ArrayBuffer
@@ -8,7 +21,7 @@ import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
-import ch.epfl.lara.synthesis.stringsolver.ProgramsSet._
+import ProgramSet._
 
 /**
  * An extension delivers start and end position to which it applies,
@@ -22,8 +35,8 @@ trait Extension {
  * Used to create a StringSolver instance to solve input/output problems.
  */
 object StringSolver {
-  import Programs._  
-  import ProgramsSet._
+  import Program._  
+  import ProgramSet._
   import Evaluator._
   import Implicits._
   import scala.language._
@@ -60,8 +73,8 @@ object StringSolver {
  * Instance solving the problem iteratively
  */
 class StringSolver {
-  import Programs._  
-  import ProgramsSet._
+  import Program._  
+  import ProgramSet._
   import Evaluator._
   import Implicits._
   import scala.language._
@@ -399,8 +412,8 @@ class StringSolver {
 }
 
 class StringSolverAlgorithms {
-  import Programs._  
-  import ProgramsSet._
+  import Program._  
+  import ProgramSet._
   import Evaluator._
   import Implicits._
   import scala.language._
@@ -523,7 +536,7 @@ class StringSolverAlgorithms {
      * Heuristic to compute separators start positions.
      * Takes the positions having the same chars before the dots
      */
-    val presentSeparators = s.toList.zipWithIndex.flatMap{ case (char, i) => if(ProgramsSet.isCommonSeparator(char.toString)) List(i) else Nil}
+    val presentSeparators = s.toList.zipWithIndex.flatMap{ case (char, i) => if(ProgramSet.isCommonSeparator(char.toString)) List(i) else Nil}
     val preferredStart = longestInterestingEdges.map(_1).toSet ++ presentSeparators
     val preferredEnd = longestInterestingEdges.map(_2).toSet ++ presentSeparators
 
@@ -711,7 +724,7 @@ class StringSolverAlgorithms {
         k2 <- k2_range.view;
         optionSeparator = if(ksep > k2) Some(ConstStr(s.substring(k2, ksep))) else None;
         //dummy6 = (if(verbose) println(s"k2 $k2") else ());
-        if(k2 == ksep || ProgramsSet.isCommonSeparator(optionSeparator.get.s));
+        if(k2 == ksep || ProgramSet.isCommonSeparator(optionSeparator.get.s));
         k1_range =  preferredStartFirst(k2-1 to 0 by -1, liteOrFull).filter(positionToCheckStart(_, liteOrFull));
         //dummy8 = (if(verbose) println(s"k1_range $k1_range") else ());
         k1 <- k1_range.view;
@@ -958,7 +971,7 @@ class StringSolverAlgorithms {
   /**
    * Returns a list of (Start, End) for tokens matching at the position, with the common index)
    */
-  def matchingTokenSeq(s: String, atPos: Int, listTokens: List[Token]=Programs.listNonEmptyTokens)
+  def matchingTokenSeq(s: String, atPos: Int, listTokens: List[Token]=Program.listNonEmptyTokens)
       : Iterable[(Start, End, TokenSeq, TokenSeq, List[Index])] = {
     val ms = computetokenSeq(s, listTokens)
     for(i <- atPos to 0 by -1;
@@ -1046,7 +1059,7 @@ class StringSolverAlgorithms {
    */
   //implicit val cacheIParts = MMap[String, Map[Token,List[Token]]]()
   def IPart_s(s: String) = {
-    val listTokens = Programs.listNonEmptyTokens
+    val listTokens = Program.listNonEmptyTokens
     val res: Map[Token,List[Token]] = listTokens.map (tok => (tok, ScalaRegExp.computePositionsOfToken(tok, s)))
       .groupBy( t => t._2)
       .mapValues(t => t map (_._1))
@@ -1055,7 +1068,7 @@ class StringSolverAlgorithms {
       .toMap
     res
   }
-  def IParts(ss: String, t: Token)(implicit map: Map[Token,List[Token]] = IPart_s(ss)): SToken = if(t == StartTok || t == EndTok) SToken(Set(t))(Programs.listTokens) else SToken(map(t).toSet)(Programs.listTokens)
+  def IParts(ss: String, t: Token)(implicit map: Map[Token,List[Token]] = IPart_s(ss)): SToken = if(t == StartTok || t == EndTok) SToken(Set(t))(Program.listTokens) else SToken(map(t).toSet)(Program.listTokens)
   
   private var cacheReps = MMap[String, (List[Token], Map[Token,List[Token]])]()
   /** Returns a subset of equivalent tokens */

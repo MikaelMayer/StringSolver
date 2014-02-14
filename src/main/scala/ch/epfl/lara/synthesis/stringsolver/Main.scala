@@ -1,3 +1,15 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * File name: Implicits.scala
+ * Author   : Mikaël Mayer
+ * Date     : 14.02.2014
+ * Function : Provides routines for command-line interaction.
+ *            mv, auto, partition, filter
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
 import java.io.BufferedReader
@@ -20,9 +32,9 @@ import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.{HashMap => MMap}
 
 import Implicits.AugString
-import Programs.Concatenate
-import Programs.ConstStr
-import Programs.Program
+import Program.Concatenate
+import Program.ConstStr
+import Program.Program
 
 /**
  * Usage

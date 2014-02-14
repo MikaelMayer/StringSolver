@@ -4,7 +4,7 @@ import org.scalatest._
 import org.scalatest.matchers._
 
 class PrinterTest extends FlatSpec with ShouldMatchers with PrivateMethodTester {
-  import Programs._
+  import Program._
   import scala.language._
 
   val v1 = InputString(0)
@@ -34,7 +34,7 @@ class PrinterTest extends FlatSpec with ShouldMatchers with PrivateMethodTester 
 }
 
 class EvaluatorTest extends FlatSpec with ShouldMatchers  {
-  import Programs._
+  import Program._
   import scala.language._
 
   
@@ -103,7 +103,7 @@ class EvaluatorTest extends FlatSpec with ShouldMatchers  {
 }
 
 class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
-  import Programs._
+  import Program._
   import ScalaRegExp._
   
   "ScalaRegExp" should "correctly convert regexps" in {
@@ -122,8 +122,8 @@ class ScalaRegExpTest extends FlatSpec with ShouldMatchers  {
 }
 
 class ProgramSetTest extends FlatSpec with ShouldMatchers {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import StringSolver._
@@ -134,7 +134,7 @@ class ProgramSetTest extends FlatSpec with ShouldMatchers {
         Map[(Int, Int), Set[SAtomicExpr]]()
         + ((0, 1) -> Set(SConstStr("a"):SAtomicExpr)) 
         + ((1, 2) -> Set(SConstStr("b"):SAtomicExpr))  
-        + ((2, 3) -> Set(SConstStr("c"):SAtomicExpr,SSubStr(0, Set(SCPos(0)), Set(SCPos(-1)), SSubStrFlag(List(NORMAL))): SAtomicExpr)) 
+        + ((2, 3) -> Set(SConstStr("c"):SAtomicExpr,SSubStr(InputString(0), Set(SCPos(0)), Set(SCPos(-1)), SSubStrFlag(List(NORMAL))): SAtomicExpr)) 
         + ((0, 2) -> Set(SConstStr("ab"):SAtomicExpr)) 
         + ((1, 3) -> Set(SConstStr("bc"):SAtomicExpr))
     )
@@ -145,23 +145,23 @@ class ProgramSetTest extends FlatSpec with ShouldMatchers {
   }
   
   it should "compute best paths" in {
-    c.takeBest should equal (Concatenate(ConstStr("ab"), SubStr(0, CPos(0), CPos(-1))))
+    c.takeBest should equal (Concatenate(ConstStr("ab"), SubStr(InputString(0), CPos(0), CPos(-1))))
   }
   
   "SToken" should "correctly represent tokens" in {
-    SToken(Set(NumTok))(Programs.listTokens).toSet should equal (Set(NumTok))
-    SToken(Set(NumTok, HyphenTok))(Programs.listTokens).toSet should equal (Set(NumTok, HyphenTok))
+    SToken(Set(NumTok))(Program.listTokens).toSet should equal (Set(NumTok))
+    SToken(Set(NumTok, HyphenTok))(Program.listTokens).toSet should equal (Set(NumTok, HyphenTok))
     val input = Set(NumTok, AlphaTok, DotTok, LeftParenTok)
     val input2 = Set(NumTok, AlphaTok, RightParenTok, LeftParenTok)
-    SToken(input)(Programs.listTokens).map((i: Token) =>i).toSet should equal (input)
+    SToken(input)(Program.listTokens).map((i: Token) =>i).toSet should equal (input)
     
     (input intersect input2).map((i: Token) =>i).toSet should equal (Set(NumTok, AlphaTok, LeftParenTok))
   }
 }
 
 class StringSolverTest extends FlatSpec with ShouldMatchers with PrivateMethodTester {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import Implicits._
@@ -246,12 +246,12 @@ import f._
   
   it should "compute find first and second numbers" in {
     val res = generateSubString(Input_state(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), 0), "178")
-    val expected = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),Set(1))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),STokenSeq(Nil),Set(1))), SSubStrFlag(List(NORMAL)))
+    val expected = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Program.listTokens))),Set(1))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Program.listTokens))),STokenSeq(Nil),Set(1))), SSubStrFlag(List(NORMAL)))
     val c = res.map(intersectAtomicExpr(_, expected))
     c.filter(_ != SEmpty).flatten should not be 'empty
     
     val res2 = generateSubString(Input_state(IndexedSeq("[Various-PC]_Some_Name_178_HD_[e2813be1].mp4"), 0), "2813")
-    val expected2 = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),Set(2))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Programs.listTokens))),STokenSeq(Nil),Set(2))), SSubStrFlag(List(NORMAL)))
+    val expected2 = SSubStr(InputString(0), Set(SPos(STokenSeq(Nil),STokenSeq(List(SToken(List(NumTok))(Program.listTokens))),Set(2))),Set(SPos(STokenSeq(List(SToken(List(NumTok))(Program.listTokens))),STokenSeq(Nil),Set(2))), SSubStrFlag(List(NORMAL)))
     res2.map(intersectAtomicExpr(_, expected2)).filter(_ != SEmpty).flatten should not be 'empty
   }
   

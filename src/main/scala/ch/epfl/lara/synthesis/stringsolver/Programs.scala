@@ -1,10 +1,9 @@
 /**
- *    ____        _      __  ____          __  __ 
- *   / __/_______(_)__  / /_/ __/_ _____  / /_/ / 
- *  _\ \/ __/ __/ / _ \/ __/\ \/ // / _ \/ __/ _ \
- * /___/\__/_/ /_/ .__/\__/___/\_, /_//_/\__/_//_/
- *              /_/           /___/               
- *              
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
  *  File:   Programs.scala
  *  Author: Mikaël Mayer
  *  Date:   27.11.2013
@@ -18,9 +17,9 @@ package ch.epfl.lara.synthesis.stringsolver
  * Attribution to Sumit Gulwani for this particular piece of code.
  */
 
-object Programs {
+object Program {
   import Evaluator._
-  import ProgramsSet._
+  import ProgramSet._
   import StringSolver._
   
   sealed trait Program {
@@ -328,7 +327,7 @@ object Programs {
   implicit def SpecialCharToRegExp(s: SpecialChar): RegExp = TokenSeq(s)
   implicit def TokenToRegExp(s: Token): RegExp = TokenSeq(s)
   implicit def IntToIntegerExpr(i: Int): IntLiteral = IntLiteral(i)
-  implicit def IntToStringVariable(i: Int): StringVariable = InputString(i)
+  //implicit def IntToStringVariable(i: Int): StringVariable = InputString(i)
   implicit def IdentifiertoIntegerExpr(i: Identifier): IntegerExpr = Linear(1, i, 0)
   implicit def MatchToBool(i: Predicate): Bool = Bool(Seq(Conjunct(Seq(i))))
 }

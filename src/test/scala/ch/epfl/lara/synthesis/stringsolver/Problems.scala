@@ -5,8 +5,8 @@ import org.scalatest.matchers.ShouldMatchers
 
 
 class BenchMarkTest extends FlatSpec with ShouldMatchers {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import Implicits._

@@ -1,3 +1,15 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * 
+ *  File:   Service.scala
+ *  Author: Mikaël Mayer
+ *  Date:   15.01.2014
+ *  Purpose:Provides filter and partition as a service.
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
 import scala.collection.mutable.ListBuffer
@@ -79,8 +91,8 @@ object Service {
     }
     filterings_w_determining_substrings.toList foreach {
       case (accepted, (_, filtering)) =>
-        import ProgramsSet._
-        import Programs._
+        import ProgramSet._
+        import Program._
         if(accepted) {
           filtering foreach {
              case (in, out) =>

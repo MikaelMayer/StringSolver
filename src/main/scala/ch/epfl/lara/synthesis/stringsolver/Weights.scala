@@ -1,6 +1,18 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * 
+ *  File:   Weights.scala
+ *  Author: Mikaël Mayer
+ *  Date:   14.02.2014
+ *  Purpose:Provides weighting mechanism for programs.
+ */
 package ch.epfl.lara.synthesis.stringsolver
-import Programs._
-import ProgramsSet._
+import Program._
+import ProgramSet._
 
 object Weights {
   /**

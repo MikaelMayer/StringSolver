@@ -6,8 +6,8 @@ import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.WordSpec 
 
 class WeightsTrain extends WordSpec  with ShouldMatchers {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import Implicits._

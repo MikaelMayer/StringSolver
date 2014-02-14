@@ -1,10 +1,9 @@
 /**
- *    ____        _      __  ____          __  __ 
- *   / __/_______(_)__  / /_/ __/_ _____  / /_/ / 
- *  _\ \/ __/ __/ / _ \/ __/\ \/ // / _ \/ __/ _ \
- * /___/\__/_/ /_/ .__/\__/___/\_, /_//_/\__/_//_/
- *              /_/           /___/               
- *              
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
  *  File:   Printer.scala
  *  Author: Mikaël Mayer
  *  Date:   27.11.2013
@@ -17,7 +16,7 @@ package ch.epfl.lara.synthesis.stringsolver
 import scala.collection.mutable.ArrayBuffer
 
 object Printer {
-  import Programs._
+  import Program._
   
   implicit class AugmentedString(sc: StringContext) {
     def t(args: Any*): String = {

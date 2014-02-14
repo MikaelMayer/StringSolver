@@ -4,8 +4,8 @@ import org.scalatest.FlatSpec
 import org.scalatest.matchers.ShouldMatchers
 
 class TempTests  extends FlatSpec with ShouldMatchers {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import Implicits._

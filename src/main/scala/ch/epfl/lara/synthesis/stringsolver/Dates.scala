@@ -1,7 +1,18 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * File name: Dates.scala
+ * Author   : Mikaël Mayer
+ * Date     : 14.02.2014
+ * Function : Provides month to number and vice-versa conversions.
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
-import ProgramsSet._
-import Programs._
+import ProgramSet._
+import Program._
 
 object Dates extends Extension {
   private val converters: List[SpecialConverter] = List(

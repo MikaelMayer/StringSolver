@@ -1,6 +1,18 @@
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * 
+ *  File:   ScalaRegExp.scala
+ *  Author: Mikaël Mayer
+ *  Date:   14.02.2014
+ *  Purpose:Converts programs to regular expressions.
+ */
 package ch.epfl.lara.synthesis.stringsolver
 
-import Programs._
+import Program._
 import scala.util.matching.Regex
 import java.util.regex.Pattern
 

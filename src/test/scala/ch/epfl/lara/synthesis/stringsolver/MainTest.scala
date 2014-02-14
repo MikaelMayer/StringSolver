@@ -8,8 +8,8 @@ import java.io.InputStream
 import java.io.ByteArrayInputStream
 
 class MainTest extends WordSpec with ShouldMatchers {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   import ScalaRegExp._
   import StringSolver._
   import Implicits._

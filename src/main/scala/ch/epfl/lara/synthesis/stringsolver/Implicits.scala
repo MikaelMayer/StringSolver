@@ -1,4 +1,14 @@
-
+/**
+ *     _____ _       _         _____     _             
+ *    |   __| |_ ___|_|___ ___|   __|___| |_ _ ___ ___ 
+ *    |__   |  _|  _| |   | . |__   | . | | | | -_|  _|
+ *    |_____|_| |_| |_|_|_|_  |_____|___|_|\_/|___|_|  
+ *                        |___|      
+ * File name: Implicits.scala
+ * Author   : Mikaël Mayer
+ * Date     : 14.02.2014
+ * Function : Provides implicit string conversions and extractions.
+ */
 
 package ch.epfl.lara.synthesis.stringsolver
 
@@ -9,8 +19,8 @@ import scala.concurrent.duration._
 import java.util.regex.Pattern
 
 object Implicits {
-  import Programs._
-  import ProgramsSet._
+  import Program._
+  import ProgramSet._
   
   implicit class AugBoolean(s: Boolean) {
     def implies(other: Boolean): Boolean = !s || other
