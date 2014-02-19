@@ -30,6 +30,13 @@ object Weights {
     case CPos(0) => 10
     case CPos(-1) => 10
     case CPos(k) => Math.abs(k)*20+80
+    case Pos(Epsilon, Epsilon, c) => 
+      val const_weight = c match {
+        case IntLiteral(i) if i >= 1 => i*10 - 10
+        case IntLiteral(i) if i <= -1 => -i*10 + 10
+        case _ => weight(c)
+      }
+      500+const_weight
     case Pos(r1, r2, c) => 
       val const_weight = c match {
         case IntLiteral(i) if i >= 1 => i*10 - 10

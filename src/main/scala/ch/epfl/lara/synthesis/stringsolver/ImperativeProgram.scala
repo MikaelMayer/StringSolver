@@ -16,36 +16,68 @@
 package ch.epfl.lara.synthesis.stringsolver
 import  scala.language.implicitConversions
 
+/**
+ * ImperativeProgram(Program) produces an imperative version of the code.
+ * Assigned expressions can be strings, numbers, booleans, operations on them.
+ * 
+ */
 object ImperativeProgram {
+  
+  def main(args: Array[String]): Unit = {
+    val c = StringSolver()
+    c.setVerbose(true)
+    c.setTimeout(6)
+    c.setOnlyInterestingPositions(true)
+    println("Adding the first example")
+    c.add(List("first 5 number 7 after .541 test"), "541")
+    c.add(List("second .467 number 5 without 54 dots"), "467")
+    //c.add("a b c d e f -> f e d c b a")
+    //println("Adding the second example")
+    //c.add("what should we do with this -> this with do we should what")
+    println(Scalafication(ImperativeProgram(c.solve().get)))
+  }
+  
   import Program.{Identifier => PIdentifier, _}
   sealed trait Tree {
-    def toScala(): String = ???
     def toBash(): String = ???
     def toBatch(): String = ???
     def toPowershell(): String = ???
     def toVBScript(): String = ???
+    var comment: String = ""
+    def withComment(s: String): this.type = { comment = s; this }
   }
-  trait Stat extends Tree
-  trait Expr extends Tree {
+  sealed trait Stat extends Tree
+  sealed trait Expr extends Tree {
     def !=(other: Expr) = NotEq(this, other)
     def +(other: Expr) = Plus(this, other)
     def *(other: Expr) = Times(this, other)
     def ||(other: Expr) = Or(this, other)
+    def &&(other: Expr) = And(this, other)
+    def unary_! = Not(this)
   }
   
-  case class Script(stats: Block) extends Tree
+  case class Script(stats: Stat, return_ident: Identifier) extends Tree {
+    def toScala() = Scalafication(this)
+  }
   object Block {
-    def apply(stats: Stat*): Block = apply(stats.toList.flatMap({ case Block(l) => l case e => List(e) }))
+    def apply(stats: Stat*): Stat = if(stats.length == 1) stats.head else apply(stats.toList.flatMap({ case Block(l) => l case e => List(e) }))
   }
   case class Block(stats: List[Stat]) extends Stat {
-    def apply(other: Block) = Block(stats ++ other.stats)
+    def apply(other: Block): Stat = Block(stats ++ other.stats)
   }
-  case class For(i: Identifier, low: Expr, up: Expr, body: Stat) extends Stat
+  //case class For(i: Identifier, low: Expr, up: Expr, body: Stat) extends Stat
   object While {
-    def apply(cond: Expr)(body: Stat*):While = apply(cond, if(body.length == 1) body.head else Block(body.toList))
+    def apply(cond: Expr)(body: Stat*):While = apply(cond, if(body.length == 1) Block(body.head) else Block(body.toList))
   }
   case class While(e: Expr, body: Stat) extends Stat
-  case class If(cond: Expr, thn: Stat, els: Option[Stat]) extends Stat
+  object If {
+    def apply(cond: Expr)(body: Stat*): If = If(cond, Block(body.toList), None)
+  }
+  case class If(cond: Expr, thn: Stat, els: Option[Stat]) extends Stat {
+    def Else(stats: Stat*): If = {
+      If(cond, thn, Some(Block(stats.toList)))
+    }
+  }
   case class Assign(i: Identifier, e: Expr) extends Stat
   
   case class VarDecl(i: Identifier, e: Expr) extends Stat
@@ -61,8 +93,9 @@ object ImperativeProgram {
   case class Plus(a: Expr, b: Expr) extends Expr
   case class Times(a: Expr, b: Expr) extends Expr
   case class Or(a: Expr, b: Expr) extends Expr
+  case class And(a: Expr, b: Expr) extends Expr
   case class Concat(a: Expr, b: Expr) extends Expr // String Concatenation
-  case class FormatNumber(a: Expr, nDigits: Int) extends Expr
+  case class FormatNumber(a: Expr, nDigits: Int, offset: Int) extends Expr
   case class InputExpr(e: Expr) extends Expr
   case class SubString(e: Expr, start: Expr, end: Expr) extends Expr
   case class LowerCase(e: Expr) extends Expr
@@ -70,18 +103,28 @@ object ImperativeProgram {
   case class InitialCase(e: Expr) extends Expr
   case class ToInt(e: Expr) extends Expr
   case class PositionBetweenRegex(e1: String, e2: String, i: Expr) extends Expr
+  case class Not(a: Expr) extends Expr
   
   var i: Int = 0
   def newVar(): Identifier = { i += 1; Identifier("res" + i) }
   val index = Identifier("index") // Special index which starts at 0.
   
+  case class Options(starting: Boolean = true) {
+    
+  }
+  
+  def apply(p: Program) = {
+    val ret = newVar()
+    Script(fromProgram(p, ret, true), ret).withComment(Printer(p))
+  }
+  
   /**
    * Converts a program to an expression
    */
-  def fromProgramExpr(p: Program): Expr = {
+  private def fromProgramExpr(p: Program)(implicit opt: Options = Options()): Expr = {
     p match {
       case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
-        FormatNumber(Plus(ToInt(fromProgramExpr(s)), offset), size)
+        FormatNumber(fromProgramExpr(s), size, offset)
       case SubStr(InputString(v1), p1, p2, mm) =>
         val res = SubString(InputExpr(fromProgramExpr(v1)), fromProgramExpr(p1), fromProgramExpr(p2))
         mm match {
@@ -91,16 +134,23 @@ object ImperativeProgram {
           case UPPERCASE_INITIAL => InitialCase(res)
         }
       case Counter(digits, start, step) =>
-        FormatNumber(index*step + start, digits)
+        FormatNumber(index*step, digits, start)
+      case Linear(1, w, 0) =>
+        fromProgramExpr(w)
+      case Linear(i, w, 0) =>
+        fromProgramExpr(i) * fromProgramExpr(w)
+      case Linear(1, w, j) =>
+        fromProgramExpr(w) + fromProgramExpr(j)
       case Linear(i, w, j) =>
         fromProgramExpr(i) * fromProgramExpr(w) + fromProgramExpr(j)
       case Pos(r1, r2, i) =>
-        PositionBetweenRegex(fromProgramExpr(r1).asInstanceOf[StringLit].s, fromProgramExpr(r2).asInstanceOf[StringLit].s, fromProgramExpr(i))
-      case TokenSeq(l) =>
-        StringLit(l map ScalaRegExp.convertToken mkString "")
+        PositionBetweenRegex(fromProgramExpr(r1)(opt.copy(starting = false)).asInstanceOf[StringLit].s, fromProgramExpr(r2)(opt.copy(starting = true)).asInstanceOf[StringLit].s, fromProgramExpr(i))
+      case t @ TokenSeq(l) =>
+        ScalaRegExp.convertRegExp(t, starting = opt.starting).toString
+        //StringLit(l map ScalaRegExp.convertToken mkString "")
       case t: Token => StringLit(ScalaRegExp.convertToken(t))
       case CPos(i) => i
-      case IntLiteral(k) => k.toString
+      case IntLiteral(k) => k
       case PIdentifier(v) =>
         Identifier(v)
       case ConstStr(s) =>
@@ -109,74 +159,137 @@ object ImperativeProgram {
     }
   }
   
-  def fromProgram(p: Program, return_identifier: Option[Identifier] = None): Tree = {
-    // TODO : Maybe consider direct concatenation instead of assigment
-    def return_block(s: Expr): Block = Block(return_identifier match { case Some(r) => List(r := s) case _ => Nil })
-    // Find variable declarations.
+  private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
     p match {
       case Loop(w, c, separator) =>
         val i = Identifier(w.value)
-        val s = Identifier(w.value + "_str")
+        val s = return_identifier
         val r = Identifier(w.value + "_ret")
         val first = Identifier(w.value + "_first")
         Block(
-        s ::= "",
+        (if(initialize_return_identifier) s ::= "" else s := ""),
         r ::= "",
         i ::= 0,
         first ::= true,
-        While(first || r != "")(
-          fromProgram(c, Some(r)).asInstanceOf[Stat],
+        While(first || NotEq(r, ""))(
+          fromProgram(c, r, false).asInstanceOf[Stat],
+          if(separator != None) If(!first && NotEq(r, ""))(s := Concat(s, StringLit(separator.get.s))) else Block(),
           s := Concat(s, r),
           first := false,
           i := i + 1
-        ))(return_block(s))
+        ))
+      /*case Concatenate(List(s)) =>
+        fromProgram(s, return_identifier, initialize_return_identifier)*/
       case Concatenate(fs) =>
-        val s = newVar()
+        val s = return_identifier
         val ret = newVar()
-        val lfs = fs flatMap { prog => fromProgram(prog, Some(ret)) match {
+        val lfs = fs flatMap { prog => fromProgram(prog, ret, false) match {
           case st: Stat => List(st, s := Concat(s, ret))
           case _ => Nil
         }}
-        Block(lfs)(return_block(s))
+        Block((if(initialize_return_identifier) s ::= "" else s := "")::(ret ::= "")::lfs)
       case SpecialConversion(s, p) =>
         throw new Exception("Special conversion not supported yet for conversion")
-      case e => return_block(fromProgramExpr(p))
+      case e => Block(if(initialize_return_identifier) return_identifier ::= fromProgramExpr(e) else return_identifier := fromProgramExpr(e))
     }
   }
 }
 
 /**
- * Transforms an imperative-like program to a scala program.
+ * Transforms an imperative-like program to a valid scala program.
  */
 object Scalafication {
   import ImperativeProgram._
   def apply(t: Script): String = {
     fromScript(t)
   }
-  def fromScript(t: Tree): String = t match {
-    case t@Script(_) => "def main(args: Array[String]): String = " + fromScript(t.stats)
-    case Block(s) => "{\n" + (s map fromScript mkString "\n") + "}"
-    case While(cond, expr) => "while("+fromScript(cond)+") " + fromScript(expr)
-    case If(cond, thn, els) => "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
-    case Assign(i, e) => fromScript(i) + " = " + fromScript(e)
-    case VarDecl(i, e) => "var " + fromScript(i) + " = " + fromScript(e)
+  case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
+  
+  def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
+    case t@Script(stat, expr) => 
+      (if(t.comment != "") {
+        "// "+t.comment + "\n"
+      } else "") +
+      "def script(args: Array[String], index: Int = 0): String = " + fromScript(t.stats, Options(ret_ident = Some(expr), declare_ret_ident=true))
+    case Block(s) => var ss = indent + "{\n"
+      ss +=  ((for(t <- s) yield {
+        var res = t
+        val tt = fromScript(t, Options())(indent = "  " + indent)
+        tt
+      }) mkString "\n")
+    ss += "\n"
+    ss += (opt.ret_ident match {
+      case Some(r) => "  " + indent + fromScript(r) + "\n" + indent + "}"
+      case None => indent + "}"
+    })
+    ss
+    case While(cond, expr) => indent + "while("+fromScript(cond)+") " + fromScript(expr)
+    case If(cond, thn, els) => indent + "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
+    
+    case Assign(i, e@SubString(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i, e@FormatNumber(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i, e) => indent + fromScript(i) + " = " + fromScript(e)
+    case VarDecl(i, e@FormatNumber(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e@SubString(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e) => indent + "var " + fromScript(i) + " = " + fromScript(e)
     case Identifier(i) => i
     case RegularExpression(s) => s
     case StringLit(s) => "\""+s+"\""
-    case IntLit(i) => i.toString
+    case IntLit(i) => opt.ret_ident match {
+      case Some(Identifier(p1)) =>
+        if((opt.input ne null) && i < 0) {
+          indent + s"val $p1 = ${opt.input.a}.length" + (if(i != -1) " + " + (i+1).toString else "")
+        } else {
+          indent + s"val $p1 = " + i.toString
+        }
+      case None => i.toString
+    }
     case BoolLit(i) => i.toString
+    case Not(a) => "!" + fromScript(a)
     case NotEq(a, b) => "(" + fromScript(a) + " != " + fromScript(b) + ")"
     case Plus(a, b) => "(" + fromScript(a) + " + " + fromScript(b) + ")"
     case Times(a, b) => "(" + fromScript(a) + " * " + fromScript(b) + ")"
     case Or(a, b) => "(" + fromScript(a) + " || " + fromScript(b) + ")"
+    case And(a, b) => "(" + fromScript(a) + " && " + fromScript(b) + ")"
     case Concat(a, b) => "(" + fromScript(a) + "+" + fromScript(b) + ")"
-    case FormatNumber(a, n) => "\"${"+fromScript(a)+"}%"+n+"d\""
-    case InputExpr(a) => "args("+fromScript(a)+")"
-    case SubString(e, start, end) => fromScript(e) + ".substring(" + fromScript(start) + "," + fromScript(end) + ")"
+    case FormatNumber(a, n, off) =>
+      val ret_expr = if(opt.ret_ident != None) (if(opt.declare_ret_ident) "val " else "")+fromScript(opt.ret_ident.get)+" = " else ""
+      val si = newVar()
+      val s = si.a
+      val offset = if(n > 0) ".toInt+"+off.toString else if(n < 0) ".toInt-" + n.toString else ""
+      fromScript(a, opt.copy(ret_ident=Some(si),declare_ret_ident=true)) + "\n" +
+      indent + s"${ret_expr}" + "f\"${" + s"$s" + offset + "}%0" + n + "d\""
+    case InputExpr(a) => 
+      val dropped = fromScript(a, Options())
+      val dropped_string = if(dropped == "0") "" else s".drop($dropped)"
+      val tq = "\""
+      s"args$dropped_string.headOption.getOrElse($tq$tq)"
+    case SubString(e, pbr1, pbr2) => 
+      val ret_expr = if(opt.ret_ident != None) (if(opt.declare_ret_ident) "val " else "")+fromScript(opt.ret_ident.get)+" = " else ""
+      val si = newVar()
+      val s = si.a
+      val p1 = s+"Start"
+      val p2 = s+"End"
+      val i1 = s+"i"
+      val i2 = s+"j"
+      val tq = "\""
+      indent + s"val $s = " + fromScript(e) + "\n" +
+      fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + "\n" +
+      fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + "\n" +
+      indent + s"""${ret_expr}if($p1 >= 0 && $p2 >= 0 && $p1 <= $s.length && $p2 <= $s.length) $s.substring($p1, $p2) else $tq$tq"""
     case LowerCase(e) => fromScript(e) + ".toLowerCase()"
     case UpperCase(e) => fromScript(e) + ".toUpperCase()"
     case InitialCase(e) =>  fromScript(e) + ".map{ var first = true; (e: Char) => if(first) {first = false; e.toUpper} else e }"
     case ToInt(e) => "("+fromScript(e)+").toInt"
-    case PositionBetweenRegex(r1, r2, i) => "{val i1 = }" // TODO
+    case PositionBetweenRegex(r1, r2, i) => 
+       val i1 = newVar().a
+       val p1 = opt.ret_ident.get.a
+       val tq = "\""
+       val s = opt.input.a
+       indent + s"val $i1 = " + fromScript(i) + "\n" +
+       indent + s"""val $p1 = $tq$tq$tq$r1$tq$tq$tq.r.findAllMatchIn($s).map(_.end(0)).toList.intersect($tq$tq$tq$r2$tq$tq$tq.r.findAllMatchIn($s).map(_.start(0)).toList) match { case l if l.length >= $i1 && $i1 >= 1 => l($i1-1) case l if l.length + $i1 >= 0 && $i1 <= -1 => l($i1 + l.length) case _ => -1 } \n"""
+    case _ => throw new Exception(s"Impossible to parse expression $t")
+      //i1 r1.r.findAllMatchIn(s).map(_.start(0)).toList
+      //
   }
 }

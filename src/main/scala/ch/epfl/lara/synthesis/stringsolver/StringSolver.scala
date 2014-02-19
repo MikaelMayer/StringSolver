@@ -437,7 +437,7 @@ class StringSolverAlgorithms {
   final val dots = "..."
   def dotsAtPosition(s: String, k: Int) = s.substring(k, Math.min(k + dots.length, s.length)) == dots
  
-  var TIMEOUT_SECONDS = 30
+  var TIMEOUT_SECONDS = 15
   var DEFAULT_REC_LOOP_LEVEL = 1
   var MAX_SEPARATOR_LENGTH = 1
  
@@ -731,7 +731,7 @@ class StringSolverAlgorithms {
         //dummy8 = (if(verbose) println(s"k1 $k1") else ());
         e1 = subDag(k1, k2, liteOrFull)) {
       if(timeout) {if(verbose) println("exited loop of generateLoop because timed out"); return Wp }
-      //if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
+      if(verbose) println(s"Going to unify '${s.substring(k1, k2)}' and '${s.substring(ksep, k3)}' separated by '${s.substring(k2, ksep)}'")
       val (e, time) = timedScope(if(liteOrFull == LITE) {
         unify(e1, e2, w)  // If unify results only in constants
       } else {
@@ -915,8 +915,8 @@ class StringSolverAlgorithms {
     
     // enumerate tokens sequence of length 0
     //val epsilonRange = (finalstart to finalend).toList zip (-1 until finalend).toList
-    for(i <- finalstart to finalend) {
-      addMapping(i, i-1, TokenSeq(), ((finalstart to finalend).toList, (-1 until finalend).toList))
+    for(i <- finalstart to (finalend+1)) {
+      addMapping(i, i-1, TokenSeq(), ((finalstart to (finalend+1)).toList, (-1 to finalend).toList))
     }
     // enumerate tokens sequence of length 1
     //addMapping(finalstart, finalstart-1, TokenSeq(StartTok)) // Simple token starting at 0
@@ -976,7 +976,7 @@ class StringSolverAlgorithms {
     val ms = computetokenSeq(s, listTokens)
     for(i <- atPos to 0 by -1;
         j <- (atPos-1) until s.length;
-        if(i != atPos || j != atPos -1);
+        //if(i != atPos || j != atPos -1); // No doubly empty regexps.
         (tok1, (liststart1, listend1)) <- ms.getOrElse((i, atPos-1), Set());
         (tok2, (liststart2, listend2)) <- ms.getOrElse((atPos, j), Set())) yield {
           val res1 = RegexpPositionsInString.computePositionsEndingWith(tok1, s).map(_ + 1)

@@ -24,11 +24,10 @@ class TempTests  extends FlatSpec with ShouldMatchers {
     val c = StringSolver()
     c.setVerbose(true)
     c.setTimeout(10)
-    c.setLoopLevel(0)
-    c.add(List("birthday",".txt"), "birthday01.txt")
+    c.setLoopLevel(1)
+    c.add(List("no corresponding program to invert the words"), "words the invert to program corresponding no")
+    c.add(List("what if there are two"), "two are there if what")
     renderer(c)
-    c.add(List("log",".txt"), "log02.txt")
-    renderer(c)
-    c.solve("truc | .avi") should equal ("""truc03.avi""")
+    c.solve("the test should succeed") should equal ("""succeed should test the""")
   }
 }

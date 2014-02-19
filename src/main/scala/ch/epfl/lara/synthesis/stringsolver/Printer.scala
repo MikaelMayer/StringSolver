@@ -111,9 +111,27 @@ object Printer {
             t"the $sv1$m"
           /*case (Pos(_, TokenSeq(List(NumTok)), IntLiteral(c1)), Pos(TokenSeq(List(NumTok)), _, IntLiteral(c2))) if c1 == c2 && v1.isInstanceOf[PrevStringNumber]=>
             t"the ${numeral(c1)} number in previous output"*/
+          case (Pos(Epsilon, Epsilon, Linear(c1, w, cc1)), Pos(Epsilon, Epsilon, l@Linear(a1, v, aa1))) if v == w && c1 == a1 && aa1 == cc1 + 1 =>
+            val cs = numeral(l)
+            if(c1 >= 0) {
+              t"the $cs$m char in $sv1"
+            } else {
+              val csEnd = numeral(Linear(-a1, w, -aa1))
+              t"the $csEnd$m char from the end in $sv1"
+            }
           case (Pos(Epsilon, r1, c1), Pos(r2, Epsilon, c2)) if r1 == r2 && c1 == c2 =>
             val cs = numeral(c1)
-            t"the $cs$m occurrence of $r1 in $sv1"
+            c1 match {
+              case IntLiteral(i) if i >= 0 =>
+                 t"the $cs$m occurrence of $r1 in $sv1"
+              case IntLiteral(i) if i < 0 =>
+                 t"the $cs$m occurrence from the end of $r1 in $sv1"
+              case Linear(i, w, j) if i >= 0 =>
+                 t"the $cs$m occurrence of $r1 in $sv1"
+              case Linear(i, w, j) if i < 0 =>
+                val csEnd = numeral(Linear(-i, w, -j))
+                t"the $csEnd$m occurrence from the end of $r1 in $sv1"
+            }
           case (CPos(0), CPos(d)) if d >= 1 =>
             val chars = if(d == 1) "char" else s"$d chars"
             t"the first$m $chars of $sv1"
@@ -146,6 +164,16 @@ object Printer {
         } else {
           s"a $digits-digit counter starting at $start$increment"
         }
+      case Pos(Epsilon, Epsilon, IntLiteral(c1)) if c1 >= 0 =>
+        t"the ${numeral(c1)} char"
+      case Pos(Epsilon, Epsilon, IntLiteral(-1)) =>
+        t"the end"
+      case Pos(Epsilon, Epsilon, IntLiteral(c1)) if c1 < 0 =>
+        t"the ${numeral(-c1)} char from the end"
+      case Pos(Epsilon, Epsilon, l@Linear(i, w, j)) if i > 0 =>
+        t"the end of the ${numeral(l)} char"
+      case Pos(Epsilon, Epsilon, l@Linear(i, w, j)) if i < 0 =>
+        t"the end of the ${numeral(Linear(-i, w, -j))} char from the end"
       case Pos(r1, Epsilon, i) =>
         t"the end of the ${numeral(i)} $r1"
       case Pos(Epsilon, r2, i) =>

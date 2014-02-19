@@ -609,20 +609,6 @@ object ProgramSet {
           SSubStr(InputString(vi), pp1, pp2, mm)
         }
       } else SEmpty
-      /*case (SSubStr(PrevStringNumber(vi@IntLiteral(i)), pj, pk, m1), SSubStr(PrevStringNumber(vj@IntLiteral(j)), pl, pm, m2)) =>
-      if(i == j || (unify.isDefined && ((i == j + 1) || (i == j - 1)))) {
-        val mm = m1 intersect m2
-        val pp1 = (for(p1 <- pj; p2 <- pl; res <- notEmpty(intersectPos(p1, p2))) yield res)
-        val pp2 = (for(p1 <- pk; p2 <- pm; res <- notEmpty(intersectPos(p1, p2))) yield res)
-        if(pp1.isEmpty || pp2.isEmpty) SEmpty else {
-           if(i == j) SSubStr(PrevStringNumber(vi), pp1, pp2, mm)
-           else if(i == j - 1 && unify.isDefined) SSubStr(PrevStringNumber(Linear(1, unify.get, i)), pp1, pp2, mm)
-           else if(i == j + 1 && unify.isDefined) SSubStr(PrevStringNumber(Linear(1, unify.get, j)), pp1, pp2, mm)
-           else SEmpty
-        }
-      } else SEmpty*/
-    //case (SAny(i), SSubStr(PrevStringNumber(j), pj, pk, m)) => b
-    //case (SSubStr(PrevStringNumber(j), pj, pk, m), SAny(vi)) => a
     case (SNumber(ss1, l1, o1), SNumber(ss2, l2, o2)) if(o1 == o2)=>
       //val s = intersectIntSet(s1, s2)
       val l = intersectIntSet(l1, l2)
@@ -674,7 +660,7 @@ object ProgramSet {
           case (a, b) if a == b => List(a)
           case (IntLiteral(k1), IntLiteral(k2)) =>
             if(k1 < k2 && k1 >= 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
-            //else if(k2 < k1 && k1 < 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
+            else if(k2 < k1 && k1 < 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
             //else if(k2 < k1 && k2 >= 0) List(Linear((k1-k2), unify.get, k2):IntegerExpr)
             else Nil
           case _ => Nil
