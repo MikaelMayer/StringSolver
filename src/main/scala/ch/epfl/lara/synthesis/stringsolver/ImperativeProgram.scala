@@ -27,10 +27,9 @@ object ImperativeProgram {
     val c = StringSolver()
     c.setVerbose(true)
     c.setTimeout(6)
-    c.setOnlyInterestingPositions(true)
-    println("Adding the first example")
-    c.add(List("first 5 number 7 after .541 test"), "541")
-    c.add(List("second .467 number 5 without 54 dots"), "467")
+    c.add("let us reverse this sentence -> Sentence This...")
+    c.add("ab bcd cd defg -> Defg Cd Bcd Ab")
+    println(Scalafication(ImperativeProgram(c.solve().get)))
     //c.add("a b c d e f -> f e d c b a")
     //println("Adding the second example")
     //c.add("what should we do with this -> this with do we should what")
@@ -63,11 +62,11 @@ object ImperativeProgram {
     def apply(stats: Stat*): Stat = if(stats.length == 1) stats.head else apply(stats.toList.flatMap({ case Block(l) => l case e => List(e) }))
   }
   case class Block(stats: List[Stat]) extends Stat {
-    def apply(other: Block): Stat = Block(stats ++ other.stats)
+    def apply(other: Block): Stat = Block(stats ++ other.stats : _*)
   }
   //case class For(i: Identifier, low: Expr, up: Expr, body: Stat) extends Stat
   object While {
-    def apply(cond: Expr)(body: Stat*):While = apply(cond, if(body.length == 1) Block(body.head) else Block(body.toList))
+    def apply(cond: Expr)(body: Stat*):While = apply(cond, if(body.length == 1) Block(body.head) else Block(body.toList : _*))
   }
   case class While(e: Expr, body: Stat) extends Stat
   object If {
@@ -97,7 +96,7 @@ object ImperativeProgram {
   case class Concat(a: Expr, b: Expr) extends Expr // String Concatenation
   case class FormatNumber(a: Expr, nDigits: Int, offset: Int) extends Expr
   case class InputExpr(e: Expr) extends Expr
-  case class SubString(e: Expr, start: Expr, end: Expr) extends Expr
+  case class SubString(e: Expr, start: Expr, end: Expr, mode: SubStrFlag) extends Expr
   case class LowerCase(e: Expr) extends Expr
   case class UpperCase(e: Expr) extends Expr
   case class InitialCase(e: Expr) extends Expr
@@ -126,13 +125,7 @@ object ImperativeProgram {
       case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
         FormatNumber(fromProgramExpr(s), size, offset)
       case SubStr(InputString(v1), p1, p2, mm) =>
-        val res = SubString(InputExpr(fromProgramExpr(v1)), fromProgramExpr(p1), fromProgramExpr(p2))
-        mm match {
-          case NORMAL => res
-          case CONVERT_LOWERCASE => LowerCase(res)
-          case CONVERT_UPPERCASE => UpperCase(res)
-          case UPPERCASE_INITIAL => InitialCase(res)
-        }
+        SubString(InputExpr(fromProgramExpr(v1)), fromProgramExpr(p1), fromProgramExpr(p2), mm)
       case Counter(digits, start, step) =>
         FormatNumber(index*step, digits, start)
       case Linear(1, w, 0) =>
@@ -187,7 +180,7 @@ object ImperativeProgram {
           case st: Stat => List(st, s := Concat(s, ret))
           case _ => Nil
         }}
-        Block((if(initialize_return_identifier) s ::= "" else s := "")::(ret ::= "")::lfs)
+        Block((if(initialize_return_identifier) s ::= "" else s := "")::(ret ::= "")::lfs : _*)
       case SpecialConversion(s, p) =>
         throw new Exception("Special conversion not supported yet for conversion")
       case e => Block(if(initialize_return_identifier) return_identifier ::= fromProgramExpr(e) else return_identifier := fromProgramExpr(e))
@@ -226,11 +219,11 @@ object Scalafication {
     case While(cond, expr) => indent + "while("+fromScript(cond)+") " + fromScript(expr)
     case If(cond, thn, els) => indent + "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
     
-    case Assign(i, e@SubString(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
-    case Assign(i, e@FormatNumber(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e) => indent + fromScript(i) + " = " + fromScript(e)
-    case VarDecl(i, e@FormatNumber(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
-    case VarDecl(i, e@SubString(_, _, _)) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e) => indent + "var " + fromScript(i) + " = " + fromScript(e)
     case Identifier(i) => i
     case RegularExpression(s) => s
@@ -264,7 +257,7 @@ object Scalafication {
       val dropped_string = if(dropped == "0") "" else s".drop($dropped)"
       val tq = "\""
       s"args$dropped_string.headOption.getOrElse($tq$tq)"
-    case SubString(e, pbr1, pbr2) => 
+    case SubString(e, pbr1, pbr2, mode) => 
       val ret_expr = if(opt.ret_ident != None) (if(opt.declare_ret_ident) "val " else "")+fromScript(opt.ret_ident.get)+" = " else ""
       val si = newVar()
       val s = si.a
@@ -273,10 +266,20 @@ object Scalafication {
       val i1 = s+"i"
       val i2 = s+"j"
       val tq = "\""
+      import Program.NORMAL
+      import Program.CONVERT_LOWERCASE
+      import Program.CONVERT_UPPERCASE
+      import Program.UPPERCASE_INITIAL
+      val mm = mode match {
+        case NORMAL => ""
+        case CONVERT_LOWERCASE =>  ".toLowerCase()"
+        case CONVERT_UPPERCASE =>  ".toUpperCase()"
+        case UPPERCASE_INITIAL =>  ".map{ var first = true; (e: Char) => if(first) {first = false; e.toUpper} else e }"
+      }
       indent + s"val $s = " + fromScript(e) + "\n" +
       fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + "\n" +
       fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + "\n" +
-      indent + s"""${ret_expr}if($p1 >= 0 && $p2 >= 0 && $p1 <= $s.length && $p2 <= $s.length) $s.substring($p1, $p2) else $tq$tq"""
+      indent + s"""${ret_expr}(if($p1 >= 0 && $p2 >= 0 && $p1 <= $s.length && $p2 <= $s.length) $s.substring($p1, $p2) else $tq$tq)$mm"""
     case LowerCase(e) => fromScript(e) + ".toLowerCase()"
     case UpperCase(e) => fromScript(e) + ".toUpperCase()"
     case InitialCase(e) =>  fromScript(e) + ".map{ var first = true; (e: Char) => if(first) {first = false; e.toUpper} else e }"
