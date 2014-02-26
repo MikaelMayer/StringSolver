@@ -37,10 +37,7 @@ import Program.ConstStr
 import Program.Program
 
 /**
- * Usage
- * create an executable script named mv containing:
- * 
- * java -jar `dirname $0`/flash-fill_2.10-1.0.jar "$@"
+ * Main object for dealing with files manipulation
  */
 object Main {
   import Implicits._

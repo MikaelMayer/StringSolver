@@ -884,6 +884,7 @@ class StringSolverAlgorithms {
 
   def computetokenSeq(s: String, listTokens: List[Token]): MMap[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]] =
     if(s == computedForString && (listTokens eq computedForList)) cacheComputeTokenSeq else {
+    if(verbose) println(s"Compute token seq for " + s.substring(0, 10) + "...")
     val finalstart = 0
     val finalend = s.length-1
     var res = MMap[(Start, End), Set[(TokenSeq, (List[Start], List[End]))]]()
@@ -965,6 +966,7 @@ class StringSolverAlgorithms {
     cacheComputeTokenSeq = res
     computedForString = s
     computedForList = listTokens
+    if(verbose) println(s"Computation finished")
     res
   }
 

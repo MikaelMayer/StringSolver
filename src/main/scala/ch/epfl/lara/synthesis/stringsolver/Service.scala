@@ -21,7 +21,7 @@ object Service {
   /**
    * Creates a filter out of a list of input/output.
    * @param inputOutput A list of strings partitioned into taken and not taken.
-   * @returns (A StringSolver instance which outputs a value equal to the second value of this tuple if the string is accepted,
+   * @return (A StringSolver instance which outputs a value equal to the second value of this tuple if the string is accepted,
    *           The substring common to accepted strings)
    *           
    * Example 1: Filter by extension
@@ -106,9 +106,9 @@ object Service {
   /**
    * Creates a partition out of a list of input/output.
    * @param inputOutput A list of strings partitioned along the equivalence class of the second member of the tuple.
-   * @returns (A StringSolver instance which outputs the determining substring from the name,
-   *           A StringSolver instance which maps the determining substring to the example output,
-   *           A function which uses the stringSolver instance to produce the corresponding substring, and the identity if it fails)
+   * @return (A StringSolver instance which outputs the determining substring from the name,
+   *          A StringSolver instance which maps the determining substring to the example output,
+   *          A function which uses the stringSolver instance to produce the corresponding substring, and the identity if it fails)
    * 
    * These three example can be combined.
    *    
