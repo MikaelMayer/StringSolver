@@ -36,7 +36,7 @@ object Weights {
         case IntLiteral(i) if i <= -1 => -i*10 + 10
         case _ => weight(c)
       }
-      500+const_weight
+      150+const_weight
     case Pos(r1, r2, c) => 
       val const_weight = c match {
         case IntLiteral(i) if i >= 1 => i*10 - 10
@@ -58,28 +58,25 @@ object Weights {
       }
       100 + weight(l) - 10 + separatorweight
     case NumberMap(s@ SubStr(InputString(vi), p1, p2, m), l, offset) =>
-      weight(vi) +
+      weight(vi) +  (if(l == 1 && offset == 0) 1000 else 0) +
       weight(s) + (if(offset < 0) ((-offset).toString.length * 70 + 50) else if(offset == 0) 0 else offset.toString.length * 70)
-    /*case Number(s@ SubStr(PrevStringNumber(_), p1, p2, m), l, (o, step)) =>
-      100 + weight(s) - 10 + 100*(Math.abs(step) - 1) + (o - 1)*/
-    /*case NumberMap(s, l, (o, step)) =>
-      100 + weight(s) - 10 + (step-1)*10*/ // if s is smaller, the better.
     case Counter(length, start, step) =>
       50 + length * 100 + Math.abs(step)*10
     case ConstStr(s) => 50 + s.size*100
     case s@SubStr(InputString(vi), Pos(r1, r2, i), Pos(p1, p2, j), method) if i == j && r1 == Epsilon && p2 == Epsilon && r2 == p1 =>
-      100 + weight(vi) + weight(r2) + method.id*10
+      100 + weight(vi) + weight(r2)(false) + method.id*10 + (if(r2 == Epsilon) 500 else 0)
     case s@SubStr(InputString(vi), CPos(0), CPos(-1), method) => 130 + weight(vi)
     case s@SubStr(InputString(vi), p, pos, method) => 100 + weight(vi) + weight(p)(true) + weight(pos)(false) + method.id*10
     case TokenSeq(t) => t.map(token => weight(token)(true)).sum
     case IntLiteral(i) => Math.abs(i)*3
-    case Linear(i,w,j) => (i-1)*10+Math.max(j-1, 0)
+    case Linear(i,w,j) => (Math.abs(i)-1)*10+Math.max(Math.abs(j)-1, 0)+(if(w.value == "index") 100 else 0)
     case SpecialConversion(s, p) => weight(s)/10
-    case NumTok => 8
-    case AlphaNumTok => 8
-    case AlphaTok => 9
-    case LowerTok => 10
-    case UpperTok => 10
+    case NonSpaceTok => 6
+    case NumTok => 7
+    case AlphaNumTok => 7
+    case AlphaTok => 8
+    case LowerTok => 9
+    case UpperTok => 9
     case _ => 10
   }
   def weightWithOffset(offset: Int)(p: Program)(implicit starting_pos: Boolean = true): Int = weight(p) + offset

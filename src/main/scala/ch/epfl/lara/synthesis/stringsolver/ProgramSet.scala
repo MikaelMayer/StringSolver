@@ -62,12 +62,14 @@ object ProgramSet {
     def flatMap[T](f: A => GenTraversableOnce[T]) = map(f).flatten
     private var cacheBest: Option[Any] = None
     def takeBest: A = { if(cacheBest.isEmpty) cacheBest = Some(takeBestRaw); cacheBest.get.asInstanceOf[A]}
+    //def takeBestUsing(w: Identifier): A = takeBest
     def takeBestRaw: A
     override def isEmpty: Boolean = this == SEmpty || ProgramSet.sizePrograms(this) == 0
     def sizePrograms = ProgramSet.sizePrograms(this)
     override def toIterable: Iterable[A] = map((i: A) =>i)
     override def toString = this.getClass().getName().replaceAll(".*\\$","")+"("+self.productIterator.mkString(",")+")"
     var weightMalus = 0
+    def examplePosition = 0 // Set only in SDag
   }
   /**
    * Set of switch expressions described in Programs.scala
@@ -80,6 +82,7 @@ object ProgramSet {
       for(t <- combinations(s map _2)) f(Switch(s map _1 zip t))
     }
     def takeBestRaw = Switch((s map _1) zip ((s map _2) map (_.takeBest)))
+    //override def takeBestUsing(w: Identifier) = Switch((s map _1) zip ((s map _2) map (_.takeBestUsing(w))))
   }
   /**
    * Set of concatenate expressions described in Programs.scala
@@ -105,9 +108,7 @@ object ProgramSet {
     def neighbors(n: Node, n_weight: Int): Set[(Int, AtomicExpr, Node)] = {
       for(e <- ξ if e._1 == n;
           versions = W.getOrElse(e, Set.empty);
-          //alternatives = versions.toIterable.flatMap(elem => elem.toIterable);
-          //alternatives = versions.collect{ case s@SConstStr(str) => ConstStr(str)};
-          atomic <- versions.map(_.takeBest/*.withAlternative(alternatives)*/).toList.sortBy(w => weight(w)).headOption) yield {
+          atomic <- versions.map(_.takeBest).toList.sortBy(w => weight(w)).headOption) yield {
         (-weight(atomic) + n_weight, atomic, e._2)
       }
     }
@@ -133,6 +134,36 @@ object ProgramSet {
       }
       Concatenate(minProg(nt))//TODO : alternative.
     }
+    /*def neighborsUsing(n: Node, n_weight: Int, w: Identifier): Set[(Int, AtomicExpr, Node)] = {
+      for(e <- ξ if e._1 == n;
+          versions = W.getOrElse(e, Set.empty);
+          atomic <- versions.map(_.takeBest).toList.sortBy(w => weight(w)).headOption) yield {
+        (-weight(atomic) + n_weight, atomic, e._2)
+      }
+    }
+    override def takeBestUsing(w: Identifier) = {
+      var minProg = Map[Node, List[AtomicExpr]]()
+      var weights = Map[Node, Int]()
+      var nodesToVisit = new PriorityQueue[(Int, List[AtomicExpr], Node)]()(Ordering.by[(Int, List[AtomicExpr], Node), Int](e => e._1))
+      nodesToVisit.enqueue((0, Nil, ns))
+      while(!(minProg contains nt) && !nodesToVisit.isEmpty) {
+        val (weight, path, node) = nodesToVisit.dequeue() // Takes the first node with the minimal path.
+        minProg += node -> path
+        for(e@(newweight, newAtomic, newNode) <- neighbors(node, weight)) {
+          nodesToVisit.find{ case (w, p, n) => n == newNode } match {
+            case Some((w, p, n)) => // New node already in nodes to visit.
+              if(newweight > w && !(minProg contains newNode)) {
+                nodesToVisit = nodesToVisit.filterNot{case (w, p, n) => n == newNode}
+                nodesToVisit.enqueue((newweight, path.asInstanceOf[List[AtomicExpr]] ++ List(newAtomic).asInstanceOf[List[AtomicExpr]], newNode))
+              } // Else we do nothing.
+            case None =>
+              nodesToVisit.enqueue((newweight, path.asInstanceOf[List[AtomicExpr]] ++ List(newAtomic).asInstanceOf[List[AtomicExpr]], newNode))
+          }
+        }
+      }
+      Concatenate(minProg(nt))//TODO : alternative.
+    }*/
+    
     def reduce: SDag[Int] = {
       val nodeMapping = ñ.toList.sortBy({ case (a: Int,b: Int) => a+b case _ => 1 }).zipWithIndex.toMap
       var ñ2 = nodeMapping.values.toSet
@@ -161,6 +192,10 @@ object ProgramSet {
                yield (edge -> v)
       SDag(ñ2, ns2, nt2, ξ2, W2)
     }
+    var mIndex = 0
+    override def examplePosition = mIndex
+    def examplePosition_=(i: Int) = mIndex = i
+    def setIndex(i: Int): this.type = { examplePosition = i; this }
   }
   
   type SAtomicExpr = ProgramSet[AtomicExpr]
@@ -195,7 +230,7 @@ object ProgramSet {
   }
   
   def isCommonSeparator(s: String) = s match {
-    case "," | "/" | " " | "-"| "#" | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" | "_" => true
+    case "," | "/" | " " | "-"| "#" | ";" | ", " | "; " | "\t" | "  " | ". " | "." | ":" | "|" | "_" | ", " | "; " => true
     case _ => false
   }
   
@@ -344,6 +379,7 @@ object ProgramSet {
       for(rr1 <- r1; rr2 <- r2; cc <- c) f(Pos(rr1, rr2, cc))
     }
     def takeBestRaw = Pos(r1.takeBest, r2.takeBest, c.toList.sortBy(weight).head)
+    //var index = 0 // Index at which this position was computed
   }
   
   type SRegExp = ProgramSet[RegExp]
@@ -469,20 +505,21 @@ object ProgramSet {
   
 
 
+  case class IntersectParam(unify: Option[Identifier], index1: Int, index2: Int, iterateInput: Boolean = true, useIndexForPosition: Boolean = true)
   /**
    * Intersection function
    */
-  def intersect(ss: Set[SAtomicExpr], tt: Set[SAtomicExpr]): Set[SAtomicExpr] = {
+  def intersect(ss: Set[SAtomicExpr], tt: Set[SAtomicExpr])(implicit unify: IntersectParam): Set[SAtomicExpr] = {
     for(s <- ss; t <- tt; r <- result(intersectAtomicExpr(s, t))) yield r
   }
   def result[T <: Program](a: ProgramSet[T]): Option[ProgramSet[T]] = if(sizePrograms(a)==0) None else Some(a)
   
-  def intersect(p1: STraceExpr, p2: STraceExpr)(implicit unify: Option[Identifier] = None): STraceExpr = (p1, p2) match {
+  def intersect(p1: STraceExpr, p2: STraceExpr)(implicit unify: IntersectParam = IntersectParam(None, 0, 0)): STraceExpr = (p1, p2) match {
     case (p1: SDag[_], p2: SDag[_]) => 
       intersectDag(p1, p2)
     case _ => SEmpty 
   }
-  def intersectDag[Node1, Node2, Node3](p1: SDag[Node1], p2: SDag[Node2])(implicit unify: Option[Identifier] = None): STraceExpr = (p1, p2) match {
+  def intersectDag[Node1, Node2, Node3](p1: SDag[Node1], p2: SDag[Node2])(implicit unify: IntersectParam): STraceExpr = (p1, p2) match {
     case (s1@SDag(ñ1, n1s, n1t, ξ1, w1),
           s2@SDag(ñ2, n2s, n2t, ξ2, w2)) => 
           //println(s"Intersecting two dags of size: ${s1.ñ.size} and ${s2.ñ.size}")
@@ -567,7 +604,7 @@ object ProgramSet {
           } else SEmpty
   }
   def notEmpty[T <: Program](a: ProgramSet[T]): Option[ProgramSet[T]] = if(a == SEmpty) None else Some(a)
-  def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: Option[Identifier] = None): SAtomicExpr = if(a eq b) a else ((a, b) match {
+  def intersectAtomicExpr(a: SAtomicExpr, b: SAtomicExpr)(implicit unify: IntersectParam = IntersectParam(None, 0, 0)): SAtomicExpr = if(a eq b) a else ((a, b) match {
     case (SSpecialConversion(a, b), SSpecialConversion(c, d)) =>
         val ss = intersectAtomicExpr(a, c)
         if(sizePrograms(ss) > 0) {
@@ -585,7 +622,7 @@ object ProgramSet {
     case (SConstStr(aa), SConstStr(bb)) if aa == bb => a
     //case (SConstStr(aa), SConstStr(bb)) if aa.isNumber == bb.isNumber => a
     case (SSubStr(InputString(vi@IntLiteral(i)), pj, pk, m1), SSubStr(InputString(vj@IntLiteral(j)), pl, pm, m2)) =>
-      if(i == j || (unify.isDefined && ((i == j + 1) || (i == j - 1)))) {
+      if(i == j || (unify.unify.isDefined && ((i == j + 1) || (i == j - 1)) && unify.iterateInput)) {
         val mm = m1 intersect m2
         if(mm.isEmpty) SEmpty else {
         val pp1 = (for(p1 <- pj; p2 <- pl; res <- notEmpty(intersectPos(p1, p2))) yield res)
@@ -593,8 +630,8 @@ object ProgramSet {
             val pp2 = (for(p1 <- pk; p2 <- pm; res <- notEmpty(intersectPos(p1, p2))) yield res)
             if(pp2.isEmpty) SEmpty else {
               if(i == j) SSubStr(InputString(vi), pp1, pp2, mm)
-              else if(i == j - 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, i)), pp1, pp2, mm)
-              else if(i == j + 1 && unify.isDefined) SSubStr(InputString(Linear(1, unify.get, j)), pp1, pp2, mm)
+              else if(i == j - 1 && unify.unify.isDefined) SSubStr(InputString(Linear(1, unify.unify.get, i)), pp1, pp2, mm)
+              else if(i == j + 1 && unify.unify.isDefined) SSubStr(InputString(Linear(1, unify.unify.get, j)), pp1, pp2, mm)
               else SEmpty
             }
           }
@@ -627,16 +664,18 @@ object ProgramSet {
             SCounter(l, s, i1, c1)
           else
             SEmpty
+        } else if(i1 == i2) {
+          SEmpty
         } else {
           if((i2 - i1) % (c2 - c1) != 0) SEmpty else {
             val newStep = Math.abs((i2 - i1)/(c1-c2))
             val newStart = i1 - c1 * newStep
             val s2 = intersectIntSet(s, SIntSemiLinearSet(newStart, 0, newStart))
             s2 match {
-              case si @ SIntSemiLinearSet(newStart2, step, max) => 
-                if(c2 != 0 && newStart2 != i2) {
+              case si : SIntSemiLinearSet => 
+                if(c2 != 0) {
                   SCounter(l, s2, i2, c2)
-                } else if(c1 != 0 && newStart2 != i1)
+                } else if(c1 != 0)
                   SCounter(l, s2, i1, c1)
                 else SEmpty
               case _ =>
@@ -648,19 +687,68 @@ object ProgramSet {
       } else SEmpty
     case _ => SEmpty
   })
-  def intersectPos(p1: SPosition, p2: SPosition)(implicit unify: Option[Identifier] = None): SPosition = (p1, p2) match {
+  final val INDEX_IDENTIFIER = Identifier("index")
+  def intersectPos(p1: SPosition, p2: SPosition)(implicit unify: IntersectParam): SPosition = (p1, p2) match {
     case (SCPos(k1), SCPos(k2)) if k1 == k2 => p1
-    case (SPos(r11, r12, c1), SPos(r21, r22, c2)) =>
-      val r1 = intersectRegex(r11,r21)
-      if(r1 == SEmpty) return SEmpty
+    
+    case (SCPos(0), p2@SPos(r21,r22,c2)) if unify.useIndexForPosition => // Possible unification with an index.
+      val newCC: SIntegerExpr = if(unify.unify.isEmpty) {
+        c2 flatMap {
+          case IntLiteral(k2) if k2 > 0 =>
+            val i1 = unify.index1
+            val i2 = unify.index2
+            if(i1 == 0 && i2 != 0 && k2%i2 == 0) {
+              val increment = k2/i2
+              val first = 0
+              List(Linear(increment, INDEX_IDENTIFIER, first))
+            } else Nil
+          case _ => Nil
+        }
+      } else {
+        c2 flatMap {
+          case IntLiteral(k2) if k2 > 0 =>
+            val increment = k2
+            val first = 0
+            List(Linear(increment, unify.unify.get, first))
+          case _ => Nil
+        }
+      }
+      if(newCC.isEmpty) SEmpty else {
+        SPos(r21, r22, newCC)
+      }
+    case (p1@SPos(r11, r12, c1), p2@SPos(r21, r22, c2)) =>
       val r2 = intersectRegex(r12,r22)
       if(r2 == SEmpty) return SEmpty
-      val c = if(unify.isEmpty) c1 intersect c2 else {
+     
+      val r1 = intersectRegex(r11,r21)
+      if(r1 == SEmpty) return SEmpty
+      
+      val c: SIntegerExpr = if(unify.unify.isEmpty) {
+        //c1 intersect c2
+        // TODO : Better intersection (currently n²)
+        val res = ((c1 x c2) flatMap {
+          case (a, b) if a == b => List(a)
+          case (a@Linear(k1, INDEX_IDENTIFIER, k), IntLiteral(k2)) if k1 * unify.index2 + k == k2 => List(a)
+          case (IntLiteral(k2), a@Linear(k1, INDEX_IDENTIFIER, k)) if k1 * unify.index1 + k == k2 => List(a)
+          case (IntLiteral(k1), IntLiteral(k2)) if unify.useIndexForPosition =>
+            val i1 = unify.index1
+            val i2 = unify.index2
+            if(i2 != i1 && (k2 - k1)%(i2 - i1) == 0) {
+              val increment = (k2-k1)/(i2-i1)
+              val start = k1 - i1*increment
+              if(start >= 0 && increment > 0 || start < 0 && increment < 0) {
+                List(Linear(increment, INDEX_IDENTIFIER, start))
+              } else Nil
+            } else Nil
+          case _ => Nil
+        }).toSet
+        res: SIntegerExpr
+      } else {
         val res = ((c1 x c2) flatMap { 
           case (a, b) if a == b => List(a)
           case (IntLiteral(k1), IntLiteral(k2)) =>
-            if(k1 < k2 && k1 >= 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
-            else if(k2 < k1 && k1 < 0) List(Linear((k2-k1), unify.get, k1):IntegerExpr)
+            if(k1 < k2 && k1 >= 0) List(Linear((k2-k1), unify.unify.get, k1):IntegerExpr)
+            else if(k2 < k1 && k1 < 0) List(Linear((k2-k1), unify.unify.get, k1):IntegerExpr)
             //else if(k2 < k1 && k2 >= 0) List(Linear((k1-k2), unify.get, k2):IntegerExpr)
             else Nil
           case _ => Nil
@@ -680,7 +768,7 @@ object ProgramSet {
     }
   }
   
-  def intersectIntSet(p1: SInt, p2: SInt)(implicit unify: Option[Identifier] = None): SInt = (p1, p2) match {
+  def intersectIntSet(p1: SInt, p2: SInt)(implicit unify: IntersectParam = IntersectParam(None, 0, 0)): SInt = (p1, p2) match {
     case (p1@SIntSemiLinearSet(start1, step1, max1), p2@SIntSemiLinearSet(start2, step2, max2)) => 
       // Multiple cases.
       val newMax = Math.min(max1, max2)
@@ -744,7 +832,7 @@ object ProgramSet {
       STokenSeq(res.toList)
     case _ => SEmpty
   }
-  def unify(s1: STraceExpr, s2: STraceExpr, w: Identifier) = intersect(s1, s2)(unify=Some(w))
+  def unify(s1: STraceExpr, s2: STraceExpr, w: Identifier, index1: Int, index2: Int, iterateInput: Boolean) = intersect(s1, s2)(unify=IntersectParam(Some(w), index1, index2, iterateInput))
 
   
   /**

@@ -1,0 +1,22 @@
+# Show France in visa and in others. Show doc, show jpg
+
+#Make pause after launch
+filter \
+ Arc_de_Triomphe_\(France\).jpg ok\
+ Eiffel_Tower_\(France\).jpg ok\
+ VISA_18746-C_\(France\).pdf notok
+
+#Make pause after launch
+filter --explain I_need_to_eat_like_that_\(Germany\).jpg ok
+
+#Make pause after launch
+partition --filter --auto \
+ Arc_de_Triomphe_\(France\).jpg Presentation01_France\
+ Eiffel_Tower_\(France\).jpg Presentation01_France\
+ At_the_beach_\(Malaysia\).jpg Presentation02_Malaysia\
+ Last_vacations_\(Malaysia\).jpg Presentation02_Malaysia
+
+mv --auto Presentation01_France/Arc_de_Triomphe_\(France\).jpg Presentation01_France/Arc_de_Triomphe.jpg
+
+auto --explain --all "convert Presentation01_France/*.jpg 01France.pdf"
+

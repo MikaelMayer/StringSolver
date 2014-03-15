@@ -193,7 +193,7 @@ object Printer {
       case NonAlphaTok =>
         "token not containing a-zA-Z"
       case AlphaNumTok =>
-        "AlphaNumeric token"
+        "alphanumeric token"
       case NonAlphaNumTok =>
         "token not containing 0-9a-zA-Z"
       case StartTok =>
@@ -235,6 +235,12 @@ object Printer {
         t"a $size-digit number incrementing$by$from continuing $s"*/
       case SpecialConversion(s, p) =>
         t"*special from $s*"
+      case InputString(i) => t"input $i"
+      case NORMAL => "without changes"
+      case CONVERT_LOWERCASE => "lowercase"
+      case CONVERT_UPPERCASE => "uppercase"
+      case UPPERCASE_INITIAL => "first letter capital"
+        
       case e =>
         s"UNKNOWN "+e.getClass().getName()
     }
@@ -249,7 +255,7 @@ object Printer {
     { case Seq(prefix, w1, w2, suffix) if w1 == w2 =>
         prefix + "all inputs" + suffix
     }
-    "(.*)\\[((?:(?!= and )[^,])*)\\](.*)" ==>
+    "(.*)\\[(?!\"|')((?:(?!= and )[^,])*)\\](?!\"|')(.*)" ==>
     { case Seq(prefix, inner, suffix) =>
         prefix + inner + suffix
     }

@@ -19,8 +19,8 @@ import java.util.regex.Pattern
 object ScalaRegExp extends ComputePositionsInString {
   type Start = Int
   type End = Int
-  final val plus = "{1," + (Integer.MAX_VALUE / 100) + "}"
-  
+  final val plus = "{1," + (1000) + "}"
+  // Replace 2000 by Integer.MAX_VALUE / 100
   /**
    * Computes the list of positions where there exists a word recognized by this regexp.
    */
@@ -30,6 +30,7 @@ object ScalaRegExp extends ComputePositionsInString {
       res
     }
     def recordStartingStates(s: String): List[Int] = {
+      //println("\"\"\""+dfa+"\"\"\".r.findAllMatchIn(\"\"\""+s+"\"\"\").map(_.start(0)).toList")
       val res = dfa.findAllMatchIn(s).map(_.start(0)).toList
       res
     }
@@ -44,6 +45,10 @@ object ScalaRegExp extends ComputePositionsInString {
     val dfa = convertRegExp(r, starting = false)
     dfa.recordStartingStates(s) map (_ - 1)
   }
+  def computeFirstPositionEndingWith(r: RegExp, s: String, start: Int = 0): Option[End] = {
+    val dfa = convertRegExp(r, starting = false)
+    dfa.findFirstMatchIn(s.substring(start)).map(_.start(0))  map (_ - 1)
+  }
   def computePositionsOfToken(r: Token, s: String): (List[Start],List[End]) = {
     val starts = ("(?="+convertToken(r) + ")").r
     var endings = ("(?<="+convertToken(r) + ")").r
@@ -56,7 +61,11 @@ object ScalaRegExp extends ComputePositionsInString {
     (dfa.recordStartingStates(s) zip dfa.recordFinalStates(s))
   }
   def computePositionsOfRegExp(r: RegExp, s: String): (List[Start],List[End]) = {
-    (computePositionsStartingWith(r, s), computePositionsEndingWith(r, s))
+    //val b = computePositionsEndingWith(r, s)
+    val a = computePositionsStartingWith(r, s)
+    val testB = (r match { case TokenSeq(l) => (l map convertToken mkString "") }).r.recordFinalStates(s) 
+    val  b = testB //assert(b == testB)
+    (a, b)
   }
   
   def convertRegExp(r: RegExp, starting: Boolean): Regex = {

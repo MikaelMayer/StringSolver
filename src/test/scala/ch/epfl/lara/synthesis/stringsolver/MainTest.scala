@@ -33,6 +33,16 @@ class MainTest extends WordSpec with ShouldMatchers {
     c.solve("abc10.jpg") should equal (s)
   }
   
+  "Service should filter: Names starting with dash" in {
+    val Some((c, s)) = Service.getFilter(List(("-a c.txt",true), ("-b.txt",true), ("a-c.txt",false), ("b-.txt", false), ("--b.txt", true)))
+    s should equal ("-")
+    println(Printer(c.solve().get))
+    c.solve("-b d.txt") should equal (s)
+    c.solve("b-d.txt") should not equal (s)
+    c.solve("--myfile.pdf") should equal (s)
+    c.solve("myfile--.jpg") should not equal (s)
+  }
+  
   "Service should partition : Name of categories unrelated to the name of files." in {
      //    Example 1: Name of categories unrelated to the name of files.
      val Some((c, optsolv, s)) = Service.getPartition(List(("abc.txt","blue"), ("defg.txt","blue"), ("hijk.jpg","red"), ("lmnop.jpg","red")))

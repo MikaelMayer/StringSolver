@@ -14,9 +14,102 @@ package ch.epfl.lara.synthesis.stringsolver
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.{HashMap => MMap}
+import java.net.Socket
+import java.net.ServerSocket
+import java.net.InetAddress
+import java.io.PrintStream
+import scala.io.BufferedSource
 
 object Service {
   import Main.Options
+  
+  var serverSocket: ServerSocket = null
+
+  var running: Boolean = false
+  
+  /**
+   * Converts a string to a list of arguments.
+   * convertStringToStringArray("""abc def "ghi klm" edf\ png 'test with space' "misquote"after""").foreach(println) givers
+   * abc
+   * def
+   * ghi klm
+   * edf png
+   * test with space
+   * "misquote"after
+   */
+  def convertStringToStringArray(in: String): Array[String] = {
+    in.split("(?<=[^\\\\]) ").foldLeft(Array[String]()){
+          case (array, entryRaw) =>
+            val entry = entryRaw.replaceAll("\\\\ ", " ")
+            if(array.size == 0) (Array(entry)) else
+            if(array.size >= 1 && (array.last.startsWith(""""""") || array.last.startsWith("""'"""))) {
+              var newElem = array.last + " " + entry
+              if(newElem.endsWith(array.last(0).toString)) {
+                array.init ++ List(newElem.substring(1, newElem.length - 1))
+              } else {
+                array.init ++ List(newElem)
+              }
+            } else array ++ List(entry)
+   }
+  }
+
+  /**
+   * Starts a server
+   * The server can be triggered using regular command line
+   */
+  def start(arg: Array[String]): Unit = {
+    if(running) return;
+    running = true;
+    try {
+      println("Starting service on IP Address " + InetAddress.getLocalHost.getHostAddress + 
+        " port No.12345")
+      serverSocket = new ServerSocket(12345)
+    } catch {
+      case ex: Exception => ex.printStackTrace()
+    }
+    val b = Array.ofDim[Byte](512)
+    var tmp = System.out
+    while (running) {
+      try {
+        println("Listening for clients on IP Address " + InetAddress.getLocalHost.getHostAddress + 
+          " port No.12345")
+        val client = serverSocket.accept()
+        println("Client from " + client.getInetAddress + ":" + client.getPort + 
+          " connected at " + 
+          (new java.util.Date().toString))
+        val in = new BufferedSource(client.getInputStream()).getLines()
+        val out = new PrintStream(client.getOutputStream())
+        println("Setting out")
+        System.setOut(out)
+        println("Set out")
+        val newCmdArray = convertStringToStringArray(in.next())
+        println("Sending the command line "+ newCmdArray.mkString(","))
+        tmp.println("Sending the command line "+ newCmdArray.mkString(","))
+        Main.main(newCmdArray)
+        out.println("Getting answer from server:")
+        tmp.println("Finished main:")
+        //out.println(in.next())
+        out.flush()
+        client.close()
+         } catch {
+        case ex: Exception => ex.printStackTrace()
+      } finally {
+        System.setOut(tmp)
+      }
+    }
+  }    
+    
+  def stop(arg: Array[String]) {
+    if (!running) return
+    running = false
+    try {
+      serverSocket.close()
+    } catch {
+      case ex: Exception => ex.printStackTrace()
+    }
+    println("Stopped service")
+  }
+  
 
   /**
    * Creates a filter out of a list of input/output.
@@ -43,8 +136,8 @@ object Service {
      c.solve("abc10.jpg") should equal (s)
    */
   def getFilter(examples: Seq[(String, Boolean)], c: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, String)] = {
-    val debug = opt.debug
-    val filterings = examples.groupBy(_._2).toList.sortBy({ case (taken, value) => if(taken) 1 else 2 })
+    val debug = true || opt.debug
+    val filterings: List[(Boolean, Seq[(String, Boolean)])] = examples.groupBy(_._2).toList.sortBy({ case (taken, value) => if(taken) 1 else 2 })
     if(filterings.length < 2) {
       println("# Filtering requires at least two different mappings accepting and not accepting. Got "+filterings.length)
       if(debug) println(filterings)
@@ -64,14 +157,15 @@ object Service {
       case (accepted, (substrings, filtering)) =>
         if(accepted) {
           val other_substrings = (filterings_w_substrings.toList.filter{ case (other_accepted, (l2, p)) => !other_accepted }.flatMap{ case (other_accepted, (l2, p)) => l2 } )
-          val smallest_set = substrings -- other_substrings
+          val smallest_set = substrings //-- other_substrings
           if(smallest_set.isEmpty) {
             println(s"# Files in accepted ${accepted} do not share a common string not found in others.")
             return None
           }
-          (accepted, (smallest_set.toList.sortBy(e => e.length).last, filtering))
+          val reprs = smallest_set.toList.sortBy(e => e.length) // TODO better sort
+          (accepted, (reprs.last, reprs.init.reverse, filtering))
         } else {
-          (accepted, ("", filtering))
+          (accepted, ("", Nil, filtering))
         }
         
         //val representative = smallest_set.toList.sortBy(_.length).last
@@ -82,25 +176,50 @@ object Service {
      *  we need to intersect all corresponding programs to generate each one of them. */
     
     // Adding mappings
-    val determiningSubstring: String = filterings_w_determining_substrings find {
+    /*val determiningSubstring: String = filterings_w_determining_substrings find {
       case (accepted, _) => accepted} match {
-      case Some((_, (determining_substring, _))) =>
+      case Some((_, (determining_substring, remaining, _))) =>
         determining_substring
       case None => // cannot happen
         ""
+    }*/
+    
+    val negatives = filterings_w_determining_substrings.toList.filter(_._1 == false) match {
+      case List((accepted, (a, remaining, filtering))) =>
+        filtering
     }
-    filterings_w_determining_substrings.toList foreach {
-      case (accepted, (_, filtering)) =>
+    
+    filterings_w_determining_substrings.toList.filter(_._1 == true) match {
+      case List((accepted, (a, remaining, filtering))) =>
+        var found: Option[(StringSolver, String)] = None
+        for(determiningSubstring <- a::remaining if found == None) {
+          //if(debug) println(s"Testing $determiningSubstring")
+          val d = c.copy()
+          val toAdd = filtering map {
+             case (in, out) =>
+               d.add(List(in), determiningSubstring)
+          }
+          if(negatives exists { case (a, _) => d.solve(a) == determiningSubstring }) {
+            // Not good, need to continue
+          } else found = Some((d, determiningSubstring))
+        }
+        found
+      case _ => // Should not happen
+        throw new Exception("Service filter crashed. Please send a report to the authors.")
+    }
+    
+    /*filterings_w_determining_substrings.toList foreach {
+      case (accepted, (_, remaining, filtering)) =>
         import ProgramSet._
         import Program._
         if(accepted) {
           filtering foreach {
              case (in, out) =>
-               c.add(List(in),determiningSubstring)
+               d.add(List(in),determiningSubstring)
           }
         }
-    }
-    Some((c, determiningSubstring))
+    }*/
+    //Some((c, determiningSubstring))
   }
   
   /**
@@ -260,7 +379,6 @@ object Service {
      * Solver to find a mapping between the representative and the category
      * Finds counters, but also substrings from representative
      */
-    val c2 = StringSolver()
     category_order map { case i => (i, category_to_substring(i))} foreach {
       case (category, representative) =>
         if(debug) {
@@ -282,6 +400,33 @@ object Service {
     }))
   }
   
+  /**
+   * Synthesize a split command.
+   */
+  def getSplit(input: String, examples: Seq[String], c: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, String => List[String])] = {
+    c.setUseIndexForPosition(true) // true by default
+    for(ex <- examples) {
+      c.add(List(input), ex)
+    }
+    c.solve() map {
+      case prog =>
+        (c, { case input => 
+          var r: Option[String] = None
+          var finished = false
+          var i = 0
+          val l = ListBuffer[String]()
+          while(!finished) {
+            c.setPosition(i)
+            c.solve(input) match {
+              case "" => finished = true
+              case e => l.append(e)
+            }
+            i += 1
+          }
+          l.toList
+        })
+    }
+  }
   
   /**
    * Returns a set of all common substrings

@@ -382,7 +382,7 @@ import f._
   
   it should "prefer constants over counters" in {
     val f = StringSolver()
-    val c = f.add("Algorithm.txt -> 001.txt")
+    val c = f.add("Algorithm.txt -> Algorithm001.txt")
     println(Printer(c.takeBest))
     f.solve("Math.txt") should equal ("Math001.txt")
   }
@@ -396,7 +396,39 @@ import f._
     val f = StringSolver()
     val c = f.add("april August mar Dec -> 4 8 03 12")
     println(Printer(c.takeBest))
-    f.solve("february March oct May") should equal ("2 3 10 5")
+    f.solve("february March oct May") should equal ("2 3 10 05")
+  }
+  it should "split simple sequences" in {
+    val c = StringSolver()
+    val p1 = c.add("extract each word separately -> extract")
+    val p2 = c.add("extract each word separately -> each")
+    renderer(c)
+    c.solve("extract each word separately") should equal ("word")
+    c.solve("extract each word separately") should equal ("separately")
+    c.solve("extract each word separately") should equal ("")
+  }
+  
+  it should "split medium sequences" in {
+    val c = StringSolver()
+    val original = "a;#d%;j;m"
+    val p1 = c.add(List(original), "a")
+    val p2 = c.add(List(original), "#d%")
+    renderer(c)
+    val p3 = c.add(List(original), "j")
+    renderer(c)
+    c.solve(original) should equal ("m")
+    c.solve(original) should equal ("")
+  }
+  
+  it should "split more complex sequences" in {
+    val c = StringSolver()
+    val original = "10:First line;comment;20: Second;line;#comment;30: %Third line;40: Fourth line"
+    val p1 = c.add(List(original), "10:First line;comment")
+    val p2 = c.add(List(original), "20: Second;line;#comment")
+    renderer(c)
+    c.solve(original) should equal ("30: %Third line")
+    c.solve(original) should equal ("40: Fourth line")
+    c.solve(original) should equal ("")
   }
 }
 

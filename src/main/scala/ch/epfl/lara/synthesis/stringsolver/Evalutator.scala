@@ -13,7 +13,8 @@
 package ch.epfl.lara.synthesis.stringsolver
 
 import Program._
-
+import scala.language.implicitConversions
+ 
 trait ComputePositionsInString {
   /**
    * Computes the list of positions where there exists a word recognized by this regexp.
@@ -67,9 +68,9 @@ object Evaluator {
   /**
    * Loop routines
    */
-  def loopR(w: Identifier, e: TraceExpr, k: Int, separator: StringValue, first: Boolean = true)(implicit input: Input_state, context: Option[Map[String, Int]]): Value = {
-    val t = evalProg(e)(input, Some(context.getOrElse(Map()) + (w.value -> k)))
-    if(k > 50) {
+  def loopR(w: Identifier, e: TraceExpr, k: Int, separator: StringValue, first: Boolean = true)(implicit evaluationContext: EvaluationContext): Value = {
+    val t = evalProg(e)(EvaluationContext(evaluationContext.input, Some(evaluationContext.context.getOrElse(Map()) + (w.value -> k))))
+    if(k > 1000) {
       println("Bug in loopR?")
     }
     t match {
@@ -84,10 +85,15 @@ object Evaluator {
     }
   }
   
+  case class EvaluationContext(input: Input_state, context: Option[Map[String, Int]])
+  implicit def inputToEvaluationContext(i: Input_state): EvaluationContext = {
+    EvaluationContext(i, Some(Map("index" -> i.position)))
+  }
+  
   /**
    * Evaluates a program given an input.
    */
-  def evalProg(p: Program)(implicit input: Input_state, context: Option[Map[String, Int]] = Some(Map())): Value = p match {
+  def evalProg(p: Program)(implicit evaluationContext: EvaluationContext): Value = p match {
     case Switch(s) =>
       s.find{case (bool, expr) => evalProg(bool).asBoolFalseIfBottom} match {
         case Some((b, expr)) =>
@@ -100,11 +106,11 @@ object Evaluator {
     case Conjunct(pis) =>
       BoolValue((true /: pis) { case (res, cj) => res && evalProg(cj).asBoolFalseIfBottom })
     case Match(InputString(v), r, k) =>
-      val s = input.inputs(evalProg(v).asInt)
+      val s = evaluationContext.input.inputs(evalProg(v).asInt)
       val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
       BoolValue(res1.length >= k)
     case NotMatch(InputString(v), r, k) =>
-      val s = input.inputs(evalProg(v).asInt)
+      val s = evaluationContext.input.inputs(evalProg(v).asInt)
       val res1 = RegexpPositionsInString.computePositionsEndingWith(r, s)
       BoolValue(res1.length < k)
     case c@Concatenate(ls) =>
@@ -135,10 +141,10 @@ object Evaluator {
     case e @ SubStr(InputString(v1), p1, p2, m) =>
       evalProg(v1) match {
         case IntValue(index) =>
-          if(index >= input.inputs.length) return BottomValue
-          val s = input.inputs(index)
-          val i1 = evalProg(p1)(Input_state(IndexedSeq(s), input.position), context)
-          val i2 = evalProg(p2)(Input_state(IndexedSeq(s), input.position), context)
+          if(index >= evaluationContext.input.inputs.length) return BottomValue
+          val s = evaluationContext.input.inputs(index)
+          val i1 = evalProg(p1)(EvaluationContext(Input_state(IndexedSeq(s), evaluationContext.input.position), evaluationContext.context))
+          val i2 = evalProg(p2)(EvaluationContext(Input_state(IndexedSeq(s), evaluationContext.input.position), evaluationContext.context))
           val res = i1 match {
             case IntValue(n1) if n1 >= 0 =>
               i2 match {
@@ -163,8 +169,8 @@ object Evaluator {
 
     case ConstStr(s) => StringValue(s)
     case CPos(k) if k >= 0 => IntValue(k)
-    case CPos(k) if k < 0 => IntValue(input.inputs(0).length + k + 1)
-    case Pos(r1, r2, c) => val s = input.inputs(0)
+    case CPos(k) if k < 0 => IntValue(evaluationContext.input.inputs(0).length + k + 1)
+    case Pos(r1, r2, c) => val s = evaluationContext.input.inputs(0)
     val res1 = RegexpPositionsInString.computePositionsEndingWith(r1, s).map(_ + 1)
     val res2 = RegexpPositionsInString.computePositionsStartingWith(r2, s)
     val intersections = res1 intersect res2
@@ -174,6 +180,10 @@ object Evaluator {
           IntValue(intersections(i-1))
         } else if(i <= -1 && 0 <= intersections.length + i) {
           IntValue(intersections(intersections.length + i))
+        } else if(i == 0) { // Special case for the first element.
+          IntValue(0)
+        } else if(i > 0 && i - 1 == intersections.length && (c match { case Linear(i1, Identifier("index"), i2) => true case _ => false})) { // Special case for the first element.
+          IntValue(s.length)
         } else {
            BottomValue
         }
@@ -183,7 +193,7 @@ object Evaluator {
     case IntLiteral(i) => IntValue(i)
     case Linear(k1, v, k2) =>
       //if(context contains v.value) {
-        context.head.get(v.value) match {
+        evaluationContext.context.head.get(v.value) match {
           case Some(k) =>
              if(!(k2 >= 0) || k*k1+k2 >= 0) {
                IntValue(k * k1 + k2)
@@ -193,7 +203,7 @@ object Evaluator {
       //} else BottomValue
     
     case Counter(size, start, offset) =>
-      val res = (input.position*offset + start).toString
+      val res = (evaluationContext.input.position*offset + start).toString
       StringValue("0"*(size - res.length) + res)
     case NumberMap(a, size, offset) =>
     val i = IntValue(size)

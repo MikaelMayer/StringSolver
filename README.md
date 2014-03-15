@@ -20,8 +20,9 @@ Installation:
 - Build the project using `sbt one-jar`.
 - Use the following alias to rename file using the tool (e.g. in your `.bashrc` file:
 ```
-alias mv='java -jar "[/path/to/target/scala/]stringsolver_2.10-1.0-one-jar.jar" move'
-alias auto='java -jar "[/path/to/target/scala/]/stringsolver_2.10-1.0-one-jar.jar" auto'
+export STRINGSOLVERPATH = [/path/to/target/scala/]
+alias mv='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" move'
+alias auto='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" auto'
 ```
 
 ### Semi-automated Renaming

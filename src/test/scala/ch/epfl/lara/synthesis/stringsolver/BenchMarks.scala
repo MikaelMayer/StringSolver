@@ -126,11 +126,11 @@ pqr.mp4 | file3.avi""", 1)
   
   "13. Rename with counter http://www.unix.com/shell-programming-scripting/166181-rename-files-sub-directories-sequential-numbers.html   " in {
     val c = StringSolver()
-    c.add("""asd.dat | 1.dat.txt  
-sdfrds.dat  | 2.dat.txt  
-asdx.dat  | 3.dat.txt""", 1)
+    c.add("""folderA/asd.dat | folderA/1.dat.txt  
+folderA/sdfrds.dat  | folderA/2.dat.txt  
+folderB/asdx.dat  | folderB/3.dat.txt""", 1)
     renderer(c)
-    c.solve("qwesd.dat") should equal ("4.dat.txt")
+    c.solve("folderC/qwesd.dat") should equal ("folderC/4.dat.txt")
   }
   
   "14. Append timestamp to name http://www.unix.com/shell-programming-scripting/172750-how-rename-file-using-shellscript.html" in {

@@ -1,7 +1,7 @@
 
 name := "StringSolver"
 
-version := "1.0"
+version := "1.1"
 
 organization := "ch.epfl.lara"
 
@@ -31,14 +31,12 @@ libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.2.3"
   
 libraryDependencies += "com.typesafe.akka" %% "akka-remote" % "2.2.3"
 
-publishMavenStyle := true
-
 publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+val nexus = "https://oss.sonatype.org/"
+if (isSnapshot.value)
+  Some("snapshots" at nexus + "content/repositories/snapshots")
+else
+  Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 
 publishArtifact in Test := false
@@ -65,3 +63,8 @@ pomExtra := (
       <url>http://www.mikaelmayer.com</url>
     </developer>
   </developers>)
+// Publish to local Maven repository
+
+publishMavenStyle := true
+
+//publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
