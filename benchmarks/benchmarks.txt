@@ -1,52 +1,28 @@
+1. Source: http://stackoverflow.com/questions/4631123/complex-file-rename 
 
- 1. source: http://stackoverflow.com/questions/4631123/complex-file-rename 
+Problem: renaming files 
 
- 
-
-problem: renaming files 
-
- AB1234.gif     
-
+AB1234.gif     
 B3245.gif   
-
 AB2541.gif   
-
-AB11422.jpg  
-
- 
+AB11422.jpg   
 
 and so on.. 
 
- 
-
 Output files should be 
 
- 
-
 AB-0111-1.gif 
-
 B-0111-2.gif 
-
 AB-0111-3.gif 
-
 AB-0111-4.jpg 
-
- 
 
 Logic will be 
 
- 
-
 for(int n=0;n<files.count;n++){ 
-
     if(file is starting with AB) 
-
         fileName = AB + "-0111" + n; 
-
     if(file is starting with B) 
-
         fileName = B + "-0111" + n; 
-
 } 
 
  
@@ -55,261 +31,129 @@ for(int n=0;n<files.count;n++){
 
  dir | foreach -begin{$cnt = 1} -process { mv $_ ($_.Name -replace '\d+',"-0111-$cnt"); $cnt += 1} 
 
- 
-
 Number of examples required: 2 
-
- 
 
 Mapping: <$1><$2>.<$3> -> <$1>-0111-<iter>.<$3> 
 
- 
-
 File Filter: (AB|B)(.)* 
 
-   
-
- 
 
 2.  Source : The UNIX and Linux Forums : http://www.unix.com/shell-programming-scripting/154111-mass-renaming-files-complex-filenames.html  
-
- 
-
 Problem: Renaming files: 
-
- 
-
 [Various-PC]_Some_Name_178_HD_[e2813be1].mp4 -> Ep 178.mp4 
-
 [TTB]_Some_Name_-_496_Vost_SD_(720x400_XviD_MP3).avi    ->               Ep 496.avi 
-
 Goffytofansub_Some name 483_HD.avi                                                ->                Ep 483.avi 
-
- 
 
 Solution: 
 
- 
-
 Foreach (x in Match(".mp4",ALLFILES) v Match(".avi",ALLFILES) )   
-
      rename x Concatenate(ConstStr("Ep"),Substring(x,Pos(NumTok,epsilon,1),Pos(epsilon,NumTok,1))  
-
- 
 
 Number of examples required: 2  
 
- 
-
 Mapping: <$1><$2><$3>.<$4> -> Ep <$s>.<$4> 
-
- 
-
 File Filter: (.)* 
 
- 
 
- 
-
-        3.   Source: Stack Overflow : http://stackoverflow.com/questions/1086502/rename-multiple-files-in-unix  
-
- 
+3.   Source: Stack Overflow : http://stackoverflow.com/questions/1086502/rename-multiple-files-in-unix  
 
 Problem: Renaming files: 
 
 fghfilea  ->  jklfilea  
+fghfileb  -> jklfileb 
+fghfile     ->  jklfile  
 
- fghfileb  -> jklfileb 
-
- fghfile     ->  jklfile  
-
- 
-
- 
-
-          Solution:  
-
- 
+Solution:  
 
 Foreach (x in Match("fgh.*",ALLFILES) )    
-
      rename x Concatenate(ConstStr("jkl"),Substring(x,3,Pos(epsilon,EndTok,1)); 
-
- 
-
- 
 
 Number of examples required: 1 
 
- 
-
 Mapping: fgh<$1> -> jkl<$1> 
-
 Filter: fgh(.)* 
 
- 
 
-         4.  Source: Stack Overflow :  http://stackoverflow.com/questions/245840/rename-files-in-sub-directories  
-
- 
+4.  Source: Stack Overflow :  http://stackoverflow.com/questions/245840/rename-files-in-sub-directories  
 
 Problem: Rename *.html to *.htm in the current directory and all subdirectories         
-
- 
 
 Solution: 
 
 Foreach (x in Match(".*\.html",ALLFILES) )     
-
      rename x Concatenate(Substring(0,Pos(epsilon,DotTok,1),ConStr("htm"));  
 
 Foreach (y in Match(".*",SUBDIR) )   
-
 Foreach (x in Match(".*\.html",ALLFILES) )      
-
      rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1),ConStr("htm"));   
 
- 
-
 Mapping: <$1>.html -> <$2>.htm 
-
 Filter: (.)*/.html 
-
 Number of examples required: 1  
 
-             
 
-         5. Source: Stack Overflow : http://stackoverflow.com/questions/6269431/rename-a-number-of-files-with-git  
-
- 
+5. Source: Stack Overflow : http://stackoverflow.com/questions/6269431/rename-a-number-of-files-with-git  
 
 Problem: Rename files:  
-
-                       __a.txt -> _a.txt 
-
-                       __b.txt -> _b.txt 
-
- 
+__a.txt -> _a.txt 
+__b.txt -> _b.txt 
 
 Solution:  
 
- 
-
 Foreach (x in Match("__.\.txt",ALLFILES) )      
-
      rename x (Substring(x,1,Pos(epsilon,EndTok,1));   
-
- 
 
 Number of examples required: 1 
 
- 
-
 Mapping: __<$1> -> _<$1> 
-
 Filter: __(.)* 
 
- 
-
- 
 
 6.  Source: Stack Overflow : http://stackoverflow.com/questions/6911301/rename-multiple-files-shell  
 
- 
-
 Problem: Rename files 
-
 linux_file1.mp4 ->  file1.mp4 
-
 linux_file2.mp4 ->  file2.mp4 
 
- 
-
 Solution:  
-
- 
-
 Foreach (x in Match("linuxfile.\.mp4",ALLFILES) )       
-
      rename x(Substring(x,6,Pos(epsilon,EndTok,1));  
-
- 
 
 Number of examples required: 1  
 
- 
-
 Mapping: linux_<$1><iter>.mp4 -> <$1><iter>.mp4 
-
 Filter: linux_(.)*/.mp4 
 
-  
 
- 
-
- 
-
-       7.  Source : http://www.unix.com/unix-dummies-questions-answers/186591-rename-multiple-files-changing-prefix-extension-dropping-characters.html  
-
- 
+7.  Source : http://www.unix.com/unix-dummies-questions-answers/186591-rename-multiple-files-changing-prefix-extension-dropping-characters.html  
 
 Problem: Rename files 
 
- 
-
 000012ABCDEFGHIJ.XXX.YYY.ZZZ -> newa012.abc 
-
-            000078KLMNO.XXX.YYY.ZZZ          -> newa078.abc 
-
-            000099PQ.XXX.YYY.ZZZ                   -> newa099.abc 
-
- 
+000078KLMNO.XXX.YYY.ZZZ          -> newa078.abc 
+000099PQ.XXX.YYY.ZZZ                   -> newa099.abc 
 
 Solution: 
 
- 
-
 Foreach (x in Match(0000.*\.XXX.YYY.ZZZ",ALLFILES) )        
-
      rename x Concatenate(ConStr("newa"),Substring(x,3,5),ConStr(".abc"));    
-
- 
 
 Number of examples required: 2 
 
- 
-
 Mapping: 000<$1><$2> -> newa<$1>.abc 
+Filter : 0000[0-9]{2}[A-Za-z]{2,10}.XXX.YYY.ZZZ   
 
-Filter : 0000[0-9]{2}[A-Za-z]{2,10}.XXX.YYY.ZZZ 
 
-  
-
- 
-
-           
-
-       8.  Source :http://www.unix.com/unix-dummies-questions-answers/177641-bash-script-rename-files-directory.html     
-
- 
+8.  Source :http://www.unix.com/unix-dummies-questions-answers/177641-bash-script-rename-files-directory.html     
 
 Problem: Appending the file name with username (who created the file), the date it was created. For example, "apple.doc" should be renamed to "johnFeb23apple.doc" where "john" is the owner and "Feb23" is file created date. 
 
- 
-
 Solution: 
 
- 
-
 Foreach (x in Match(.*\.doc",ALLFILES) )         
-
-                name=getUserName(x); 
-
-                date=getCreatedDate(x); 
-
-              rename x Concatenate(ConStr($name),ConStr($date),x);      
-
- 
+  name=getUserName(x); 
+  date=getCreatedDate(x); 
+  rename x Concatenate(ConStr($name),ConStr($date),x);      
 
 Mapping: <$1>.<$2> -> <name><date><$1>.<$2> 
 
@@ -317,48 +161,28 @@ Filter: (.)*
 
 # examples req: 2 
 
- 
-
 apple.doc | John  | 23Feb2012  | johnFeb23apple.doc   
 orange.doc  | Harry | 11Apr2011 | harryApr11orange.doc 
 dfe.doc  | Lisa | 14Dec1990 
 dfeasd.doc  | Paul | 24May1995 
 
-            
 
-      9.  Source : http://www.unix.com/unix-dummies-questions-answers/149885-bash-script-rename-all-files-within-folder.html  
-
- 
+9.  Source : http://www.unix.com/unix-dummies-questions-answers/149885-bash-script-rename-all-files-within-folder.html  
 
 Problem:  Rename all files in a folder to the format file1.avi, file2.avi, file3.avi, and so on.....  
-
 Please note that the original files have different filenames and different extensions. But they all need to be renamed into the above format.....  
-
- 
 
 Solution: 
 
- 
-
 Foreach (x in Match(".*",ALLFILES) )    
-
-     cnt=1;      
-
-     rename x Concatenate(ConStr("file"+$cnt+".avi"));cnt++; 
-
- 
+   cnt=1;      
+   rename x Concatenate(ConStr("file"+$cnt+".avi"));cnt++; 
 
 abc.mp3 | file1.avi 
 xyz.avi | file2.avi 
 pqr.mp4 | file3.avi 
 aqw.mkv  
-awq.mkv  
-
- 
-
- 
-
-Unable to learn! 
+awq.mkv   
 
  
 
@@ -366,764 +190,374 @@ Mapping: <$1>.<$2> -> file<iter>.avi
 
 Filter: (.)* 
 
- 
-
- 
-
- 
 
 10. Source : http://www.unix.com/shell-programming-scripting/135178-rename-all-jpg-files-jpg-under-all-subfolders.html   
 
- 
-
 Problem: Rename all ".JPG" files to ".jpg" in all subfolders. 
-
-   
-
 Solution:  
-
- 
-
-Foreach (y in Match(".*",SUBDIR) )    
-
-Foreach (x in Match(".*\.JPG",ALLFILES) )       
-
-                     rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1),ConStr("jpg"));    
+    Foreach (y in Match(".*",SUBDIR) )    
+    Foreach (x in Match(".*\.JPG",ALLFILES) )       
+      rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1),ConStr("jpg"));    
 
  
 
  
 
 abc.JPG | abc.jpg 
-
 xsers.JPG 
-
 awes.JPG 
 
- 
-
 No. of examples: 1 
-
- 
 
 Mapping: <$1>.JPG -> <$1>.jpg 
-
 FIlter: (.)*/.JPG 
 
- 
-
- 
-
-     11.  Source: The UNIX and Linux Forums: http://www.unix.com/shell-programming-scripting/80154-rename-file-extension.html  
-
- 
-
+11.  Source: The UNIX and Linux Forums: http://www.unix.com/shell-programming-scripting/80154-rename-file-extension.html  
 Problem: Rename files  
 
- 
-
 file1.txt -> file1.html 
-
-            file2.txt->  file2.html 
-
-            and so on... 
-
- 
+file2.txt->  file2.html 
+and so on... 
 
 Solution:  
-
 Foreach (x in Match(".*\.txt",ALLFILES) )        
-
-                     rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1),ConStr("html")); 
-
- 
+  rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1),ConStr("html")); 
 
 No. of examples: 1 
 
- 
-
 Mapping: <$1>.txt -> <$1>.html 
-
 Filter: (.)*/.txt 
 
- 
-
-     12.  Source: The UNIX and Linux Forums: http://www.unix.com/linux/139049-rename-files-using-loop-different-name.html  
-
- 
+12.  Source: The UNIX and Linux Forums: http://www.unix.com/linux/139049-rename-files-using-loop-different-name.html  
 
 Problem: Rename Files: 
 
- 
-
 file1.dat ->  file1_201001.dat 
-
-            file2.dat ->  file2_201002.dat 
-
-            file3.dat ->  file3_201003.dat 
+file2.dat ->  file2_201002.dat 
+file3.dat ->  file3_201003.dat 
 
  
 
 Solution: 
 
- 
-
 Foreach (x in Match("file.\.dat",ALLFILES) )         
-
-         cnt=201001; 
-
-                     rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1)-1,ConStr("_"+$cnt),Substring(x,Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)); cnt++; 
-	
-
- 
-	
-
- 
-
- 
+  cnt=201001; 
+  rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1)-1,ConStr("_"+$cnt),Substring(x,Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)); cnt++; 
 
 No. of examples: 1 
-
- 
 
 Mapping: <$1>.<$2> -> <$1>_201<iter>.<$2> 
 
 FIlter:  (.)* 
 
- 
-
 13.  Source: http://www.unix.com/shell-programming-scripting/166181-rename-files-sub-directories-sequential-numbers.html   
-
- 
-
-            Problem: Rename files 
+  Problem: Rename files 
 
 [some].dat ->  1.dat.txt 
-
 [some].dat ->  2.dat.txt 
-
-            [some].dat ->  3.dat.txt 
-
- 
+[some].dat ->  3.dat.txt 
 
 Solution: 
 
- 
-
 Foreach (x in Match(".*\.dat",ALLFILES) )        
-
-         cnt=1; 
-
-                     rename x Concatenate(ConStr($cnt+".dat.txt")); 
-
- 
+  cnt=1; 
+  rename x Concatenate(ConStr($cnt+".dat.txt")); 
 
 asd.dat | 1.dat.txt  
 sdfrds.dat  | 2.dat.txt  
 asdx.dat  | 3.dat.txt 
 qwesd.dat 
 
- 
-
- 
-
-Unable to learn 
-
- 
-
 Mapping: <$1>.dat -> <iter>.dat.txt 
 
 Filter: (.)*/.dat 
 
- 
 
 14.  Source: http://www.unix.com/shell-programming-scripting/172750-how-rename-file-using-shellscript.html  
 
- 
-
 Problem: Append timestamp to filename 
 
-              
-
-            abc.log ->   abc.2011120706:54:59.log 
-
- ppp.log ->  ppp.2011120706:54:59.log 
-
- shd.log  ->  shd.2011120706:54:59.log 
-
- 
+abc.log ->   abc.2011120706:54:59.log 
+ppp.log ->  ppp.2011120706:54:59.log 
+shd.log  ->  shd.2011120706:54:59.log 
 
 Solution: 
-
- 
 
 Foreach (x in Match("\.jpg",ALLFILES) )        
 
 timestamp=getTimeStamp();       
-
-             rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1))),ConStr(""+$timestamp), Substring(x,Pos(epsilon,DotTok,1)+1,Pos(epsilon,EndTok,1)) )   
-	
-
- 
-
- 
-	
-
- 
-
- 
+rename x Concatenate(Substring(x,0,Pos(epsilon,DotTok,1))),ConStr(""+$timestamp), Substring(x,Pos(epsilon,DotTok,1)+1,Pos(epsilon,EndTok,1)) )   
 
 abc.log  | 2011120706:54:59  | abc.2011120706:54:59.log  
- ppp.log  | 2011120703:54:59 
- shd.log  | 2011100706:51:59 
-
- 
-
- 
+ppp.log  | 2011120703:54:59 
+shd.log  | 2011100706:51:59 
 
 No. of examples: 1 
 
- 
-
 Mapping: <$1>.log -> <$1>.<timestamp>.log 
-
 Filter: (.)*/.log 
-
- 
 
 15.  Source: Stack Overflow : http://stackoverflow.com/questions/11901555/rename-multiple-jpg-files  
 
- 
-
 Problems: Rename Files: 
 
- 
-
 0001webcamimage.jpg ->  0001.jpg 
-
-            0002webcamimage.jpg ->  0002.jpg 
-
+0002webcamimage.jpg ->  0002.jpg 
 0003webcamimage.jpg ->  0003.jpg 
-
-             
 
          Solution:  
 
 Foreach (x in Match("000.webcamimage\.jpg",ALLFILES) )        
-
-                     rename x Concatenate(Substring(x,0,3), Substring(x,Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)));     
-
- 
+  rename x Concatenate(Substring(x,0,3), Substring(x,Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)));     
 
 Number of examples: 1 
-
- 
-
 Mapping: <iter>webcamimage.jpg -> <iter>.jpg 
-
 Filter: [0-9]{4}webcamimage/.jpg 
-
- 
-
- 
 
 16. Source:  http://www.unix.com/shell-programming-scripting/172964-complex-renaming-then-moving-files.html 
 
- 
-
 Problem: 1. Folder ExperimentX (where X is a number) that contains files "out.pdb" and "log.txt".  
+         2. Renames the out.pdb file to out_ExperimentX.pdb  
+         3. Move the new out files to a new common directory 
 
-        2. Renames the out.pdb file to out_ExperimentX.pdb  
-
-        3. Move the new out files to a new common directory 
-
- 
-
-           Solution:  Foreach (x_dir in Match("Experiment.",ALLDIR) 
-
-      
-	
-
- 
-	
+Solution:  Foreach (x_dir in Match("Experiment.",ALLDIR) 
 
 rename out.pdb Concatenate(ConStr("out_"), ConStr($x_dir+".pdb")   
 
- 
-	
-
- 
-	
-
 move out_Experiment.  <destination path> 
-
- 
 
 out.pdb | Experiment1  | out_Experiment1.pdb 
 out.pdb | Experiment2  
 out.pdb | Experiment3 
 
- 
-
- 
-
 Number of examples required: 1 
 
- 
-
 Mapping: 1. out.pdb -> out_Experiment<$1>.pdb 
-
-        2.  out_Experiment<$1>.pdb -> <destination path> 
-
- 
+         2. out_Experiment<$1>.pdb -> <destination path> 
 
 Filter: out.pdb in Experiment[0-9]+ folder 
 
- 
-
- 
 
 17.  Source: http://kangry.com/topics/viewcomment.php?index=9075 
 
- 
+Problem: Rename
 
-Problem: Rename           music01helpless.mp3  
-
+music01helpless.mp3  
 music02hopeless.mp3  
-
 music03merciless.mp3  
 
 to  
 
 music01.mp3  
-
 music02.mp3  
-
 music03.mp3  
-
- 
-
-         Solution: 
-
- 
-
-Foreach (x in Match(".mp3",ALLFILES) )    
-
-     rename x Concatenate(Substring(0,Pos(epsilon,NumTok,2),Substring(Pos(epsilon,DotTok,1)), Pos(epsilon,EndTok,1))) 
-	
-
-                             
-
- 
-
-music01helpless.mp3 | music01.mp3  
-
-music02hopeless.mp3   
-
-music03merciless.mp3 
-
- 
-
-Number of examples required: 1 
-
- 
-
-Mapping: <$1><$2>.mp3 -> <$1>.mp3 
-
-Filter: music[0-9]{2}(.)*/.mp3 
-
- 
-
-18.  Source: http://unix.stackexchange.com/questions/34014/bulk-rename-files-with-numbering 
-
- 
-
-Problem: Rename  
-	
-
- 
-	
-
-Image401.jpg, Image402.jpg,... 
-
- 
-
-to 
-
- 
-
-Image 001.jpg, Image002.jpg, ...  
-
- 
 
 Solution: 
 
- 
+Foreach (x in Match(".mp3",ALLFILES) )    
+     rename x Concatenate(Substring(0,Pos(epsilon,NumTok,2),Substring(Pos(epsilon,DotTok,1)), Pos(epsilon,EndTok,1))) 
+	
+music01helpless.mp3 | music01.mp3  
+music02hopeless.mp3   
+music03merciless.mp3 
+
+Number of examples required: 1 
+
+Mapping: <$1><$2>.mp3 -> <$1>.mp3 
+Filter: music[0-9]{2}(.)*/.mp3 
+
+
+18.  Source: http://unix.stackexchange.com/questions/34014/bulk-rename-files-with-numbering 
+
+Problem: Rename  
+Image401.jpg, Image402.jpg,... 
+
+to 
+
+Image 001.jpg, Image002.jpg, ...  
+
+Solution: 
 
 Foreach (x in Match(".jpg",ALLFILES) )     
-
      rename x Concatenate(ConStr("Image0"),Substring(Pos(epsilon,NumTok,2),Pos(epsilon,EndToken,1))) 
 
- 
-
 Image401.jpg  | Image001.jpg 
-
 Image402.jpg 
-
 Image403.jpg 
 
- 
-
 No. of examples required: 1 
-
- 
 
 Mapping: Image<$1>.jpg -> Image<$1>.jpg 
 
 Filter: Image[0-9]{4}/.jpg 
 
- 
-
- 
 
 19.  Source: http://www.unix.com/shell-programming-scripting/197485-multiple-file-rename.html 
 
- 
-
-Problem: Rename files 
-
-    
-	
+Problem: Rename files
 
 file02.dat 
-
-. 
-
-. 
-
 file12.dat 
 
         to 
 
 file01.dat.......file11.dat 
 
- 
 
 Solution:    
 
              $cnt=0; 
 
 Foreach (x in Match("file..\.dat",ALLFILES) )      
-
      if($cnt<10) rename x  Concatenate(ConStr("file0"),ConStr(""+$cnt)); $cnt+=1; 
-
      else rename x  Concatenate(ConStr("file"),ConStr(""+$cnt)); $cnt+=1; 
 
- 
-	
-
-  
-
- 
 
 file02.dat  | file01.dat 
 file03.dat  | file02.dat 
 file04.dat  | file03.dat 
 file05.dat 
 
- 
-
-Unable to learn!! 
-
- 
-
 Mapping: file<$1>.dat -> file<$2>.dat 
 
 Filter: file[0-9]{2}/.dat 
 
- 
-
- 
-
- 
 
 20.  Source: http://www.unix.com/shell-programming-scripting/176262-rename-file-add-extensions.html 
 
- 
-
 Problem: Add extension to filename 
 
-            myfileaa -> myfileaa.txt 
-
+myfileaa -> myfileaa.txt 
 myfileab -> myfileab.txt 
-
 myfileac -> myfileac.txt 
-
 myfilead -> myfilead.txt 
-
-. 
-
-. 
-
-. 
-
 myfileav -> myfileav.txt 
-
- 
 
 Solution: 
 
- 
-
 Foreach (x in Match("myfilea.",ALLFILES) )      
-
-     rename x Concatenate(ConStr(x),ConStr(".txt)) 
-
- 
-
- 
+  rename x Concatenate(ConStr(x),ConStr(".txt)) 
 
 myfileaa | myfileaa.txt  
-
 myfileab    
-
 myfileac  
-
 myfilead 
-
- 
-
- 
 
 No. of examples required: 1 
 
- 
-
-Mappign: myfile. -> myfile./.txt 
+Mapping: myfile. -> myfile./.txt 
 
 Filter: myfilea. 
 
- 
 
- 
-
- 
-
- 
-
- 21.  
-	
-
-Source: http://www.unix.com/shell-programming-scripting/32584-print-all-files-directory.html 
-
- 
+21. Source: http://www.unix.com/shell-programming-scripting/32584-print-all-files-directory.html 
 
 Problem: Print all text files of an archive that have been deposited in a directory and later remove these files. 
 
- 
-
 Solution:  
 
-  
-
 Foreach (x in Match("\.txt.",ALLFILES) )       
-
      lpr x 
-
      rm x 
 
- 
-
 abc.txt | lpr abc.txt | rm txt 
-
 asd.txt 
-
 qwe.txt 
 
- 
-
 Mapping: i) (.)*/.txt -> lpr (.)*/.txt 
-
         ii) (.)*/.txt -> rm  (.)*/.txt 
 
 Number of examples required: 1 
 
- 
-
 Filter: (.)*/.txt 
 
- 
 
-    Source: http://www.cyberciti.biz/faq/linuxunix-move-file-starting-with-a-dash/ 
-
- 
+22.  Source: http://www.cyberciti.biz/faq/linuxunix-move-file-starting-with-a-dash/ 
 
 Problem: Move all files starting with - (dash)  
 
 Note: Many meta-characters such as semicolons, spaces, backslashes, dollar signs, question marks, and asterisks are characters that are interpreted under Unix as commands. - or -- interpreted as an option passed to the command 
 
- 
-
 Logic: To delimit the option list use -- 
-
- 
 
 Solution: 
 
- 
-
 Foreach (x in Match("-.",ALLFILES) )        
+  mv -- x <destination>  
 
-    mv -- x <destination>  
-
- 
-
--abc.txt  | mv --abc.txt myfolder 
-
+-abc.txt  | mv -- -abc.txt myfolder 
 -xyz.wmv 
-
 -qas.doc 
-
- 
 
 No. of examples required: 1 
 
- 
-
 Mapp:  -<$1>  ->  mv --<$1> 
-
- 
 
 Filter: -(.)* 
 
- 
 
-    Source: http://forums.techguy.org/business-applications/485943-printing-multiple-files-folder.html 
-
- 
+23.  Source: http://forums.techguy.org/business-applications/485943-printing-multiple-files-folder.html 
 
 Problem: Print all doc files in a folder without opening each one of them. 
-
- 
 
 Solution: 
 
 Foreach (x in Match("\.doc",ALLFILES) )  
-
 lpr x 
-
- 
 
 Number of examples required: 1 
 
- 
-
 Mapping: <$1>.doc -> lpr <$1>.doc 
-
- 
 
 Filter: (.)*/.doc 
 
- 
-
-    Source: http://unix.stackexchange.com/questions/29869/converting-multiple-image-files-from-jpeg-to-pdf-format 
-
- 
-
- 
+24.  Source: http://unix.stackexchange.com/questions/29869/converting-multiple-image-files-from-jpeg-to-pdf-format 
 
 Problem: Convert jpg files in the directory to pdf files. For example convert, 
 
 image1.jpg to image1.pdf 
 
- 
-
 Solution: 
 
 Foreach (x in Match("\.jpg",ALLFILES) )       
-
      convert x Concatenate(Substring(0,Pos(epsilon,DotTok,1))),ConStr("pdf"))  
 
- 
-
 Number of examples required: 1 
-
- 
 
 Mapping: <$1>.jpg -> <$1>.pdf 
 
 Filter: (.)*/.jpg 
 
- 
-
       25. Source: http://social.msdn.microsoft.com/forums/en-US/sqlintegrationservices/thread/1f5cc7b3-43c8-4d18-9c3b-445e76add1eb/ 
-	
-
- 
-
- 
 
 Problem: Rename file with datetime appended to filename. Example 
-
         filename: betty.rpt rename to betty0924081530.rpt  
-
- 
 
 Solution: 
 
    Foreach (x in Match("\.jpg",ALLFILES) )       
 
 datetime=getDateTime();      
-	
-
- 
-
-             rename x Concatenate(Substring(0,Pos(epsilon,DotTok,1))),ConStr(""+$timestamp), Substring(Pos(epsilon,DotTok,1)+1,Pos(epsilon,EndTok,1)) )   
-	
-
- 
-
- 
+rename x Concatenate(Substring(0,Pos(epsilon,DotTok,1))),ConStr(""+$timestamp), Substring(Pos(epsilon,DotTok,1)+1,Pos(epsilon,EndTok,1)) )   
 
 betty.rpt | 09.24.08  | 15:30 |  betty0924081530.rpt 
 abc.txt   | 11.04.12  | 09:11 
 image.jpg | 12.09.11  | 11:50  
 
- 
-
 Number of examples required: 1 
 
- 
-
 Mapping: <$1>.<$2> -> <$1><date><time>.<$2> 
-
 Filter: (.)* 
 
- 
-
- 
 
 26.  Source: http://www.unix.com/unix-dummies-questions-answers/127741-moving-files-out-multiple-directories-renaming-them-numerical-order.html 
-
- 
-
 Problem: Rename files of type e_1.dat, e_5.dat, e_8.dat, etc. to 1.dat, 2.dat, 3.dat,? 
-
- 
-
 Solution: 
 
- 
-
 Foreach (x in Match("e_.*\.dat",ALLFILES) )        
+    cnt=1;      
+    rename x Concatenate(ConStr($cnt+".dat"));cnt++; 
 
-cnt=1;      
-
-             rename x Concatenate(ConStr($cnt+".dat"));cnt++; 
-
- 
-
- 
 
 e_1.dat | 1.dat 
 e_5.dat | 2.dat 
@@ -1132,623 +566,271 @@ e_9.dat | 4.dat
 e_12.dat  | 5.dat 
 e_15.dat  
 
- 
- 
-
-Unable to learn! 
-
- 
-
 Mapping: e_<$1>.dat -> e_<iter>.dat 
 
 Filter: e_[0-9]+/.dat 
 
- 
 
 27.  Source: http://www.unix.com/shell-programming-scripting/94164-mv-command-rename-multiple-files-retain-some-portion-original-file-nam.html 
 
- 
-
 Problem: Rename files 
-
- 
-
 ???file1.txt 
-
 ???file2.txt 
-
 ???file1a.txt 
-
 ???file2a.txt 
-
-. 
-
-. 
-
-. 
-
- 
-
- 
 
 to : 
 
- 
-
 ???renamedfile1'date'.txt 
-
 ???renamedfile2'date'.txt 
-
 ???renamedfile1a'date'.txt 
-
 ???renamedfile2a'date'.txt 
-
-. 
-
-. 
-
-. 
-
- 
 
 The ??? are really numbers 001 through 999, and date is the current date. 
 
- 
-
 Solution: 
 
- 
+Foreach (x in Match("...file.*\.txt",ALLFILES) )        
 
- Foreach (x in Match("...file.*\.txt",ALLFILES) )        
-
-date=getDate();       
-
-             rename x Concatenate(Substring(0,2),ConStr("renamed"), Substring(3,Pos(epsilon,DotTok,1)-1),ConStr($date),SubString(Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)) )      
-	
-
- 
-
- 
+    date=getDate();       
+    rename x Concatenate(Substring(0,2),ConStr("renamed"), Substring(3,Pos(epsilon,DotTok,1)-1),ConStr($date),SubString(Pos(epsilon,DotTok,1),Pos(epsilon,EndTok,1)) )      
 
 001file1.txt  | 11.12.2012  | 001renamedfile111122012.txt 
 011file2.txt  | 11.12.2012 
 101file1a.txt  | 11.12.2012 
 
- 
-
 No. of examples required: 1 
-
- 
 
 Mapping: <$1>file<$2>.txt ->  <$1>renamedfile<$2><date>.txt 
 
 Filter: [0-9]{3}file[0-9]+/.txt 
 
- 
 
- 
-
-    Source: http://www.unix.com/shell-programming-scripting/38510-moving-renaming-multiple-files.html 
-
- 
+28.  Source: http://www.unix.com/shell-programming-scripting/38510-moving-renaming-multiple-files.html 
 
 Problem: Rename files  
 
 pic01.bmp to pic0001.bmp 
-
 pic02.bmp to pic0002.bmp 
-
 and so on.. 
-
- 
 
 and move them to a new directory 
 
- 
-
 Solution: 
-
- 
 
 Foreach (x in Match("pic..\.jpg",ALLFILES) )         
 
  move x <destination folder>/Concatenate(ConStr("pic00"),Sunstring(3,Pos(epsilon,EndTok,1)));  
 
- 
-
 pic01.bmp | pic0001.bmp  
-
 pic02.bmp 
-
 pic03.bmp 
-
- 
 
 Number of examples required: 1  
 
- 
-
 Mapping: pic<$1>.bmp -> pic<$2>.bmp 
-
 Filter: pic[0-9]{2}.bmp 
 
- 
 
- 
+29.  Source: http://www.unix.com/shell-programming-scripting/42272-find-append-move-rename-multiple-files.html 
 
-    Source: http://www.unix.com/shell-programming-scripting/42272-find-append-move-rename-multiple-files.html 
-
- 
-
- Problem: Insert the contents of one text file into all the files found. This text needs to be placed at the beginning of each file and needs a blank line between it and the current contents of the file. Then I need to move all those modified files to another folder and change the extension portion of their name from .log to .101 
-
- 
+Problem: Insert the contents of one text file into all the files found. This text needs to be placed at the beginning of each file and needs a blank line between it and the current contents of the file. Then I need to move all those modified files to another folder and change the extension portion of their name from .log to .101 
 
 Solution: 
-
- 
 
 Foreach (x in Match(".\.log",ALLFILES) )  
 
 //script for inseting 
-
 ?..................... 
 
 //script for renaming 
-
 move x <dest_folder>/Concatenate(SubString(x,Pos(epsilon,StartTok,1), Pos(epsilon,DotTok,1)), ConStr("101")); 
-	
-
- 
-
- 
 
 abc.log | abc.101 
-
 test.log 
-
 xyz.log 
-
- 
 
 No. of examples required: 1 
 
  
 
 Mapping: <$1>.log -> <$2>.101
-
 Filter: (.)*/.log 
-
- 
 
 Examples involving change in the directory structure 
 
  
-30
-    Source:  http://www.unix.com/unix-dummies-questions-answers/86-rename-multiple-files.html 
-
- 
+30. Source:  http://www.unix.com/unix-dummies-questions-answers/86-rename-multiple-files.html 
 
 Problem:  Rename files and moving files 
 
- 
-
 /u01/PROD/arch.PROD.1_1 
-
 /u01/PROD/arch.PROD.1_2 
-
 /u01/PROD/arch.PROD.1_3 
-
- 
 
 to 
 
- 
-
 /u01/TEST/arch.TEST.1_1 
-
 /u01/TEST/arch.TEST.1_2 
-
 /u01/TEST/arch.TEST.1_3 
-
- 
 
 Solution: 
 
- 
-
 Foreach (x in Match("arch.PROD.1_.*",ALLFILES) )          
-
-           move x /u01/TEST/Concatenate(Substring(x,Pos(epsilon,StartTok,1),Pos(epsilon,DotTok,1)-1),ConStr("TEST"),Substring(x,Pos(epsilon,DotTok,2),Pos(epsilon,EndTok,1)));  
-
- 
-
- 
+   move x /u01/TEST/Concatenate(Substring(x,Pos(epsilon,StartTok,1),Pos(epsilon,DotTok,1)-1),ConStr("TEST"),Substring(x,Pos(epsilon,DotTok,2),Pos(epsilon,EndTok,1)));  
 
 arch.PROD.1_1 | /u01/TEST/arch.TEST.1_1 
-
 arch.PROD.1_2  
-
 arch.PROD.1_3 
 
- 
-
 No. of examples required: 1 
-
- 
 
 Mapping: PROD/arch.PROD.<$1> -> TEST/arch.TEST.<$1> 
 
 Filter: arch.PROD.[0-9]+_[0-9]+ 
 
- 
 
- 
-
-31. 
-
- 
-
-Problem: Renaming files and moving them to different subdirectories based on the location in the file name 
-
- 
+31. Problem: Renaming files and moving them to different subdirectories based on the location in the file name 
 
 dir\pic_delhi_20121015_001.jpg  ->  dir\delhi\20121015-001.jpg 
-
 dir\pic_delhi_20121015_002.jpg  ->  dir\delhi\20121015-002.jpg  
-
-. 
-
-. 
-
 dir\pic_delhi_20111013_001.jpg  ->  dir\delhi\20111013-001.jpg  
-
-. 
-
-. 
-
 dir\pic_mumbai_20121015_001.jpg  ->  dir\mumbai\20121015-001.jpg  
 
-. 
-
-. 
-
-. 
-
 and so on 
-
- 
 
 pic_delhi_20121015_001.jpg  | dir\delhi\20121015-001.jpg  
 pic_mumbai_20121015_001.jpg | dir\mumbai\20121015-001.jpg  
 pic_delhi_20121015_002.jpg  
 pic_delhi_20111013_001.jpg  
 
- 
- 
-
- 
-
 Number of examples required: 2 
-
- 
 
 Mapping: pic_<$1>_<$2>_<$3>.jpg -> <$1>\<$2>-<$3>.jpg 
 
 Filter: pic(.)*<date>_<iter>.jpg 
 
- 
 
- 
-
-32. 
-
- 
-
-Problem: Renaming files and moving them to different subdirectories based on date in the filename. 
-
- 
+32. Problem: Renaming files and moving them to different subdirectories based on date in the filename. 
 
 dir\11022011-001.jpg         ->   dir\11Feb2011\001.jpg 
-
 dir\11022011-002.jpg         ->   dir\11Feb2011\002.jpg  
-
-. 
-
-. 
-
-. 
-
 dir\21092011-001.jpg         ->   dir\21Sep2011\001.jpg  
 
-. 
-
-. 
-
-. 
-
 and so on... 
-
- 
 
 11022011-001.jpg  | dir\11Feb2011\001.jpg 
 11022011-002.jpg  | dir\11Feb2011\002.jpg 
 21092007-001.jpg  | dir\21Sep2007\001.jpg 
 21092007-002.jpg 
 
- 
-
-Unable to learn 
-
- 
-
 Mapping: <$1>-<$2>.jpg -> <$3>\<$2>.jpg 
 
 Filter: <date>-<iter>.jpg 
 
- 
-
- 
-
-33. 
-
- 
-
-Problem: Renaming movie files and moving them to different subdirectories based on the year of the movie present in the file name. 
-
- 
+33. Problem: Renaming movie files and moving them to different subdirectories based on the year of the movie present in the file name. 
 
 ABC\TheDarkNightRises[2012]BluRay.wmv   -> ABC\2012\TheDarkNightRises.wmv 
-
 ABC\Mirror[2005]HD.wmv   -> ABC\2005\Mirror.wmv 
 
-. 
-
-. 
-
-. 
-
 and so on.. 
-
- 
 
 TheDarkNightRises[2012]BluRay.wmv | 2012\TheDarkNightRises.wmv 
 Mirror[2005]HD.wmv  | 2005\Mirror.wmv 
 Batman[2001]BluRay.wmv 
 
- 
-
 ? examples req: 2 
-
- 
 
 Mapping: <$1><$2><$3>.<$4> -> <$2>\<$1>.<$4> 
 
 Filter: (.)*[0-9]{4}(.)* 
 
- 
-
-34. 
-
-(Ruzica's comment: this will be very useful for many users. On the top of my head I know at least 10 with this problem) 
-
- 
-
- 
+34. (Ruzica's comment: this will be very useful for many users. On the top of my head I know at least 10 with this problem) 
 
 Problem: There are lots of jpg files present in a directory, all having different names (and no particular name pattern). We want to move all files created on a particular date to a different subdirectory, named as the date of file creation. We need to do this based on the file's attribute. 
 
- 
-
 FOL\xyz.jpg  [attribute: creation date : 09-12-2010]  -> FOL\09102012\xyz.jpg 
-
-. 
-
-. 
-
 FOL\abcsf.jpg [attribute: creation date : 19-11-2012]  -> FOL\19112012\abcsf.jpg 
 
-. 
-
-. 
-
 and so on. 
-
- 
 
 xyz.jpg | 09-12-2010  | 09122010\xyz.jpg 
 abcsf.jpg | 19-11-1995 
 qwe.jpg | 09-12-2010 
 
- 
-
 # examples req: 1 
-
- 
 
 Mapping: <$1>.jpg -> <$2>\<$1>.jpg 
 
 Filter: (.)*/.jpg 
 
- 
-
- 
-
 35. 
-
- 
 
 Problem: Rename and move files to different subfolders as shown below: 
 
- 
+f01\image<$1><$2>.jpg -> f01\$1\pic-$2.jpg
 
- 
-
-==== 
-
-f01\image<$1><$2>.jpg -> f01\$1\pic-$2.jpg [This is not very well-defined because it is not clear how to split between $1 and $2] 
-
-=== 
-
- 
 
 f01\imagetaiwan001.jpg  -> f01\taiwan\pic-001.jpg 
-
 f01\imagetaiwan002.jpg  -> f01\taiwan\pic-002.jpg  
-
-. 
-
-. 
-
-. 
-
 f01\imagetokyo001.jpg  -> f01\tokyo\pic-001.jpg  
 
-. 
-
-. 
-
-.  
-
 and so on. 
-
- 
 
 imagetaiwan001.jpg  | taiwan\pic-001.jpg 
 imagetokyo001.jpg | tokyo\pic-001.jpg 
 imagetaiwan002.jpg 
 imagetokyo002.jpg 
 imagelondon001.jpg 
-
  
 
 # examples required: 2 
-
- 
 
 Mapping: image<$1><$2>.jpg -> <$1>\pic-<$2>.jpg 
 
 Filter: image(.)*[0-9]{3}.jpg 
 
- 
-
- 
 
 36. [SUMIT: The argument to a command is a list] 
 
- 
-
 Problem: Concatenate files into a new file and place it in a different subdirectory. 
 
- 
-
 report_16032012_part1.pdf , report_16032012_part2.pdf, ?.... report_16032012_part27.pdf   ->  16032012\report.pdf 
-
-ppt_12052010_1.pdf , ppt_12052010_part2.pdf, ?.... ppt_12052010_part35.pdf   ->  12052010\ppt.pdf  
-
+ppt_12052010_1.pdf , ppt_12052010_part2.pdf, ?.... ppt_12052010_part35.pdf   ->  12052010\ppt.pdf
 . 
-
+.
 . 
-
-. 
-
- 
 
 (Mikaël: Wrong. Use ellipsis)
 Mapping:  set of report_<date>_part<$1>.pdf ->  report.pdf 
 
 Filter: report_<date>_part[0-9]+/.pdf 
 
- 
-
 # examples required: 2 (one from each partition) 
 
- 
-
-37. 
-
- 
-
-Problem: We have lots of mp3 files. we need to move each file to a different subdirectory based on the year of creating of the file, which is to be extracted from the file attribute. 
-
- 
+37. Problem: We have lots of mp3 files. we need to move each file to a different subdirectory based on the year of creating of the file, which is to be extracted from the file attribute. 
 
 breathless.mp3 [attribute: Creation date: 05 Oct 2005]  ->  2005\breathless.mp3 
-
 untill_you.mp3 [attribute: Creation date: 11 Sep 2005]  ->  2005\untill_you.mp3  
-
 no_promises.mp3 [attribute: Creation date: 10 Jan 2010]  ->  2010\no_promises.mp3  
-
-. 
-
-. 
-
-. 
-
- 
 
 breathless.mp3  | 05 Oct 2005 | 2005\breathless.mp3 
 untill_you.mp3  | 11 Sep 2005 
 no_promises.mp3 | 10 Jan 2010 
 
- 
-
 # examples required: 1 
-
- 
 
 Mapping: <$1>.mp3 -> <$2>\$1.mp3 
 
 FIlter: (.)*/.mp3 
 
- 
-
- 
-
- 
-
- 
-
-38. 
-
- 
-
-Problem: Merge files, name each merged file as '<$1>_book.pdf' and put them in different subdirectories as shown below: 
-
- 
+38. Problem: Merge files, name each merged file as '<$1>_book.pdf' and put them in different subdirectories as shown below: 
 
 microprocessor_chapter1.pdf, microprocessor_chapter2.pdf, ?.... microprocessor_chapter11.pdf    ->   microprocessor_book.pdf  
-	
-
-   
-
- 
-
 cormen_ch1.pdf, cormen_ch2.pdf, ?.... cormen_ch18.pdf    ->   cormen_book.pdf   
 
-. 
-
-. 
-
-. 
-
-. 
-
- 
-
- 
-
 Mapping: <$1><$2>.pdf   ->  <$1>_book.pdf 
-
- 
-
 Filter:  (.)*<iter>.pdf 
-
- 
-
- 
-
- 
 
 microprocessor_chapter1.pdf | microprocessor_book.pdf 
 cormen_ch1.pdf  | cormen_book.pdf 
@@ -1758,52 +840,23 @@ asrf_chap2.pdf
 asdff_c1.pdf 
 cormen_ch40.pdf 
 
- 
-
 # examples required: 2 (one from each partition) 
 
-
-39. 
-
-Problem: There are lots of different doc, jpg and mp3 files present in a directory. Move and rename all files to different subdirectories based on the creation year (from file attribute) and file type 
-
- 
+39. Problem: There are lots of different doc, jpg and mp3 files present in a directory. Move and rename all files to different subdirectories based on the creation year (from file attribute) and file type 
 
 c:\solar_eclipse.jpg    [attribute: creation date: 05-11-1995] ->  c:\1995\images\img-0001.jpg 
-
 c:\northpole.jpg    [attribute: creation date: 14-12-1995] ->  c:\1995\images\img-0002.jpg  
-
 c:\polar_bear.jpg    [attribute: creation date: 02-07-2009] ->  c:\2009\images\img-0001.jpg  
 
-. 
-
-. 
-
 c:\abc.doc   [attribute: creation date: 15-10-1995] ->  c:\1995\documents\docmt-0001.doc 
-
 c:\xyz.doc   [attribute: creation date: 19-10-1995] ->  c:\1995\documents\domtc-0002.doc 
-
 c:\abc.doc   [attribute: creation date: 15-10-1999] ->  c:\1999\documents\domtc-0001 .doc 
 
-.  
-
-.  
-
 c:\melt-the-snow.mp3   [attribute: creation date: 15-10-1995] ->  c:\1995\songs\song-0001.mp3  
-
 c:\some_tears.mp3   [attribute: creation date: 19-10-1995] ->  c:\1995\songs\song-0002.mp3  
-
 c:\again.mp3   [attribute: creation date: 15-10-1999] ->  c:\1999\songs\song-0001.mp3 
 
-. 
-
-. 
-
-. 
-
 and so on. 
-
- 
 
 solar_eclipse.jpg | 05-11-1995  | 1995\images\img-0001.jpg 
 northpole.jpg | 14-12-1995  | 1995\images\img-0002.jpg 
@@ -1811,43 +864,17 @@ abc.doc  | 15-10-1995 | 1995\documents\docmt-0001.doc
 melt-the-snow.mp3 | 15-10-1995  | 1995\songs\song-0001.mp3 
 xyz.doc  | 19-10-1995 
 some_tears.mp3  | 19-10-1995 
- 
-
-Unable to learn! 
-
- 
 
 Mapping: <$1>.<$2> -> <$3>\<$4>\<$5>-<iter>.jpg 
 
 Filter: (.)*/.(jpg|doc|mp3) 
 
- 
-
- 
-
-40. 
-
- 
-
-Problem: Move and rename movies to different directories as shown below (based on video quality): 
-
- 
+40. Problem: Move and rename movies to different directories as shown below (based on video quality): 
 
 e:\Social_Network_BluRay_2009.avi    ->  e:\BluRay\Social_Network_2009.avi 
-
 e:\PursuitOfHappiness-BluRay-2001.avi    ->  e:\BluRay\PursuitOfHappiness-2001.avi  
-
 e:\Ice-Age_DVDScr_2011.avi    ->  e:\DVDScr\Ice-Age_2011.avi  
-
 e:\LetMeSee_DVDRip_1995.avi  -> e:\DVDRip\LetMeSee_1995.avi 
-
-. 
-
-. 
-
-. 
-
- 
 
 Social_Network_BluRay_2009.avi  | BluRay\Social_Network_2009.avi 
 LetMeSee_DVDRip_1995.avi  | DVDRip\LetMeSee_1995.avi 
@@ -1856,49 +883,16 @@ PursuitOfHappiness_BluRay_2001.avi
 PursuitOfHappiness_DVDRip_2001.avi 
 PursuitOfHappiness_DVDScr_2001.avi 
 
- 
-
 # examples required: 3 
 
- 
-
 Mapping: <$1><$2><$3>.avi -> <$2>/<$1><$3>.avi 
-
 Filter: [A-Za-z]*_[A-Za-z]*[-_][0-9]{4}/.avi 
 
- 
-
- 
-
- 
-
-41. 
-
- 
-
-Problem: Move files into different subdirectories based on the month of file creation, as present in timestamp in the filename 
-
- 
+41. Problem: Move files into different subdirectories based on the month of file creation, as present in timestamp in the filename 
 
 kk\16515066 Sep 18 00:57 test1.txt  -> kk\sep_bkp_files\ test1.txt  
-
 kk\22824 Sep 18 01:30 sample2.txt  -> kk\sep_bkp_files\ sample2.txt   
-
 kk\60864 Aug 18 04:34 hello.csv       -> kk\aug_bkp_files\ hello.csv 
-
-. 
-
-. 
-
-. 
-
-. 
-
-. 
-
- 
-
- 
 
 16515066 Sep 18 00:57 test1.txt | sep_bkp_files\test1.txt 
 60864 Aug 18 04:34 hello.csv  | aug_bkp_files\hello.csv 
@@ -1906,293 +900,125 @@ kk\60864 Aug 18 04:34 hello.csv       -> kk\aug_bkp_files\ hello.csv
 22824 Mar 89 21:30 sam.txt 
 12824 Sep 19 21:10 xyz.csv 
 
- 
-
 # examples req: 3 
-
- 
-
 Mapping: <$1><$2><$3><$4> -> <$2>_bkp_files\<$4> 
-
 Filter: [0-9]+ <Date> <Time> [A-Za-z0-9]+.[A-Za-z0-9]+ 
-
- 
 
 Examples involving sequence of commands 
 
- 
-
-42. 
-
- 
-
- Problem: We have a lot of .txt files present in a directory. For each .txt file do the following: 
-
- 
-
-    Delete first four lines from the file. 
-
-    Print the file 
+42. Problem: We have a lot of .txt files present in a directory. For each .txt file do the following: 
+Delete first four lines from the file. 
+Print the file 
 
 # of examples req: 1 
 
- 
-
 Mapping:I) <$1>.txt ->  <command> <$1>.txt 
-
        II) <$1>.txt ->  lpr <$1>.txt 
-
- 
 
 Filter: (.)*/.txt 
 
- 
+43. Problem: We have lots of files of the form [Date]-doc-[iter].pdf. For each file, do the following: 
 
-43. 
-
- 
-
-Problem: We have lots of files of the form [Date]-doc-[iter].pdf. For each file, do the following: 
-
-    Move [Date]-doc-[iter].pdf to Date\doc-[iter].pdf 
-
-    in each [Date] subfolder, 
-
-    i) merge doc-001.pdf, doc-002.pdf...... to doc.pdf 
-
-    ii) print doc.pdf 
-
- 
+Move [Date]-doc-[iter].pdf to Date\doc-[iter].pdf 
+  in each [Date] subfolder, 
+  i) merge doc-001.pdf, doc-002.pdf...... to doc.pdf 
+  ii) print doc.pdf 
 
 11052012-doc-001.pdf  | 11052012/doc-001.pdf 
-
 11052012-doc-002.pdf 
-
 12052012-doc-001.pdf 
-
 12052010-doc-001.pdf 
 
- 
-
 Filter: [Date]-doc-[iter].pdf 
-
- 
 
 Mapping: 
 
     <$1>-doc-<iter>.pdf -> <$1>\doc-<iter>.pdf 
-
     <Current Folder> -> <Date1>   <Date2>    .....  <DateN>   [All subfolders whose names satify the regex of Date] 
-
     doc-<iter>.pdf -> doc.pdf 
-
     doc.pdf -> lpr doc.pdf 
-
- 
-
- 
 
 # examples required for 1. : 1 
 
 # examples required for 3 : 1 
 
- 
-
-44. 
-
- 
-
-Problem:  There is a folder containing header.txt file, and lots of files of the form test01.txt, test02.txt,?... 
+44. Problem:  There is a folder containing header.txt file, and lots of files of the form test01.txt, test02.txt,?... 
 
 For each file of the form testXX.txt, do the following 
-
     insert contents of header.txt at the beginning of testXX.txt 
-
     print testXX.txt 
-
- 
 
 # examples required for 2  : 1 
 
- 
-
 Filter: test[0-9]{2}.txt 
 
- 
-
-45. 
-
- 
-
-Problem: There is a folder containing lots of jpg and pdf files. Do the following: 
+45. Problem: There is a folder containing lots of jpg and pdf files. Do the following: 
 
     Delete all pdf files 
-
     Convert xyz.jpg to xyz.pdf (all jpg files to pdf) 
-
     print xyz.pdf (all pdf files) 
 
- 
-
- 
-
- 
-
 Filter: 1. (.)/.pdf 
-
  2. (.)/.jpg 
-
  3. (.)/.pdf 
-
- 
 
 Mapping: 2.  <$1>.jpg -> <$1>.pdf 
 
- 
-
 # of examples required for 2: 1 
-
- 
-
- 
 
 More Examples involving list of files as arguments 
 
- 
 
 46. Problem: Creating multiple melodies having a mix of various songs 
-
- 
- 
-
-song1_1.mp3 song1_2.mp3 ...... song1_7.mp3   -> medoly1.mp3 
-
+Song1_1.mp3 song1_2.mp3 ...... song1_7.mp3   -> medoly1.mp3 
 song2_1.mp3 song2_2.mp3 ...... song2_5.mp3   -> medoly2.mp3 
-
-. 
-
-. 
-
-. 
 
 and so on 
 
- 
 Mapping: set of song<$1>_<$2>.mp3 -> medoly<$1>.mp3 
 
 Filter: song[0-9]+_[0-9]+/.mp3 
 
- 
-
-song1_1.mp3 | medoly1.mp3 
-song2_1.mp3 | medoly2.mp3 
-song1_10.mp3 
-song2_15.mp3 
-song12_100.mp3 
-
- 
-
 # of examples required: 2 (1 from each partition) 
 
- 
 
 47. Problem: Combining movie-parts downloaded from youtube into full movie(s). 
 
- 
- 
-
 IronMan_part1.avi IronMan_part2.avi ...... IronMan_part18.avi   ->  IronMan_full_movie.avi 
-
 Hangover_part1.wmv  Hangover_part2.wmv  ....  Hangover_part23.wmv   ->  Hangover_full_movie.wmv 
 
-. 
-
-. 
-
-. 
-
-. 
-
-. 
-
 and so on 
-
- 
 
 Mapping: set of <$1>_part<$2>.<$3> -> <$1>_full_movie.<$3> 
 
 Filter: [A-Za-z0-9]+_part[0-9]+/.(avi|wmv) 
 
- 
 # of examples required: 2 (1 from each partition)  
 
- 
 
 48. Problem: We have lots of music files (.mp3). We want to create subdirectories based on the year and album and move the music files to the specific subdirectories. 
 
 The creation year and album are to implicitly extracted from file attributes 
-
- 
- 
-
 f:\Songs\Song001.mp3  [Album- ABC, creation year- 2001]  ->  f:\Songs\2001\ABC\song001.mp3 
-
 f:\Songs\Song002.mp3 [Album- XYZ, creation year- 2001]  ->  f:\Songs\2001\XYZ\song002.mp3 
-
 f:\Songs\Song003.mp3  [Album- PQR, creation year- 2010]  ->  f:\Songs\2010\PQR\song003.mp3 
-
-. 
-
-. 
-
-. 
-
 and so on 
 
- 
-
 Filter: Song[0-9]{3}/.mp3 
-
 Mapping: Song<S1>.mp3 -> <$2>\<$3>\ Song<S1>.mp3 
-
- 
-
 Song001.mp3 | 2001  | ABC | 2001\ABC\song001.mp3 
 Song002.mp3 | 2001  | XYZ 
 Song003.mp3 | 2010  | PQR 
 
- 
-
 # examples req: 1 
 
- 
-
- 
- 
-
 49. Problem: Putting doc files into different archives based on the author. 
-
-  
-
 report1.doc  report5.doc  report11.doc .... report43.doc  [Created by Sam Jose]  ->  Sam_reports.zip 
-
 report2.doc  report8.doc  report17.doc .... report49.doc  [Created by Peter Park]  ->  Peter_reports.zip 
-
-. 
-
-. 
-
-. 
-
-. 
 
 .and so on 
 
- 
-
 # of examples required: 2 (1 from each partition)   
-
- 
 
 report1.doc | Sam Jose  | Sam_reports.zip 
 report2.doc | Peter Park  | Peter_reports.zip 
@@ -2200,101 +1026,44 @@ report10.doc | Sam Jose
 report24.doc | Peter Park 
 report21.doc | James Stinson 
 
- 
-
- 
-
 Mapping: set of report<$1>.doc -> <$2>_reports.zip 
-
 Filter: report[0-9]+/.doc 
 
- 
- 
 
 50. Problem: There are lots of movies in 2 or 3 parts each, along with their subtitles (.srt) files. Move all parts of a movie along with its subtitles to a new sub-directory. 
-
- 
- 
-
 move {Schlinder's_List_CD1.avi Schlinder's_List_CD2.avi Schlinder's_List_CD1.srt Schlinder's_List_CD2.srt} to a new subdirectory [Schlinder's_List] 
-
- 
- 
-
 move {Godfather_CD1.avi Godfather_CD2.avi Godfather_CD1.srt Godfather_CD1.srt} to a new subdirectory [Godfather] 
 
-. 
-
-. 
-
-. 
-
-.  
-
- 
- 
-
 and so on.... 
-
- 
-
 Mapping: <$1><$2>.<$3> -> <$1> 
 
 Filter: (.)*\.(avi|srt) 
 
- 
 
 # examples required: 1 
 
- 
-
 Schlinder's_List_CD1.avi  | Schlinder's_List 
-
 Schlinder's_List_CD2.srt   
-
 Schlinder's_List_CD2.avi 
-
 Schlinder's_List_CD1.srt 
-
 Godfather_CD1.avi 
-
 Godfather_CD2.avi 
-
 Godfather_CD1.srt 
-
 Godfather_CD2.srt 
 
- 
-
- 
- 
 
 51. Problem: Extracting all archives created in particular year to a particular folder. 
 
- 
- 
-
 Extract {songs1.zip reports12.zip movies15.zip..... } /*Archives created in the year 2012*/ to the folder [Files_2012] 
-
 Extract {songs2.zip reports5.zip movies27.zip..... } /*Archives created in the year 2011*/ to the folder [Files_2011] 
 
-. 
-
-. 
-
 . and so on 
-
- 
 
 Mapping: <$1>.zip -> Files_<$2>.zip 
 
 Filter: (.)*\.zip 
 
- 
-
 # examples req.: 2 
-
- 
 
 songs1.zip   | 2012  | Files_2012 
 reports12.zip | 2012  | Files_2012 
@@ -2302,60 +1071,34 @@ songs2.zip   | 2011
 movies15.zip   | 2011 
 songs23.zip   | 2017 
 
- 
 
-  
-
+--------------------------
 Examples with nested loops 
-
- 
-
+--------------------------
  52. Source: http://www.unix.com/shell-programming-scripting/193261-nested-loops-copying-files-different-machines.html 
 
- 
-
 Problem: Copy all files on diff machines .Number of machines is fixed as 4 but number of files may vary. For eg. 
-
- 
- 
 
 Files: f1,f2,f3,f4,f5,f6.........fn 
 
 Machines: M1,M2,M3,M4 
 
- 
- 
-
 M1 - f1,f2,f3,f4,f5,f6.........fn 
-
 M2 - f1,f2,f3,f4,f5,f6.........fn 
-
 M3 - f1,f2,f3,f4,f5,f6.........fn 
-
 M4 - f1,f2,f3,f4,f5,f6.........fn 
 
- 
 Logic:  
 
 for (i=1; i<=n;i++) 
 
 do 
-
  for m in M1 M2 M3 M4 
-
    do 
-
       ssh to m 
-
       copy f${i} in m 
-
    done 
-
 done 
-
- 
-
- 
 
 f1  | copy f1 in M1;copy f1 in M2;copy f1 in M3;copy f1 in M4; 
 f2  | copy f2 in M1;copy f2 in M2;copy f2 in M3;copy f2 in M4; 
@@ -2363,220 +1106,105 @@ f3
 f4 
 f11 
 
- 
-
- 
-
 # examples required: 2 
 
- 
-
 Filter: f[0-9]+ 
-
- 
 
 ## StringSolver:
 f1 | M1 | M2 | M3 | M4 | copy f1 in M1;copy f1 in M2...
 f2 | M1 | M2 | M3 | M4 | copy f2 in M1;copy f2 in M2...
 f3
 f4
- 
-
- 
-
-  
-
- 
 
 53.  Source: http://www.dslreports.com/forum/r23299971-Bash-scripts-nested-loops- 
 
- 
-
 Problem: We have  a directory full of files and I need to go through each one and take each line and replace NUMBER in a file and place it in a directory with a random file name: 
-
- 
- 
 
 cat /dialer/template.call | sed "s/NUMBER/$NUMBER/g;" > /dialer/spool/$RANDOM$RANDOM$RANDOM.call 
 
- 
-
 Logic: 
 
- 
-
 for file in DIR;do 
-
      for line in $file; do 
-
           1.replace number in file 
-
           2.move file to a directory with a random name 
-
      done; 
-
 done; 
-
- 
-
- 
 
 Filter: (.)* 
 
- 
+54. Source: http://stackoverflow.com/questions/11625649/nested-while-loop-to-calculate-distance-for-multiple-destinations 
 
-    Source: http://stackoverflow.com/questions/11625649/nested-while-loop-to-calculate-distance-for-multiple-destinations 
-
-  
-
-54. Problem: (Two iterators in filename) 
-
- 
+Problem: (Two iterators in filename) 
 
 I am trying to use two nested for loops to process some files and then create a new file using both variables in the output file name. I have several files in this naming style:  
 
- 
 FIlenames: 
 
 S1_L3_all_R1.fastq 
-
 S1_L3_all_R2.fastq 
-
 S1_L4_all_R1.fastq 
-
 S1_L4_all_R2.fastq 
-
-. 
-
-. 
-
 S1_L8_all_R1.fastq 
-
 S1_L8_all_R1.fastq 
-
- 
- 
 
 I need to apply a process to each file and rename the files like this: 
-
- 
 
 Renamed filename: 
 
 S1_L3_all_R1.fasta 
-
 S1_L3_all_R2.fasta 
-
-. 
-
-. 
-
 S1_L8_all_R1.fasta 
-
 S1_L8_all_R2.fasta 
-
- 
 
 Logic: 
 
- 
-
 for((n=3;n<=8;n++)) 
-
 do  
-
 for((k=1;k<=2;k++)) 
-
 do  
-
 Rename S1_L$n_all_filt_R$k.fastq to S1_L$n_all_filt_R$k.fasta 
 
- 
-
- 
-
 S1_L3_all_R1.fastq  | S1_L3_all_R1.fasta 
-
 S1_L3_all_R2.fastq  
-
 S1_L4_all_R1.fastq  
-
 S1_L4_all_R2.fastq 
-
 S1_L8_all_R1.fastq  
-
 S1_L8_all_R1.fastq 
 
- 
 # examples req: 1 
-
- 
 
 Filter: S1_L[0-9]_all_R[0-9].fastq 
 
- 
-
 Mapping: S1_L<$1>_all_R1<$2>.fastq  ->  S1_L<$1>_all_R1<$2>.fasta 
 
- 
+55.  Source: http://www.computing.net/answers/dos/how-to-rename-files-in-subfolders/15172.html 
 
- 
-
- 
-
-    Source: http://www.computing.net/answers/dos/how-to-rename-files-in-subfolders/15172.html 
-
- 
-
-55. Problem: Renaming files in subfolders. I have folder called My music under it I have 80 folders (artist name) , each folder have *.ram files . 
+Problem: Renaming files in subfolders. I have folder called My music under it I have 80 folders (artist name) , each folder have *.ram files . 
 
 I want to rename all of *.ram files to *.rm 
-
- 
-
 Logic: 
-
- 
-
 foreach DIR in My Music 
-
 foreach file in DIR 
-
 rename *.ram to *.rm 
-
- 
-
- 
 
 xyzad.ram | xyzad.rm 
 abc.ram | abc.rm 
 adfdsf.ram 
 13fsf.ram 
  
- 
-
-# examples req: 2 
-
- 
+ # examples req: 2 
 
 Filter: (.)*/.ram 
-
- 
-
 Mapping:  
+  My Music -> Folder1 Folder2 ?.. Folder80 (All subfolders) 
+  FolderX -> file1.ram file2.ram ?.. [ (.)*/.ram ] (along with the path of fileX.ram as an attribute to preserve the directory structure). 
+  <$1>.ram -> <$1>.rm
 
- 
-
-    My Music -> Folder1 Folder2 ?.. Folder80 (All subfolders) 
-
-    FolderX -> file1.ram file2.ram ?.. [ (.)*/.ram ] (along with the path of fileX.ram as an attribute to preserve the directory structure). 
-
-     <$1>.ram -> <$1>.rm
-
-56.http://stackoverflow.com/questions/20960013/extract-right-columns-in-notepad
+  
+56. http://stackoverflow.com/questions/20960013/extract-right-columns-in-notepad
 Gamer453|63463462|id3256236311616 -> Gamer453|id3256236311616
 GamFlower1515|63463462|id3243362516325 -> GamFlower1515|id3243362516325 
-
 
 ---- Regexp ----
 "[129]: (29) -> (1): Rumor"
@@ -2589,6 +1217,7 @@ for(line: String <- Source.fromFile(f1).getLines()){
     val pattern(clock, from, to, msg) = line
     println(clock+", "+ from+", "+to+", msg")
 }
+
 
 57. Rename sequential files http://stackoverflow.com/questions/14224166/massive-rename-on-terminal-and-sequentially-numbered?rq=1
 
