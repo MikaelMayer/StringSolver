@@ -16,7 +16,7 @@
 ## `n`n 
 ## "@ 
 ## 
-## $http | Send-TcpRequest search.msn.com 80 
+## $http | Send-TcpRequest localhost 12345
 ############################################################################## 
 param( 
         [string] $remoteHost = "localhost", 
@@ -76,10 +76,14 @@ function Main
             { 
                 $writer.WriteLine($line) 
                 $writer.Flush() 
-                Start-Sleep -m $commandDelay 
-                $SCRIPT:output += GetOutput 
             }
-
+			Start-Sleep -m $commandDelay 
+            $SCRIPT:output += GetOutput 
+			# Be sure to get all the output.
+			while(!$Script:output.EndsWith("END")) {
+			  Start-Sleep -m $commandDelay 
+              $SCRIPT:output += GetOutput 
+			}
             break 
         } 
         ## If we’re in interactive mode, write the buffered 
@@ -131,7 +135,7 @@ function GetOutput
     do 
     { 
         ## Allow data to buffer for a bit 
-        start-sleep -m 1000
+        # start-sleep -m 1000
 
         ## Read what data is available 
         $foundmore = $false 

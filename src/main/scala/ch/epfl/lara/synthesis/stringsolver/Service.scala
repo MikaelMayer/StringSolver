@@ -59,7 +59,8 @@ object Service {
    */
   def start(arg: Array[String]): Unit = {
     if(running) return;
-    running = true;
+    running = true
+    Main.useLogFileOnDisk = false
     try {
       println("Starting service on IP Address " + InetAddress.getLocalHost.getHostAddress + 
         " port No.12345")
@@ -68,7 +69,7 @@ object Service {
       case ex: Exception => ex.printStackTrace()
     }
     val b = Array.ofDim[Byte](512)
-    var tmp = System.out
+    var tmp = Console.out
     while (running) {
       try {
         println("Listening for clients on IP Address " + InetAddress.getLocalHost.getHostAddress + 
@@ -79,22 +80,25 @@ object Service {
           (new java.util.Date().toString))
         val in = new BufferedSource(client.getInputStream()).getLines()
         val out = new PrintStream(client.getOutputStream())
-        println("Setting out")
-        System.setOut(out)
-        println("Set out")
+        //System.setOut(out)
+        Console.setOut(out)
+        tmp.println("Parsing arguments:")
+        Main.debug = false
         val newCmdArray = convertStringToStringArray(in.next())
-        println("Sending the command line "+ newCmdArray.mkString(","))
-        tmp.println("Sending the command line "+ newCmdArray.mkString(","))
-        Main.main(newCmdArray)
-        out.println("Getting answer from server:")
-        tmp.println("Finished main:")
+        if(newCmdArray.mkString == "stop") stop(newCmdArray) else {
+          tmp.println("Parsing the command line '"+ newCmdArray.mkString(" ")+"'")
+          tmp.flush()
+          Main.main(newCmdArray)
+          tmp.println("Finished handling")
+        }
+        print("END")
         //out.println(in.next())
         out.flush()
         client.close()
          } catch {
         case ex: Exception => ex.printStackTrace()
       } finally {
-        System.setOut(tmp)
+        Console.setOut(tmp)
       }
     }
   }    

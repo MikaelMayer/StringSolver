@@ -94,6 +94,41 @@ class MainTest extends WordSpec with ShouldMatchers {
     Main.getMvHistory(new File(Main.workingDirAbsFile)) should equal (Nil)
   }
   
+  "Main should rename with counters" in {
+    val tmpUserDir = System.getProperty("user.dir")
+
+    val tmpDir = new File(System.getProperty("java.io.tmpdir"), "tmpMainTest")
+    if(!tmpDir.exists()) {
+      tmpDir.mkdir()
+    }
+    
+    tmpDir.list() foreach { e => new File(tmpDir, e).delete()}
+
+    import Main._
+    val tmp = Main.fileLister
+    try {
+      Main.workingDirAbsFile = tmpDir.getAbsolutePath()
+      Main.fileLister = () => Array(new File(workingDirAbsFile, "ABC1234.gif"),new File(workingDirAbsFile, "B321.jpg"))
+      
+      
+      val examples = MvLog(workingDirAbsFile, false, INPUT_FILE_EXTENSION, List("ABC1234",".gif"), "ABC-1234-1.gif", "Now") ::
+                     MvLog(workingDirAbsFile, false, INPUT_FILE_EXTENSION, List("B321",".jpg"), "B-321-2.jpg", "after") ::
+                     Nil
+      
+      val c = Main.automatedRenaming(Options(perform=false,performAll=false,explain=true,test=true), examples, None)
+      c match {
+        case Some(solver) =>
+          solver.setPosition(2)
+          solver.solve(List("C532",".png"))(0) should equal ("C-532-3.png")
+        case None =>
+          c should not equal None
+      }
+    } finally {
+      Main.fileLister = tmp
+    }
+  }
+  
+  
   "Main should suggest renaming" in {
     val tmpIn = System.in
     val tmpUserDir = System.getProperty("user.dir")
@@ -116,7 +151,6 @@ class MainTest extends WordSpec with ShouldMatchers {
       import Main._
       Main.workingDirAbsFile = tmpDir.getAbsolutePath()
       Main.deleteMvHistory()
-      
       
       c1 = new File(workingDirAbsFile, "infoAutocad.log")
       c2 = new File(workingDirAbsFile, "mathAnalyse.log")

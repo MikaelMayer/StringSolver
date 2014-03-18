@@ -51,7 +51,9 @@ $RenamedAction = {
   $oldpath = getRelativePath -From $wdir -To $oldabspath
   $newpath = getRelativePath -From $wdir -To $newabspath
   
-  $out = java -jar $stringsolver move --mintwoexamples --explain --test $oldpath $newpath 2>&1 | Out-String # | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  $out = "mv --mintwoexamples --workingdir $wdir --explain --test $oldpath $newpath" | Send-TcpRequest localhost 12345
+  
+  $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
 
   $OUTPUT = "NO" #[System.Windows.Forms.MessageBox]::Show("Do you want to rename the files according to the following pattern:`r`n $out ?" , "File renaming suggestion" , 4)
   Set-Location $tmpwdir
@@ -77,6 +79,7 @@ $RenamedAction = {
 
 	    Set-Location $wdir;
 		$fsw.EnableRaisingEvents = $false;
+		"mv --workingdir $wdir --all" | Send-TcpRequest localhost 12345 | Out-String
      	java -jar $stringsolver move --mintwoexamples --all;
      	$fsw.EnableRaisingEvents = $true;
     	Set-Location $tmpwdir;

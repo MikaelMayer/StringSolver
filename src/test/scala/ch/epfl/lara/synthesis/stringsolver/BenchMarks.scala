@@ -196,12 +196,18 @@ folderB/asdx.dat  | folderB/3.dat.txt""", 1)
     c.solve("""qwe.txt""") should equal ("lpr qwe.txt; rm qwe.txt")
   }
   "22.Move all files starting with - http://www.cyberciti.biz/faq/linuxunix-move-file-starting-with-a-dash/ " in {
-    val c = StringSolver()
-    c.add("""-abc.txt  | mv --abc.txt myfolder""", 1)
-    c.add("""abc.txt  | """, 1)
-    renderer(c)
-    c.solve("""-xyz.wmv""") should equal ("mv --xyz.txt myfolder")
-    c.solve("""xyz.wmv""") should equal ("")
+    val Some((c, expected)) = Service.getFilter(List(("-abc.txt", true), ("abc.txt", false), ("--b.pdf", true), ("b-.pdf", false)))
+    
+    c.solve("-def.txt") should equal(expected)
+    c.solve("-z") should equal(expected)
+    c.solve("def.-txt") should not equal(expected)
+    c.solve("--def.txt") should equal(expected)
+    
+    val d = StringSolver()
+    
+    d.add("""-abc.txt  | mv -- -abc.txt myfolder""", 1)
+    renderer(d)
+    d.solve("""-xyz.wmv""") should equal ("mv --xyz.txt myfolder")
   }
   "23.Print all doc files in a folder without opening each one of them.  http://forums.techguy.org/business-applications/485943-printing-multiple-files-folder.html " in {
     val c = StringSolver()

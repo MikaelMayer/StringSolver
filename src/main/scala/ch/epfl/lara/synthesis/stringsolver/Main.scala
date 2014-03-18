@@ -35,6 +35,9 @@ import Implicits.AugString
 import Program.Concatenate
 import Program.ConstStr
 import Program.Program
+import Program.Program
+import Program.TraceExpr
+import ProgramSet.ProgramSet
 
 /**
  * Main object for dealing with files manipulation
@@ -59,6 +62,8 @@ object Main {
   }
   
   var debug = false // Can be set by the flag -d
+  var useLogFileOnDisk = true // Set to false to use memory logging for service
+
   val HISTORY_DIR = "StringSolverRenaming"
   val HISTORY_MV_FILE = "mv.log"
   val HISTORY_AUTO_FILE = "auto.log"
@@ -99,7 +104,7 @@ object Main {
   object INPUT_FILE_PROPERTIES extends ParameterInput {
     val prefix = "INPUT_FILE_PROPERTIES"
   }
-  implicit class NatureString(s: Logger) {
+  implicit class NatureString(s: LogLine[_]) {
     def onlyFiles: Boolean = {
       s.nature match {
         case INPUT_FILE | INPUT_FILE_LIST(_) | INPUT_FILE_CONTENT(_) | INPUT_FILE_PROPERTIES(_) | INPUT_FILE_EXTENSION => true
@@ -209,36 +214,41 @@ object Main {
   //val path = Main.getClass().getProtectionDomain().getCodeSource().getLocation().getPath()
   var workingDirAbsFile = System.getProperty("user.dir");//URLDecoder.decode(path, "UTF-8");
   def workingDirAbsFileFile = new File(workingDirAbsFile)
+  def fileListerString() = fileLister().map(_.getName())
+  var fileLister = () => workingDirAbsFileFile.listFiles()
   
-  trait LogWrapper {
+  trait LogWrapper[A <: LogLine[A]] {
     def delete()
-    def getContent: Seq[String]
-    def setContent(s: Seq[String]): Unit
-    def addLine(s: String)
+    def getContent: Seq[A]
+    def setContent(s: Seq[A]): Unit
+    def addLine(s: A)
   }
-  case class Lines(var lines: List[String]) extends LogWrapper {
+  case class Lines[A <: LogLine[A]](var lines: List[A]) extends LogWrapper[A] {
     def delete() = lines = List()
     override def toString = "internal log"
-    def getContent: Seq[String] = lines
-    def setContent(s: Seq[String]) = {
+    def getContent: Seq[A] = lines
+    def setContent(s: Seq[A]) = {
       lines = s.toList
     }
-    def addLine(s: String) = {
+    def addLine(s: A) = {
       lines = lines ++ List(s)
     }
   }
-  case class FileWrapper(var file: File) extends LogWrapper {
+  case class FileWrapper[A <: LogLine[A] : LogFileFactory](var file: File) extends LogWrapper[A] {
     def delete() = file.delete
     override def toString = file.getAbsolutePath()
-    def getContent: Seq[String] = readLines(readFile(file))
-    def setContent(s: Seq[String]) = {
+    def getContent: Seq[A] = {
+      val s = readLines(readFile(file))
+      s flatMap { line => implicitly[LogFileFactory[A]].extractor(line, None) }
+    }
+    def setContent(s: Seq[A]) = {
       val out = new PrintWriter(new BufferedWriter(new FileWriter(file.getAbsoluteFile(), false)));
       out.println(s.mkString("\n"))
       out.close
     }
-    def addLine(s: String) = {
+    def addLine(s: A) = {
       val out = new PrintWriter(new BufferedWriter(new FileWriter(file.getAbsoluteFile(), true)));
-      out.println(s)
+      out.println(s.mkString)
       out.close
     }
   }
@@ -246,9 +256,9 @@ object Main {
   /**
    * Returns an history file.
    */
-  private def getHistoryFile[A <: Logger : LoggerFile](): Option[LogWrapper] = {
-    val name = implicitly[LoggerFile[A]].history_filename
-    implicitly[LoggerFile[A]].history_file match {
+  private def getHistoryFile[A <: LogLine[A] : LogFileFactory](): Option[LogWrapper[A]] = {
+    val name = implicitly[LogFileFactory[A]].history_filename
+    implicitly[LogFileFactory[A]].history_file match {
       case g@FileWrapper(history_file) => 
         if(if(!history_file.exists) history_file.createNewFile() else true) {
           Some(g)
@@ -256,7 +266,7 @@ object Main {
       case l@Lines(lines) => Some(l)
     }
   }
-  def deleteHistory[A <: Logger : LoggerFile]() = {
+  def deleteHistory[A <: LogLine[A] : LogFileFactory]() = {
     getHistoryFile() map { history_file =>
       history_file.delete()
       if(debug) println("Deleted " + history_file.toString())
@@ -266,32 +276,41 @@ object Main {
   var timeStampGiver = () => new Timestamp(new java.util.Date().getTime).toString
   
   /**
-   * Logger facilities
+   * LogLine facilities
    */
-  trait Logger {
+  trait LogLine[A <: LogLine[A]] {
     def mkString: String
     def dir: String
     def time: String
     def performed: Boolean
     def nature: String
     def input: List[String]
-    def setPerformed(b: Boolean): Logger
+    def setPerformed(b: Boolean): A
+    private var programs: Option[Seq[ProgramSet[TraceExpr]]] = None
+    def setPrograms(p: Option[Seq[ProgramSet[TraceExpr]]]): this.type = {programs = p; this}
+    def getPrograms: Option[Seq[ProgramSet[TraceExpr]]] = programs
   }
-  trait LoggerFile[A <: Logger] {
+  
+  trait LogFileFactory[A <: LogLine[A]] {
     def history_filename: String
-    def extractor: String => Option[A]
-    private var mHistoryFile: Option[LogWrapper] = None
-    def history_file: LogWrapper = {
+    def extractor: (String, Option[Seq[ProgramSet[TraceExpr]]]) => Option[A]
+    private var mHistoryFile: Option[LogWrapper[A]] = None
+    def history_file: LogWrapper[A] = {
       mHistoryFile match {
         case Some(z) => z
         case None =>
-          val tmpDir = System.getProperty("java.io.tmpdir")
-          val history_dir = new File(tmpDir, HISTORY_DIR)
-          if(!history_dir.exists()) {
-            history_dir.mkdirs()
+          if(useLogFileOnDisk) {
+            val tmpDir = System.getProperty("java.io.tmpdir")
+            val history_dir = new File(tmpDir, HISTORY_DIR)
+            if(!history_dir.exists()) {
+              history_dir.mkdirs()
+            }
+            mHistoryFile = Some(FileWrapper(new File(history_dir, history_filename))(this))
+            mHistoryFile.get
+          } else {
+            mHistoryFile = Some(Lines(List()))
+            mHistoryFile.get
           }
-          mHistoryFile = Some(FileWrapper(new File(history_dir, history_filename)))
-          mHistoryFile.get
         }
     }
   }
@@ -302,14 +321,14 @@ object Main {
   object Companion {
     implicit def companion[T](implicit comp : Companion[T]) = comp()
   }
-  trait LoggerCompanion[C <: Logger] {
+  trait LogFactory[C <: LogLine[C]] {
     implicit def companion: Companion[C]
   }
   
   /**
    * Renaming log
    */
-  object MvLog extends LoggerCompanion[MvLog] {
+  object MvLog extends LogFactory[MvLog] {
     def unapply(s: String): Option[MvLog] = {
       val a = s.split(";")
       try {
@@ -330,7 +349,7 @@ object Main {
       def apply() = MvLog
     }
   }
-  case class MvLog(dir: String, performed: Boolean, nature: String, file1AndProperties: List[String], file2: String, time: String = timeStampGiver()) extends Logger {
+  case class MvLog(dir: String, performed: Boolean, nature: String, file1AndProperties: List[String], file2: String, time: String = timeStampGiver()) extends LogLine[MvLog] {
     override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1AndProperties.mkString(";") +";"+file2
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = file1AndProperties
@@ -340,15 +359,15 @@ object Main {
       case INPUT_FILE_PROPERTIES(n) => file1AndProperties.head
     }
   }
-  implicit object MvLogFile extends LoggerFile[MvLog] {
+  implicit object MvLogFile extends LogFileFactory[MvLog] {
     def history_filename = HISTORY_MV_FILE
-    def extractor = MvLog.unapply(_)
+    def extractor = (s: String, p: Option[Seq[ProgramSet[TraceExpr]]]) => MvLog.unapply(s).map(_.setPrograms(p))
   }
   
   /**
    * Auto log
    */
-  object AutoLog extends LoggerCompanion[AutoLog]{
+  object AutoLog extends LogFactory[AutoLog]{
     def unapply(s: String): Option[AutoLog] = {
       val a = s.split("\\|\\|").toList
       try {
@@ -369,20 +388,20 @@ object Main {
       def apply() = AutoLog
     }
   }
-  case class AutoLog(dir: String, performed: Boolean, content: Boolean, nature: String, input_files: List[String], commands: List[String], time: String = timeStampGiver()) extends Logger {
+  case class AutoLog(dir: String, performed: Boolean, content: Boolean, nature: String, input_files: List[String], commands: List[String], time: String = timeStampGiver()) extends LogLine[AutoLog] {
     override def mkString = time + "||" + dir + "||" + performed.toString + "||" + content.toString + "||" + nature + "||"  + (input_files++commands).mkString("||")
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = input_files
   }
-  implicit object AutoLogFile extends LoggerFile[AutoLog] {
+  implicit object AutoLogFile extends LogFileFactory[AutoLog] {
     def history_filename = HISTORY_AUTO_FILE
-    def extractor = AutoLog.unapply(_)
+    def extractor = (s: String, p: Option[Seq[ProgramSet[TraceExpr]]]) => AutoLog.unapply(s).map(_.setPrograms(p))
   }
   
   /**
    * Partition log
    */
-  object PartitionLog extends LoggerCompanion[PartitionLog] {
+  object PartitionLog extends LogFactory[PartitionLog] {
     def unapply(s: String): Option[PartitionLog] = {
       val a = s.split(";")
       try {
@@ -397,20 +416,20 @@ object Main {
       def apply() = PartitionLog
     }
   }
-  case class PartitionLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+  case class PartitionLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends LogLine[PartitionLog] {
     override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";" + folder
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = List(file1)
   }
-  implicit object PartitionLogFile extends LoggerFile[PartitionLog] {
+  implicit object PartitionLogFile extends LogFileFactory[PartitionLog] {
     def history_filename = HISTORY_PARTITION_FILE
-    def extractor = PartitionLog.unapply(_)
+    def extractor =  (s: String, p: Option[Seq[ProgramSet[TraceExpr]]]) =>  PartitionLog.unapply(s)
   }
   
   /**
    * Filter log
    */
-  object FilterLog extends LoggerCompanion[FilterLog] {
+  object FilterLog extends LogFactory[FilterLog] {
     def unapply(s: String): Option[FilterLog] = {
       val a = s.split(";")
       try {
@@ -425,30 +444,33 @@ object Main {
       def apply() = FilterLog
     }
   }
-  case class FilterLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends Logger {
+  case class FilterLog(dir: String, performed: Boolean, nature: String, file1: String, folder: String, time: String = timeStampGiver()) extends LogLine[FilterLog] {
     override def mkString = time + ";" + dir + ";" + performed.toString + ";" + nature + ";" + file1+";"+folder
     def setPerformed(b: Boolean) = this.copy(performed = true)
     def input = List(file1)
     
-    var filter: Option[(StringSolver, String)] = None // Helps to recompute it.
+    private var mFilterSolver: Option[(StringSolver, String)] = None
+    def getFilterSolver: Option[(StringSolver, String)] = mFilterSolver
+    def setFilterSolver(c: StringSolver, expected: String): Unit = {
+      mFilterSolver = Some((c, expected))
+    }
   }
-  implicit object FilterLogFile extends LoggerFile[FilterLog] {
+  implicit object FilterLogFile extends LogFileFactory[FilterLog] {
     def history_filename = HISTORY_FILTER_FILE
-    def extractor = FilterLog.unapply(_)
+    def extractor =  (s: String, p: Option[Seq[ProgramSet[TraceExpr]]]) => FilterLog.unapply(s)
   }
   
   /**
    * Recovers all actions in history which happened in this folder
    */
-  def getHistory[A <: Logger : LoggerFile](folder: File): Seq[A] = {
+  def getHistory[A <: LogLine[A] : LogFileFactory](folder: File): Seq[A] = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s == dir
     getHistoryFile[A]() map { history_file =>
       if(debug) println(s"history file : $history_file")
       val lines = history_file.getContent
       val res = 
-        for(line <- lines;
-            log <- implicitly[LoggerFile[A]].extractor(line);
+        for(log <- lines;
             if(checkDir(log.dir))) yield log
       if(debug) println(s"content : $res")
       res
@@ -458,16 +480,15 @@ object Main {
   /**
    * Remove the directory from a given command.
    */
-  def removeDirectoryFromHistory[A <: Logger : LoggerFile](folder: File): Unit = {
+  def removeDirectoryFromHistory[A <: LogLine[A] : LogFileFactory](folder: File): Unit = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s != dir
     try {
       getHistoryFile[A]() map { history_file =>
         val content = history_file.getContent
         val lines = 
-          for(line <- content;
-              log <- implicitly[LoggerFile[A]].extractor(line);
-              if(checkDir(log.dir))) yield line
+          for(log <- content;
+              if(checkDir(log.dir))) yield log
          history_file.setContent(lines)
       }
     } catch  {
@@ -478,14 +499,12 @@ object Main {
   /**
    * Stores a transaction for this folder in the history
    */
-  def storeHistory[A <: Logger : LoggerFile](log: A): Unit = {
+  def storeHistory[A <: LogLine[A] : LogFileFactory](log: A): Unit = {
     getHistoryFile[A]() foreach { history_file =>
       try {
         if(debug) println(s"Writing in history")
         //val out = new PrintWriter(new BufferedWriter(new FileWriter(history_file.getAbsoluteFile(), true)));
-        val line=log.mkString
-        if(debug) println(s"Writing line \n$line")
-        history_file.addLine(line)
+        history_file.addLine(log)
         //out.println(line);
         //out.close();
       } catch  {
@@ -497,19 +516,19 @@ object Main {
   /**
    * Sets a line in the history to performed state.
    */
-  def setHistoryPerformed[A <: Logger : LoggerFile](folder: File, files: List[String]): Unit = {
+  def setHistoryPerformed[A <: LogLine[A] : LogFileFactory](folder: File, files: List[String]): Unit = {
     val dir = if(folder.isDirectory()) folder.getAbsolutePath() else new File(folder.getParent()).getAbsolutePath()
     val checkDir = (s: String) => s == dir
     try {
       getHistoryFile[A]() foreach { history_file =>
         val content = history_file.getContent
-        val lines = 
-          for(line <- content;
-              log <- implicitly[LoggerFile[A]].extractor(line)) yield {
+        val lines: Seq[A] = 
+          for(log <- content) yield {
             if(checkDir(log.dir) && log.input.startsWith(files) && !log.performed) {
-              log.setPerformed(true).mkString
-            } else line
+              log.setPerformed(true): A
+            } else log
         }
+        history_file.setContent(lines)
       }
     } catch  {
       case e: IOException =>println("ioexception")
@@ -572,11 +591,11 @@ object Main {
    */
   def listFiles(nested_level: Int, onlyFiles: Boolean, filter: Boolean, extension: Boolean, maybePrevious: String => String = (s: String) => s): Array[List[String]] = {
     val f = if(nested_level == 0) {
-      workingDirAbsFileFile.list().sortBy(f => alphaNumericalOrder(maybePrevious(f)))
+      fileListerString().sortBy(f => alphaNumericalOrder(maybePrevious(f)))
       .filter(file => new File(workingDirAbsFile, file).isDirectory() ^ onlyFiles)
       .map(file => if(extension) splitExtension(file) else List(file))
     } else if(nested_level == 1){
-      workingDirAbsFileFile.listFiles().filter(_.isDirectory()).flatMap{ theDir =>
+      fileLister().filter(_.isDirectory()).flatMap{ theDir =>
         theDir.list().sortBy(f => alphaNumericalOrder(maybePrevious(f)))
         .map(file => theDir.getName() + "/" + file)
         .filter(file => new File(workingDirAbsFile, file).isDirectory() ^ onlyFiles)
@@ -584,13 +603,19 @@ object Main {
       }
     } else Array[List[String]]()
     val res = if(filter) {
-      val loghistory = getFilterHistory(workingDirAbsFileFile)
-      automatedFilter(Options(perform=false, performAll=false, explain=false, test=false), loghistory) match {
-        case Some(filters) =>
-          val okString = loghistory(0).folder
-          val accepted = filters.filter{ case (lin, lout) => lout.head == okString}.map(_._1).toSet
-          f filter { elem => accepted(List(elem.mkString(""))) }
-        case None => f
+      val loghistory = getFilterHistory(workingDirAbsFileFile) // Take the last filter which contains everything.
+      loghistory.lastOption match {
+        case Some(filterLine) if filterLine.getFilterSolver != None =>
+          val Some((c, expected)) = filterLine.getFilterSolver
+          f.filter { elem => c.solve(elem.mkString("")) == expected }
+        case _ =>
+          automatedFilter(Options(perform=false, performAll=false, explain=false, test=false), loghistory) match {
+          case Some(filters) =>
+            val okString = loghistory(0).folder
+            val accepted = filters.filter{ case (lin, lout) => lout.head == okString}.map(_._1).toSet
+            f filter { elem => accepted(List(elem.mkString(""))) }
+          case None => f
+        }
       }
     } else {
       f
@@ -613,7 +638,7 @@ object Main {
     c.setVerbose(opt.debug)
     c.setIterateInput(false)
     val alreadyPerformed = (for(log <- examples if log.performed) yield log.file2).toSet
-    if(debug) println(s"$workingDirAbsFile $examples, $perform; $explain")
+    if(debug) println(s"where=$workingDirAbsFile examples=$examples, perform=$perform; explain=$explain")
     
     if(examples != Nil && !(opt.minTwoExamples && examples.length < 2)) {
       if(!explain && !perform)
@@ -645,15 +670,20 @@ object Main {
     }
     } else files_raw
     if(debug) println(s"available files:\n" + files.mkString("\n"))
-    if(solver == None)
+    //if(solver == None)
     examples.reverse.take(2).reverse foreach {
-      case MvLog(dir, performed, nature, in, out, time) =>
+      case m@MvLog(dir, performed, nature, in, out, time) =>
         
         val index = files.indexWhere(s => s.startsWith(in))
         val position = if(index == -1) Math.max(0, files.indexWhere(s => s.head + s.tail.head == out)) else index
         if(debug) println(s"Adding $in, $out at position $position")
-        c.setPosition(position)
-        c.add(in, List(out))(0)
+        m.getPrograms match {
+          case Some(p)=>c.add(p.toIndexedSeq)
+          case None =>
+            c.setPosition(position)
+            val p = c.add(in, List(out))(0)
+            m.setPrograms(Some(Seq(p)))
+        }
     }
     if(debug) println(s"Files: ${files.mkString}")
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
@@ -718,7 +748,7 @@ object Main {
         case ("--"::remaining, options) =>
           Some((options.copy(noMoreDecoding=true), remaining))
         case (("-w" | "--workingdir")::dir::remaining, options) => // Explain the algorithm
-          workingDirAbsFile = dir
+          workingDirAbsFile = new File(dir).getAbsolutePath()
           Some((options, remaining))
         case (("-e" | "--explain")::remaining, options) => // Explain the algorithm
           Some((options.copy(perform=false, explain=true), remaining))
@@ -926,8 +956,6 @@ object Main {
     // Controls if the last example was reading the content of the file instead of the name itself.
     var read_content_file: Option[FileName] = None
     
-    var previous_input: List[String] = Nil
-    var previous_output: List[String] = Nil
     var lastFilesCommand: List[String] = Nil
     // All files should have the same nature.
     // onlyFile represents if the files are files (true) or directories (false)
@@ -948,7 +976,7 @@ object Main {
     
     // Solving the mapping based on the last two examples.
     examples.reverse.take(2).reverse foreach {
-      case AutoLog(folder, performed, contentFlag, nature, files, command, time) =>
+      case a@AutoLog(folder, performed, contentFlag, nature, files, command, time) =>
         // Extra time if looking for dots
         if(command.indexOf("...") != -1) {
           c.setTimeout(4)
@@ -970,30 +998,29 @@ object Main {
             is_input_file_list = false
             read_content_file = None
         }
-        
-        // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
-        // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
-        val (inputList,output) = if(contentFlag) {
-          val content = readFile(files.head)
-          if(!content.isEmpty) {
-            val lines = readLines(content).take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)
-            if(debug) println(s"Adding ${lines} (content=$contentFlag), $command")
-            (files.head::lines, command)
-          } else (Nil, Nil)
-        } else {
-          if(debug) println(s"Adding ${files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)} (content=$contentFlag), $command")
-          (files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
-        }
-        if(inputList != previous_input) {
+        a.getPrograms match {
+          case Some(p) => c.add(p.toIndexedSeq)
+          case None =>
+          // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
+          // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
+          val (inputList,output) = if(contentFlag) {
+            val content = readFile(files.head)
+            if(!content.isEmpty) {
+              val lines = readLines(content).take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)
+              if(debug) println(s"Adding ${lines} (content=$contentFlag), $command")
+              (files.head::lines, command)
+            } else (Nil, Nil)
+          } else {
+            if(debug) println(s"Adding ${files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED)} (content=$contentFlag), $command")
+            (files.take(NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED), command)
+          }
           c.setPosition(input.indexWhere(s => s.startsWith(inputList)))
-          c.add(inputList, output)
+          val p = c.add(inputList, output)
+          a.setPrograms(Some(p))
         }
     }
     
-    
     if(debug) println(s"Only files: $onlyFiles, nested level = $nested_level")
-    
-    
 
     if(debug) println(s"Input ${input.mkString("")}")
     var mapping: Array[(List[String], Seq[String])] = null
@@ -1321,6 +1348,7 @@ object Main {
       println("# Unable to filter. Please perform filter --clean to reset filtering option")
       return None
     }
+    examples.last.setFilterSolver(c, determiningSubstring)
     
     if(debug) println(s"Exceptions: $alreadyPerformed, nested level = $nested_level")
     
@@ -1472,7 +1500,7 @@ object Main {
   def alphaNumericalOrder(f: String): String = {
     var res = f
     for(i <- 1 to 3; j = 4-i ) {
-      res = res.replaceAll(s"""(?:[^\\d]|^)(\\d{$i})(?=[^\\d]|$$)""","0"*j+"$1")
+      res = res.replaceAll(s"""(?<=[^\\d]|^)(\\d{$i})(?=[^\\d]|$$)""","0"*j+"$1")
     }
     res.replaceAll("[ _\\-\\+#\\$]", "").toLowerCase()
   }
