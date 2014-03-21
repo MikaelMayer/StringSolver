@@ -9,10 +9,10 @@
 #           "Get-EventSubscriber | Unregister-Event"
 #           It requires python installed and available at the command line.
 
-# Enter the root path you want to monitor. 
-$folder = 'C:\Users\Mikael\Dropbox\workspace\StringSolver' 
+# CHANGE HERE : Enter the root path you want to monitor.
+$folder = 'C:\Users' 
 # Enter the location of the StringSolver-jar
-$stringsolver = "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"
+#$stringsolver = "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"
 
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
@@ -53,7 +53,7 @@ $RenamedAction = {
   
   $out = "mv --mintwoexamples --workingdir $wdir --explain --test $oldpath $newpath" | Send-TcpRequest localhost 12345
   
-  $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
+  # $out | Out-File C:\Users\Mikael\Dropbox\workspace\StringSolver\logrename.txt -Append
 
   $OUTPUT = "NO" #[System.Windows.Forms.MessageBox]::Show("Do you want to rename the files according to the following pattern:`r`n $out ?" , "File renaming suggestion" , 4)
   Set-Location $tmpwdir
@@ -80,7 +80,7 @@ $RenamedAction = {
 	    Set-Location $wdir;
 		$fsw.EnableRaisingEvents = $false;
 		"mv --workingdir $wdir --all" | Send-TcpRequest localhost 12345 | Out-String
-     	java -jar $stringsolver move --mintwoexamples --all;
+     	# java -jar $stringsolver move --mintwoexamples --all;
      	$fsw.EnableRaisingEvents = $true;
     	Set-Location $tmpwdir;
 		$balloon.dispose()

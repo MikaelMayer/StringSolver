@@ -139,7 +139,7 @@ class StringSolver {
   
   /**
    * Timeout in seconds to add a new input/output example.
-   * This is approximate. Default is 30s
+   * This is approximate. Default is 15s
    */
   def setTimeout(seconds: Int) = {ff.TIMEOUT_SECONDS = seconds; this}
   
@@ -160,14 +160,29 @@ class StringSolver {
   def setVerbose(b: Boolean) = {ff.verbose = b; this}
   def isVerbose = ff.verbose
   
+  /**
+   * Allows to iterate over inputs.
+   */
   def setIterateInput(b: Boolean) = ff.iterateInput = b
   
+   /**
+   * Allows to use the example index for positions
+   */
   def setUseIndexForPosition(b: Boolean) = ff.useIndexForPosition = b
   
+   /**
+   * Retrieves statistics
+   */
   def getStatistics(): String = ff.statistics()
   
+   /**
+   * Advanced stats.
+   */
   def setAdvancedStats(b: Boolean) = ff.advanced_stats = b
   
+  /**
+   * Extra time to merge as a proportion of timeout
+   */
   def setExtraTimeToMerge(f: Float) = extra_time_to_merge = f
   
   /**Adds a new inputs/outputs example.

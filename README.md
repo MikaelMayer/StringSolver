@@ -11,18 +11,29 @@ Build using sbt 0.13 and scala 2.10.3.
 - Semi-automated file processing commands
 - Semi-automated file filter and partition commands
 
+## How to install
+
+- Install SBT http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html
+- Make sure to have PATH making sbt accessible
+- `git clone https://github.com/MikaelMayer/StringSolver.git`
+- `sbt compile`
+
 ## Automated Bash commands
 
-StringSolver includes an awesome automatic renaming tool and an automated command generalizer.
+StringSolver includes a nice automatic renaming tool and an automated command generalizer.
 
 Installation:
 
+#### Linux/bash/cygwin
+
 - Build the project using `sbt one-jar`.
-- Use the following alias to rename file using the tool (e.g. in your `.bashrc` file:
+- Use the following alias to rename file using the tool (e.g. in your `.bashrc` file:)
 ```
-export STRINGSOLVERPATH = [/path/to/target/scala/]
+export STRINGSOLVERPATH = [/path/to/StringSolver/target/scala/]
 alias mv='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" move'
 alias auto='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" auto'
+alias partition='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" partition'
+alias filter='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" filter'
 ```
 
 ### Semi-automated Renaming
@@ -31,14 +42,29 @@ alias auto='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" auto
 
 [![ScreenShot](http://i1.ytimg.com/vi/rbhAv3uBFqw/mqdefault.jpg)](http://youtu.be/rbhAv3uBFqw)
 
-After editing the two lines of `Monitor.ps1` to indicate which root folder to monitor (it could be `c:\`) and where to find the jar file,
-run Powershell and within it run `powershell -Sta`.
-Then start
+This windows shell extension recursively monitors folders for renaming and suggests renamings.
+
+- Install python https://www.python.org/downloads/
+- Make sure that python can be invoked from the command line.
+- Edit the first line of `Monitor.ps1` to indicate which root folder to monitor (it could be c:\)
+- Run PowerShell and navigate to the repository
+- Inside Powershell, run `PowerShell -Sta` to start single threaded mode.
+- Start:
 
     .\Monitor.ps1
 
-And within the explorer, rename two files or two folders in the same folder.
-A balloon should appear with the suggestion. Click it and voilà!
+- Now navigate to the `StringSolver` repository
+- Type `sbt`
+- Type `run server`
+
+Now the service is launched.
+
+Now, within the explorer, rename two files or two folders in the same folder.
+A balloon should appear with the suggestion. Click it and the renaming is automatically done.
+
+To stop the service, either close the command line utility, or on another shell at the `StringSolver` repository, write:
+
+- echo "stop" | Send-TcpRequest localhost 12345;
 
 ## Bash version:
 
@@ -168,10 +194,9 @@ object Test {
    c.add("credits##.pdf -> 03credits.pdf")
    
    /* Prints:
-	* a 2-digit number incrementing starting at 1 continuing the numbers
-	* of previous first output until [the end of the first number]
-	* + the first input until [the end of the first lowercase word]
-	* + the first input starting at [the first '.']
+	* a 2-digit counter incrementing starting at 1
+	* + the first input until the end of the first lowercase word
+	* + the first input starting at the first '.'
 	*/ 
    println(Printer(c.solve().get))
    
@@ -187,8 +212,8 @@ object Test2 {
    
    /* Prints:
 	* the constant string 'convert ' + the first input
-	  + the constant string ' ' + the first input until [the end of the first word]
-	  + a 3-digit number incrementing starting at 1 continuing the first number in previous output
+	  + the constant string ' ' + the first input until the end of the first word
+	  + a 3-digit number from the first number in previous output
 	  + the constant string '.pdf'
 	*/ 
    println(Printer(c.solve().get))
@@ -204,8 +229,8 @@ object Test2 {
    
    /* Prints:
 	* the constant string 'convert ' + concatenates all inputs separated by ' '
-	* + the constant string ' ' + the first input until [the end of the first word]
-	* + the constant string 'Book' + the first input starting at [the last non-number]
+	* + the constant string ' ' + the first input until the end of the first word
+	* + the constant string 'Book' + the first input starting at the last non-number
 	*/
    println(Printer(c2.solve().get))
    
@@ -219,7 +244,7 @@ object Test2 {
 
 ## Providing input/output examples
 
-The other ways to add input/output examples in StringSolver are the following, given that c is a StringSolver instance.
+The other ways to add input/output examples in StringSolver are the following, given that `c` is a StringSolver instance.
 
 ```Scala
 // Exactly one input and one output
@@ -234,6 +259,10 @@ c.add(List("input1", "input2", "input3"), List("output1", "output2"))
 
 // Three inputs and one output
 c.add(List("input1", "input2", "input3"), "output1)
+
+// Three inputs and two outputs two times
+c.add("""input1 | input2 | input3 | output1 | output2
+input4 | input5 | input6 | output3 | output4""", 2)
 ```
 
 ## Solving new input
@@ -262,6 +291,19 @@ c.solve("c | d")
 c.solve(List("c", "d"))
 ```
 
+To solve a problem from scratch, you can also do the following:
+```Scala
+val c = StringSolver()
+c.add(List("a","b"),List("ab","ba"))
+
+// Return: "a | b | ab | ba
+//         c | d | cd | dc"
+
+c.solve("""
+a | b  | ab | ba
+c | d""", 2)
+````
+
 ## Options
 
 Most of the StringSolver usage is fully automated, and does not require to change the following options.
@@ -270,21 +312,61 @@ For some cases, they can be useful to trigger on/off.
 ```Scala
 val c = StringSolver()
 
-/** Use dots ... to trigger manual loop research */
-c.setUseDots(b: Boolean)
+/**
+ * Use numbering from previous input option
+ */
+c.setUseNumbers(b: Boolean) = {ff.numbering = b; this}
 
-/** Use numbering from previous input option */
-c.setUseNumbers(b: Boolean)
-
-/** Loop level. 0 will not look for loops */
-c.setLoopLevel(i: Int)
+/**
+ * Loop level. 0 will not look for loops
+ */
+c.setLoopLevel(i: Int) = {ff.DEFAULT_REC_LOOP_LEVEL = i; this}
 
 /**
  * Timeout in seconds to add a new input/output example.
- * This is approximate. Default is 30s
+ * This is approximate. Default is 15s
  */
-c.setTimeout(seconds: Int)
+c.setTimeout(seconds: Int) = {ff.TIMEOUT_SECONDS = seconds; this}
 
-/** If looking for loops, what could be the maximum separator length */
-c.setMaxSeparatorLength(length: Int)
+/**
+ * If looking for loops, what could be the maximum separator length
+ */
+c.setMaxSeparatorLength(length: Int) = {ff.MAX_SEPARATOR_LENGTH = length; this}
+
+/**
+ * If only interesting positions (aka word, special chars and digit separators)
+ * are considered when looking for loops
+ */
+c.setOnlyInterestingPositions(b: Boolean) = {ff.onlyInterestingPositions = b; this}
+
+/**
+ * Outputs programs steps. Useful for debugging an other.
+ */
+c.setVerbose(b: Boolean) = {ff.verbose = b; this}
+c.isVerbose = ff.verbose
+
+/**
+ * Allows to iterate over inputs.
+ */
+c.setIterateInput(b: Boolean) = ff.iterateInput = b
+
+/**
+ * Allows to use the example index for positions
+ */
+c.setUseIndexForPosition(b: Boolean) = ff.useIndexForPosition = b
+
+/**
+ * Retrieves statistics
+ */
+c.getStatistics(): String = ff.statistics()
+
+/**
+ * Advanced stats.
+ */
+c.setAdvancedStats(b: Boolean) = ff.advanced_stats = b
+
+/**
+ * Extra time to merge as a proportion of timeout
+ */
+c.setExtraTimeToMerge(f: Float) = extra_time_to_merge = f
 ```
