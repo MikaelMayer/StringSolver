@@ -3,25 +3,25 @@ Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun
 
 ## Table of contents
 
-- [Table of contents]#table-of-contents
-- [Key features]#key-features
-- [Usage]#usage
-    - [Compile it]#compile-it
-    - [Link library for SBT]#link-library-for-sbt
-    - [Link library for Maven]#link-library-for-maven
-- [Automated Bash commands]#automated-bash-commands
-    - [Bash and Cygwin]#bash-and-cygwin
-    - [Semi-automated Renaming]#semi-automated-renaming
-        - [Windows Shell extension for renaming files (requires python)]#windows-shell-extension-for-renaming-files-requires-python
-        - [Bash version]#bash-version
-    - [Semi-automated bash commands]#semi-automated-bash-commands
-        - [Implicit file names and file content]#implicit-file-names-and-file-content
-    - [Semi-automated partition commands]#semi-automated-partition-commands
-    - [Semi-automated filter commands]#semi-automated-filter-commands
-- [API]#api
-    - [Providing input/output examples]#providing-input/output-examples
-    - [Solving new input]#solving-new-input
-    - [Options]#options
+- [Table of contents](#table-of-contents)
+- [Key features](#key-features)
+- [Usage](#usage)
+    - [Compile it](#compile-it)
+    - [Link library for SBT](#link-library-for-sbt)
+    - [Link library for Maven](#link-library-for-maven)
+- [Automated Bash commands](#automated-bash-commands)
+    - [Bash and Cygwin](#bash-and-cygwin)
+    - [Semi-automated Renaming](#semi-automated-renaming)
+        - [Windows Shell extension for renaming files (requires python)](#windows-shell-extension-for-renaming-files-requires-python)
+        - [Bash version](#bash-version)
+    - [Semi-automated bash commands](#semi-automated-bash-commands)
+        - [Implicit file names and file content](#implicit-file-names-and-file-content)
+    - [Semi-automated partition commands](#semi-automated-partition-commands)
+    - [Semi-automated filter commands](#semi-automated-filter-commands)
+- [API](#api)
+    - [Providing input/output examples](#providing-input/output-examples)
+    - [Solving new input](#solving-new-input)
+    - [Options](#options)
 
 
 Build using sbt 0.13 and scala 2.10.3.
