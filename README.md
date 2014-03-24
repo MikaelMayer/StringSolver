@@ -1,6 +1,29 @@
 # String-Solver
 Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
 
+## Table of contents
+
+- [Table of contents]#table-of-contents
+- [Key features]#key-features
+- [Usage]#usage
+    - [Compile it]#compile-it
+    - [Link library for SBT]#link-library-for-sbt
+    - [Link library for Maven]#link-library-for-maven
+- [Automated Bash commands]#automated-bash-commands
+    - [Bash and Cygwin]#bash-and-cygwin
+    - [Semi-automated Renaming]#semi-automated-renaming
+        - [Windows Shell extension for renaming files (requires python)]#windows-shell-extension-for-renaming-files-requires-python
+        - [Bash version]#bash-version
+    - [Semi-automated bash commands]#semi-automated-bash-commands
+        - [Implicit file names and file content]#implicit-file-names-and-file-content
+    - [Semi-automated partition commands]#semi-automated-partition-commands
+    - [Semi-automated filter commands]#semi-automated-filter-commands
+- [API]#api
+    - [Providing input/output examples]#providing-input/output-examples
+    - [Solving new input]#solving-new-input
+    - [Options]#options
+
+
 Build using sbt 0.13 and scala 2.10.3.
 
 ## Key features:
@@ -11,12 +34,57 @@ Build using sbt 0.13 and scala 2.10.3.
 - Semi-automated file processing commands
 - Semi-automated file filter and partition commands
 
-## How to install
+## Usage
+
+### Compile it
 
 - Install SBT http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html
 - Make sure to have PATH making sbt accessible
 - `git clone https://github.com/MikaelMayer/StringSolver.git`
 - `sbt compile`
+
+### Link library for SBT
+
+Add the following two lines separated by a blank line in your main `build.sbt`:
+
+    resolvers += "Sonatype.org" at "https://oss.sonatype.org/content/groups/staging"
+
+    libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.0"
+
+Then you can use it in your code, for example in a file in `src/main/scala/Custom.scala`:
+
+```Scala
+package com.example
+import ch.epfl.lara.synthesis.stringsolver._
+object Custom {
+  val c = StringSolver()
+  def main(a: Array[String]): Unit = {
+    c.add(a(0).split("\\|").toList, a(1))
+	c.solve() match {
+	  case Some(a) => println(Printer(a))
+	  case None => println("No program found")
+    }
+  }
+}
+```
+
+Then if in your `build.sbt` you have `mainClass in (Compile, run) := Some("com.example.Custom")`, you can then run:
+
+    sbt
+	run "tEsT|inPuT1" TESTinput001
+
+and it should output:
+
+    the first input uppercase + the lowercase second input until the end of the first word
+	+ a 3-digit number from the second input starting at the first number
+
+### Link library for Maven
+
+    <dependency>
+      <groupId>ch.epfl.lara</groupId>
+      <artifactId>stringsolver_2.10</artifactId>
+      <version>1.1</version>
+    </dependency>
 
 ## Automated Bash commands
 
@@ -24,9 +92,9 @@ StringSolver includes a nice automatic renaming tool and an automated command ge
 
 Installation:
 
-#### Linux/bash/cygwin
+### Bash and Cygwin
 
-- Build the project using `sbt one-jar`.
+- Build the project using `sbt one-jar` or download it from sonatype (see URL [above](#link-library-for-sbt))
 - Use the following alias to rename file using the tool (e.g. in your `.bashrc` file:)
 ```
 export STRINGSOLVERPATH = [/path/to/StringSolver/target/scala/]
@@ -36,9 +104,9 @@ alias partition='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar"
 alias filter='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" filter'
 ```
 
-### Semi-automated Renaming
+### Semi-automated Renaming - Bash, Cygwin, Windows
 
-## Windows Shell extension (requires python)
+#### Windows Shell extension for renaming files (requires python)
 
 [![ScreenShot](http://i1.ytimg.com/vi/rbhAv3uBFqw/mqdefault.jpg)](http://youtu.be/rbhAv3uBFqw)
 
@@ -66,7 +134,7 @@ To stop the service, either close the command line utility, or on another shell 
 
 - echo "stop" | Send-TcpRequest localhost 12345;
 
-## Bash version:
+#### Bash version
 
 The semi-automatic rename tool overrides the actual one:
 
@@ -242,7 +310,7 @@ object Test2 {
 }
 ```
 
-## Providing input/output examples
+### Providing input/output examples
 
 The other ways to add input/output examples in StringSolver are the following, given that `c` is a StringSolver instance.
 
@@ -265,7 +333,7 @@ c.add("""input1 | input2 | input3 | output1 | output2
 input4 | input5 | input6 | output3 | output4""", 2)
 ```
 
-## Solving new input
+### Solving new input
 
 To solve and print an existing StringSolver instance, do the following:
 ```Scala
@@ -304,7 +372,7 @@ a | b  | ab | ba
 c | d""", 2)
 ````
 
-## Options
+### Options
 
 Most of the StringSolver usage is fully automated, and does not require to change the following options.
 For some cases, they can be useful to trigger on/off.
