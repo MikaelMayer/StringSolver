@@ -49,7 +49,7 @@ Add the following two lines separated by a blank line in your main `build.sbt`:
 
     resolvers += "Sonatype.org" at "https://oss.sonatype.org/content/groups/staging"
 
-    libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.0"
+    libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.1"
 
 Then you can use it in your code, for example in a file in `src/main/scala/Custom.scala`:
 
@@ -83,7 +83,7 @@ and it should output:
     <dependency>
       <groupId>ch.epfl.lara</groupId>
       <artifactId>stringsolver_2.10</artifactId>
-      <version>1.0</version>
+      <version>1.1</version>
     </dependency>
 
 ## Automated Bash commands
