@@ -104,7 +104,7 @@ alias partition='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar"
 alias filter='java -jar "$STRINGSOLVERPATH/stringsolver_2.10-1.1-one-jar.jar" filter'
 ```
 
-### Semi-automated Renaming - Bash, Cygwin, Windows
+### Semi-automated Renaming
 
 #### Windows Shell extension for renaming files (requires python)
 
