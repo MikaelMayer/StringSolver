@@ -221,6 +221,8 @@ If you experience trouble with the `auto` command, you can always run `auto --cl
 
 ### Semi-automated partition commands
 
+[![ScreenShot](http://i1.ytimg.com/vi/NNFY9azdblQ/mqdefault.jpg)](http://youtu.be/NNFY9azdblQ)
+
 If you have a set of files, by providing at least two files of each partition for at least two partitions, you can split the files into as many folders as there are partitions.
 For example:
 
