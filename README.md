@@ -83,7 +83,7 @@ and it should output:
     <dependency>
       <groupId>ch.epfl.lara</groupId>
       <artifactId>stringsolver_2.10</artifactId>
-      <version>1.1</version>
+      <version>1.0</version>
     </dependency>
 
 ## Automated Bash commands
