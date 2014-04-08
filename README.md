@@ -18,6 +18,7 @@ Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun
         - [Implicit file names and file content](#implicit-file-names-and-file-content)
     - [Semi-automated partition commands](#semi-automated-partition-commands)
     - [Semi-automated filter commands](#semi-automated-filter-commands)
+    - [Semi-automated file content mapping commands](#semi-automated-file-content-mapping-commands)
 - [API](#api)
     - [Providing input/output examples](#providing-inputoutput-examples)
     - [Solving new input](#solving-new-input)
