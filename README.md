@@ -244,7 +244,7 @@ If it is given one input, it will apply the current transformation to the lines 
 
 ```
 map '  case France => "0033"' '  case France => "+33"'
-map z3.def
+map CountryMapping.scala
 ```
 
 The `--filter` flag can be used to apply the transformation on a subset of lines. See below.
@@ -266,7 +266,7 @@ The second line asks to move accepted files to a folder `images` and keep the ot
 
 `mv`, `auto` and `partition` also accept the `--filter` modifier. If set, it will perform the last `filter --test` and apply their transformation only on filtered files and not the others.
 
-To use the `filter` command with the content of a file and the `map` option, you have to provide the `--lines` flag to filter and then the `--filter` flag to maps. For example:
+To use the `filter` command with the content of a file and the `map` command, you have to provide the `--lines` flag to `filter` and then the `--filter` flag to `map`. For example:
 
 ```
 filter --lines "element {01}" ok "element {02}" ok "Title" notok
