@@ -23,7 +23,6 @@ Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun
     - [Solving new input](#solving-new-input)
     - [Options](#options)
 
-
 Build using sbt 0.13 and scala 2.10.3.
 
 ## Key features:
@@ -42,6 +41,8 @@ Build using sbt 0.13 and scala 2.10.3.
 - Make sure to have PATH making sbt accessible
 - `git clone https://github.com/MikaelMayer/StringSolver.git`
 - `sbt compile`
+
+Now it should work. To test it, run `sbt test' but this might take a while.
 
 ### Link library for SBT
 
@@ -235,6 +236,18 @@ It will move all files ending with `.jpg` to images, all files ending with `.txt
 
 Provided partition names can be unrelated constants (red, blue, etc.), numbers (1, 2, 3...), strings transformation from the common substring of each partition (set-TXT,set-JPG,....) or any combination of these three.
 
+### Semi-automated file content mapping commands
+
+StringSolver provides a way to change the content of an entire file based on examples. Given an even number of inputs, `map` will start to compute the transformation from inputs to outputs.
+If it is given one input, it will apply the current transformation to the lines of the file.
+
+```
+map '  case France => "0033"' '  case France => "+33"'
+map z3.def
+```
+
+The `--filter` flag can be used to apply the transformation on a subset of lines. See below.
+
 ### Semi-automated filter commands
 
 `filter` is slightly different from the previous commands. It is similar to partition, in the sense that it can move files to different folder. The difference is that it separates files given a property, and is lazy to move files, so it can be used for the other commands.
@@ -251,6 +264,14 @@ The first line considers that the `images` is the tag for accepted files. It wil
 The second line asks to move accepted files to a folder `images` and keep the others in the current directory `.`
 
 `mv`, `auto` and `partition` also accept the `--filter` modifier. If set, it will perform the last `filter --test` and apply their transformation only on filtered files and not the others.
+
+To use the `filter` command with the content of a file and the `map` option, you have to provide the `--lines` flag to filter and then the `--filter` flag to maps. For example:
+
+```
+filter --lines "element {01}" ok "element {02}" ok "Title" notok
+map "element {01}" "element {1,el}" "content {10}" "content {10,co}"
+map --filter mycontent.json
+```
 
 ## API
 

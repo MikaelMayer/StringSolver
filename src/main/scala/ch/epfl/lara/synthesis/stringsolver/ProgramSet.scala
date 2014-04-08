@@ -505,7 +505,9 @@ object ProgramSet {
   
 
 
-  case class IntersectParam(unify: Option[Identifier], index1: Int, index2: Int, iterateInput: Boolean = true, useIndexForPosition: Boolean = true)
+  case class IntersectParam(unify: Option[Identifier], index1: Int, index2: Int, iterateInput: Boolean = true, useIndexForPosition: Boolean = false) {
+    var timeout = false
+  }
   /**
    * Intersection function
    */
@@ -526,7 +528,7 @@ object ProgramSet {
           //println("computing edges...")
           
           val W12f = {  (arg : ((Node1, Node2), (Node1, Node2))) => arg match { case ((n1, n2), (np1, np2)) =>
-              for(f1 <- w1(n1, np1); f2 <- w2(n2, np2)) yield {
+              for(f1 <- w1(n1, np1) if !unify.timeout; f2 <- w2(n2, np2)) yield {
                 intersectAtomicExpr(f1, f2)
               }
             }}
@@ -553,10 +555,11 @@ object ProgramSet {
                 yield ((n12, n22), n1n2)
             }
           }
-
+          var i = 1;
           var emptyEdges = Set[((Node1, Node2), (Node1, Node2))]()
           // Alternate between nodes to visit on the end and on the start.
-          while(!(nodesToVisitEnd.isEmpty || nodesToVisit.isEmpty)) {
+          while(!(nodesToVisitEnd.isEmpty || nodesToVisit.isEmpty) && !unify.timeout) {
+            //println(s"Level $i - starting edges (${nodesToVisit.length} to visit)")
             //println(s"Nodes to visit start: ${nodesToVisit.size}", s"Nodes to visit end: ${nodesToVisitEnd.size}")
             val nFirst = nodesToVisit.dequeue()
             nodesVisited += nFirst
@@ -564,6 +567,7 @@ object ProgramSet {
                 e = newEdge._2) {
               val res = W12f(newEdge).filterNot(_ == SEmpty)
               if(!res.isEmpty) {
+                //println(s"Found expression for edge $newEdge")
                 edges += newEdge
                 W12 += newEdge -> res
                 if(!(nodesVisited contains e) && !(nodesToVisit contains e))
@@ -572,12 +576,14 @@ object ProgramSet {
                 emptyEdges += newEdge
               }
             }
+            //println(s"Level $i - ending edges (${nodesToVisitEnd.length} to visit)")
             val nLast = nodesToVisitEnd.dequeue()
             nodesVisited += nLast
             for(newEdge <- edgeMapEnd.getOrElse(nLast, Set.empty) if !(W12 contains newEdge) && !(emptyEdges(newEdge));
                 e = newEdge._1) {
               val res = W12f(newEdge).filterNot(_ == SEmpty)
               if(!res.isEmpty) {
+                //println(s"Found expression for edge $newEdge")
                 edges += newEdge
                 W12 += newEdge -> res
                 if(!(nodesVisited contains e) && !(nodesToVisitEnd contains e))
@@ -586,17 +592,12 @@ object ProgramSet {
                 emptyEdges += newEdge
               }
             }
+            i += 1
           }
-          val ñ = nodesVisited
-          //val ñ = ñ1 x ñ2
-          
-          //println(s"Computing edges...")
-          //val W12 = (ξ12 ==> W12f)
-          //println(s"Simplifying edges...")
-          //val ξ12final = ξ12.filterNot(e => W12.getOrElse(e, Set.empty).isEmpty)
-          val ξ12final = edges //edges.filterNot(e => W12.getOrElse(e, Set.empty).isEmpty)
-          
-          //println(s"Reducing automata...")
+          val ñ = nodesVisited ++ (nodesToVisitEnd intersect nodesToVisit)
+
+          val ξ12final = edges
+
           if(!nodesVisited((n1t, n2t))) SEmpty else
           if(ξ12final.size != 0) {
             val res = SDag[(Node1, Node2)](ñ, (n1s, n2s), (n1t, n2t), ξ12final, W12).reduce

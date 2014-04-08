@@ -113,6 +113,11 @@ class StringSolver {
   def setExtraTimeToComputeLoops(f: Float) = {extra_time_to_compute_loop = f; this}
   
   /**
+   * Proportion of the original time to resolve from computing loops
+   */
+  def setExtraTimeToResolve(f: Float) = {extra_time_to_resolve = f; this}
+  
+  /**
    * Possibility to reset the counter used to number files
    */
   def resetCounter() = { index_number = 0; this}
@@ -242,10 +247,13 @@ class StringSolver {
     } else {
       val waiting_seconds =  (ff.TIMEOUT_SECONDS * extra_time_to_merge).toInt
       if(ff.verbose) println(s"Computing intersection with previous programs... (waiting $waiting_seconds seconds)")
+      val intersectionParams = for(i <-0 until currentPrograms.length) yield {
+        IntersectParam(None, currentPrograms(i).examplePosition, newProgramSets(i).examplePosition, false, ff.useIndexForPosition)
+      }
       val intersectionsFuture = future {
         for(i <-0 until currentPrograms.length) yield {
           //println(s"Intersecting programs $i")
-          intersect(currentPrograms(i), newProgramSets(i))(IntersectParam(None, currentPrograms(i).examplePosition, newProgramSets(i).examplePosition, false, ff.useIndexForPosition))
+          intersect(currentPrograms(i), newProgramSets(i))(intersectionParams(i))
         }
         //(currentPrograms zip newProgramSets) map { case (a, b) => intersect(a, b) }
       }
@@ -253,8 +261,15 @@ class StringSolver {
         Await.result(intersectionsFuture, waiting_seconds.seconds)
       } catch {
         case e: TimeoutException  => 
-          if(ff.verbose) println("Intersection took too much time! Returning empty")
-          currentPrograms map {_ => SEmpty}
+          if(ff.verbose) println(s"Intersection took too much time! Resolving what has been done... (waiting ${ff.TIMEOUT_SECONDS * extra_time_to_resolve} seconds)")
+          intersectionParams.foreach{ f => f.timeout = true}
+          try {
+          Await.result(intersectionsFuture, (ff.TIMEOUT_SECONDS * extra_time_to_resolve).seconds)
+          } catch {
+            case e: TimeoutException =>
+              if(ff.verbose) println("Resolving took too much time! Intersection cancelled")
+              currentPrograms map {_ => SEmpty}
+          }
           //throw e
       }
       currentPrograms = intersections
@@ -317,8 +332,8 @@ class StringSolver {
    * c             c | C | c1
    * d             d | D | d1
    */
-  def solve(input: String): String = {
-    if(input.indexOf('\n') != -1) {
+  def solve(input: String, rawMode: Boolean = false): String = {
+    if(input.indexOf('\n') != -1 && !rawMode) {
       val problems = input.split('\n').map(_.split("\\|").toList.map(_.trim())).toList
       val iolength = (0 /: problems) { case (a, io) => Math.max(a, io.length)}
       val ilength  = (iolength /: problems) { case (a, io) => Math.min(a, io.length)}
@@ -335,8 +350,12 @@ class StringSolver {
         } else throw new Exception("All examples must be at the beginning")
       }) mkString "\n"
     } else {
-      val elems = input.split("\\|").map(_.trim()).toList
-      solve(elems).mkString(" | ")
+      if(input.indexOf('|') != -1 && !rawMode) {
+        val elems = input.split("\\|").map(_.trim()).toList
+        solve(elems).mkString(" | ")
+      } else {
+        solve(List(input)).mkString
+      }
     }
   }
   
@@ -346,8 +365,10 @@ class StringSolver {
   /** Returns the best solution to the last problem for the whole output */
   def solveLasts(): List[Option[Program]] = for(i <- (0 until currentPrograms.length).toList) yield solveLast(i)
   
+  def solve(): Option[Program] = solve(0)
+  
   /** Returns the best solution to the problem for the whole output */
-  def solve(nth: Int = 0): Option[Program] = if(currentPrograms != null) try {
+  def solve(nth: Int): Option[Program] = if(currentPrograms != null) try {
     val res = Some(currentPrograms(nth).takeBest)
     if(debugActive) verifyCurrentState()
     res
@@ -499,7 +520,7 @@ class StringSolverAlgorithms {
   var iterateInput = true
   
   // Set to true if we want to extract stuff from the same string.
-  var useIndexForPosition = true
+  var useIndexForPosition = false
 
   @volatile private var mTimeout = false
   @volatile private var mTimeoutPhaseGenerateStr = false
@@ -629,7 +650,7 @@ class StringSolverAlgorithms {
   }
   
   /**
-   * Specializes a DAG by removing all positions except those between k1 and k2
+   * Specializes a DAG by removing all positions except those between k1 and k2. Removes all corresponding edges
    */
   def specializeDag(dag: STraceExpr, k1: Int, k2: Int, orElse: => STraceExpr): STraceExpr = dag match {
     case SDag(ñ, ns: Int, nt, ξ, a) =>
@@ -651,8 +672,8 @@ class StringSolverAlgorithms {
       val aa = a.asInstanceOf[W[Int]]
       def ok1(i: Int): Boolean = k1 == i  || notablePositions(i)
       def ok2(i: Int): Boolean = i == k2  || notablePositions(i)
-      def ok3(ij: (Int, Int)): Boolean = ok1(ij._1) && ok2(ij._2)
-      SDag(Set(k1, k2), k1, k2, x.filter(ok3), aa)
+      def ok3(ij: (Int, Int)): Boolean = ok1(ij._1) && ok2(ij._2) && ij._1 >= k1 && ij._2 <= k2
+      SDag(Set(k1, k2)++notablePositions, k1, k2, x.filter(ok3), aa)
     case e => orElse
   }
   

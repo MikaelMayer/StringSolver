@@ -82,16 +82,16 @@ class MainTest extends WordSpec with ShouldMatchers {
   }
   
   "Main should keep history" in {
-    Main.deleteMvHistory()
+    Main.MvLogFile.deleteHistory()
     val path = new File(Main.workingDirAbsFile).getAbsolutePath()
     Main.timeStampGiver = () => "T1"
-    Main.storeMvHistory(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt"))
+    Main.MvLogFile.storeHistory(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt"))
     Main.timeStampGiver = () => "T2"
-    Main.storeMvHistory(MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt"))
+    Main.MvLogFile.storeHistory(MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt"))
     println(Main.workingDirAbsFile)
-    Main.getMvHistory(new File(Main.workingDirAbsFile)) should equal (List(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt", "T1"), MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt", "T2")))
-    Main.deleteMvHistory()
-    Main.getMvHistory(new File(Main.workingDirAbsFile)) should equal (Nil)
+    Main.MvLogFile.getHistory(new File(Main.workingDirAbsFile)) should equal (List(MvLog(path, true, INPUT_FILE, List("test.txt"), "tist.txt", "T1"), MvLog(path, false, INPUT_FILE, List("tost.txt"), "tust.txt", "T2")))
+    Main.MvLogFile.deleteHistory()
+    Main.MvLogFile.getHistory(new File(Main.workingDirAbsFile)) should equal (Nil)
   }
   
   "Main should rename with counters" in {
@@ -115,7 +115,7 @@ class MainTest extends WordSpec with ShouldMatchers {
                      MvLog(workingDirAbsFile, false, INPUT_FILE_EXTENSION, List("B321",".jpg"), "B-321-2.jpg", "after") ::
                      Nil
       
-      val c = Main.automatedRenaming(Options(perform=false,performAll=false,explain=true,test=true), examples, None)
+      val c = Main.MvLogFile.automatedMv(Options(perform=false,performAll=false,explain=true,test=true), examples, None)
       c match {
         case Some(solver) =>
           solver.setPosition(2)
@@ -150,7 +150,7 @@ class MainTest extends WordSpec with ShouldMatchers {
     try {
       import Main._
       Main.workingDirAbsFile = tmpDir.getAbsolutePath()
-      Main.deleteMvHistory()
+      Main.MvLogFile.deleteHistory()
       
       c1 = new File(workingDirAbsFile, "infoAutocad.log")
       c2 = new File(workingDirAbsFile, "mathAnalyse.log")
@@ -169,14 +169,14 @@ class MainTest extends WordSpec with ShouldMatchers {
       cc3 should not be('exists)
       
       //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
-      Main.parseMvCmd(List(c1.getName, cc1.getName), Options())
+      Main.MvLogFile.parseCmd(List(c1.getName, cc1.getName), Options())
       c1 should not be 'exists
       cc1 should be('exists)
-      Main.parseMvCmd(List(c2.getName, cc2.getName), Options())
+      Main.MvLogFile.parseCmd(List(c2.getName, cc2.getName), Options())
       c2 should not be 'exists
       cc2 should be('exists)
       cc3 should not be('exists)
-      Main.parseMvCmd(List(), Options())
+      Main.MvLogFile.parseCmd(List(), Options())
       c2 should not be 'exists
       c3 should not be 'exists
       cc1 should be('exists)
@@ -247,7 +247,7 @@ class MainTest extends WordSpec with ShouldMatchers {
     try {
       import Main._
       workingDirAbsFile = tmpDir.getAbsolutePath()
-      Main.deleteAutoHistory()
+      Main.AutoLogFile.deleteHistory()
       
       c1 = new File(workingDirAbsFile, "Algorithms")
       c2 = new File(workingDirAbsFile, "Maths")
@@ -267,7 +267,7 @@ class MainTest extends WordSpec with ShouldMatchers {
       for(a <- as; f <- a) f.createNewFile()
 
       //System.setIn(new ByteArrayInputStream("n\ny\n".getBytes()))
-      Main.parseAutoCmd(List("Algorithm1.txt", "mkDir Algorithms;convert Algorithm1.txt Algorithms/Algorithm1.pdf;rm Algorithm1.txt"), Options(performAll=true))
+      Main.AutoLogFile.parseCmd(List("Algorithm1.txt", "mkDir Algorithms;convert Algorithm1.txt Algorithms/Algorithm1.pdf;rm Algorithm1.txt"), Options(performAll=true))
       for(a <- as; f <- a) f should not be ('exists)
       
       c1 should be('exists)
@@ -275,7 +275,7 @@ class MainTest extends WordSpec with ShouldMatchers {
       c3 should be('exists)
       for(a <- as; f <- a) f should not be 'exists
       for(a <- bs; f <- a) f should be ('exists)
-      Main.parseAutoCmd(List("Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"), Options(performAll=true))
+      Main.AutoLogFile.parseCmd(List("Algorithms", "convert Algorithms/*.pdf AlgorithmsBook.pdf;rm -rf Algorithms"), Options(performAll=true))
       cc1 should be('exists)
       cc2 should be('exists)
       cc3 should be('exists)

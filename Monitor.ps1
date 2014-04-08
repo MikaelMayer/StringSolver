@@ -11,8 +11,12 @@
 
 # CHANGE HERE : Enter the root path you want to monitor.
 $folder = 'C:\Users' 
-# Enter the location of the StringSolver-jar
-#$stringsolver = "c:/Users/Mikael/Dropbox/workspace/StringSolver/target/scala-2.10/stringsolver_2.10-1.0-one-jar.jar"
+
+$IsSTAEnabled = $host.Runspace.ApartmentState -eq 'STA'
+If ($IsSTAEnabled -eq $false) { 
+"You need to run this script with -STA switch or inside ISE"
+Exit 1
+}
 
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
