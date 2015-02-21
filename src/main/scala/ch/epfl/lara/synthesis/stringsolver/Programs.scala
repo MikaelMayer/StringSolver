@@ -43,12 +43,19 @@ object Program {
     def apply(args: String*): String = {
       apply(args.toIndexedSeq, 0).asString
     }
+    def apply(args: String, index: Int): String = {
+      apply(IndexedSeq(args), index).asString
+    }
     def apply(args: Input_state): String = {
       evalProg(this)(args).asString
     }
     override def toString = Printer(this) 
     var weightMalus = 0
     def withWeightMalus(i: Int): this.type = { weightMalus = i; this }
+    
+    def toScala = ImperativeProgram(this).toScala
+    def toBash = ImperativeProgram(this).toBash
+    def toPowerShell = ImperativeProgram(this).toPowerShell
   }
 
   

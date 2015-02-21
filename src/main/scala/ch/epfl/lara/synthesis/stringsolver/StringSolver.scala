@@ -294,6 +294,25 @@ class StringSolver {
     res(0)
   }
   
+  /**Adds a new input/output example.
+   * If the best program already matches the input/output example,
+   * it is not recomputed.
+   **/
+  def add(input: String, output: String): STraceExpr = {
+    val res = add(IndexedSeq(input), IndexedSeq(output))
+    res(0)
+  }
+  
+  /**Adds a new input/output example.
+   * If the best program already matches the input/output example,
+   * it is not recomputed.
+   **/
+  def add(input: String, output: String, index: Int): STraceExpr = {
+    this.index_number = index - 1
+    val res = add(IndexedSeq(input), IndexedSeq(output))
+    res(0)
+  }
+  
   /**
    * Adds a new input/output example
    */

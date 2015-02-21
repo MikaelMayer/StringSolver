@@ -6,7 +6,7 @@ Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun
 - [Table of contents](#table-of-contents)
 - [Key features](#key-features)
 - [Usage](#usage)
-    - [Compile it](#compile-it)
+    - [Compile it yourself](#compile-it-yourself)
     - [Link library for SBT](#link-library-for-sbt)
     - [Link library for Maven](#link-library-for-maven)
 - [Automated Bash commands](#automated-bash-commands)
@@ -36,7 +36,11 @@ Build using sbt 0.13 and scala 2.10.3.
 
 ## Usage
 
-### Compile it
+You can either compile this project and link to the compiled JAR file, or link to the existing online repository for sbt and maven projects.
+
+### Compile it yourself
+
+If you want to test this project, run the benchmarks, inspect source files, or compile with different optimizations, you can recompile the code from the source repository.
 
 - Install SBT http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html
 - Make sure to have PATH making sbt accessible
@@ -45,15 +49,35 @@ Build using sbt 0.13 and scala 2.10.3.
 
 Now it should work. To test it, run `sbt test' but this might take a while.
 
+To create a usable jar file containing everything, including scala, run:
+
+- `sbt one-jar`
+
+The jar file will be somewhere in the `target/` repository
+
 ### Link library for SBT
 
-Add the following two lines separated by a blank line in your main `build.sbt`:
+When you want to include `StringSolver` in your own scala or java project, follow these steps:
 
-    resolvers += "Sonatype.org" at "https://oss.sonatype.org/content/groups/staging"
+1. Add the following lines separated by blank lines in your `build.sbt` at the root of your project
+
+    name := "MyProject"
+
+    version := "1.0"
+
+    organization := "com.example"
+
+    scalaVersion := "2.10.3"
+
+    mainClass in (Compile, run) := Some("com.example.Custom")
+
+    resolvers += "Sonatype.org" at "https://oss.sonatype.org/service/local/repositories/releases/content"
 
     libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.1"
 
-Then you can use it in your code, for example in a file in `src/main/scala/Custom.scala`:
+2. import the various declarations in your source file.
+
+If for example your project contains a file named `src/main/scala/com/example/Custom.scala`:
 
 ```Scala
 package com.example
@@ -70,9 +94,9 @@ object Custom {
 }
 ```
 
-Then if in your `build.sbt` you have `mainClass in (Compile, run) := Some("com.example.Custom")`, you can then run:
+3. Then you can run in command line
 
-    sbt
+  sbt
 	run "tEsT|inPuT1" TESTinput001
 
 and it should output:
@@ -82,11 +106,15 @@ and it should output:
 
 ### Link library for Maven
 
+Not sure how it works, but a colleague of mine used the following in the maven build file:
+
     <dependency>
       <groupId>ch.epfl.lara</groupId>
       <artifactId>stringsolver_2.10</artifactId>
       <version>1.1</version>
     </dependency>
+
+The remaining steps are similar to the previous paragraph.
 
 ## Automated Bash commands
 

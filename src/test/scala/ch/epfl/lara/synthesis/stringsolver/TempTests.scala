@@ -41,8 +41,8 @@ http://lara.epfl.ch/~gvero/gveroETAL13CompleteCompletionTypesWeights.pdf""")
 T. Gvero, V. Kuncak and R. Piskac, 2011.
 http://lara.epfl.ch/~kuncak/papers/GveroETAL11InteractiveSynthesisofCodeSnippets.pdf""")*/
     
-    val p1 = c.add(List("      Z3_app_to_ast @198"), "      Z3_app_to_ast @196")
-    val p2 = c.add(List("      Z3_get_error_msg_ex @301"), "      Z3_get_error_msg_ex @299")
+    val p1 = c.add(List("02"), "Feb")
+    val p2 = c.add(List("03"), "Mar")
       
     renderer(c)
     //c.solve("other sentence %* without spaces") should equal ("other_sentence_%*_without_spaces")

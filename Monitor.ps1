@@ -10,11 +10,24 @@
 #           It requires python installed and available at the command line.
 
 # CHANGE HERE : Enter the root path you want to monitor.
-$folder = 'C:\Users' 
+$folder = '' 
+foreach($argument in $args){
+  $folder = $argument
+}
+If ($folder -eq '') { 
+echo "Syntax: .\Monitor.ps1 FOLDER_NAME"
+echo "Checks FOLDER_NAME for renamings and generalizes them."
+Exit 1
+}
+echo "Checking for renames in $folder..."
+echo 'To stop monitoring, please run:'
+echo '  Get-EventSubscriber | Unregister-Event'
+echo 'To stop the remote server, please run:'
+echo '  "stop" | Send-TcpRequest localhost 12345'
 
 $IsSTAEnabled = $host.Runspace.ApartmentState -eq 'STA'
 If ($IsSTAEnabled -eq $false) { 
-"You need to run this script with -STA switch or inside ISE"
+echo "You need to run this script with -STA switch or inside ISE"
 Exit 1
 }
 
