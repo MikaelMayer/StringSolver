@@ -117,6 +117,7 @@ object ImperativeProgram {
     }
   }
   case class Assign(i: Identifier, e: Expr) extends Stat
+  case class CustomStat(s: String) extends Stat
   
   case class VarDecl(i: Identifier, e: Expr) extends Stat
   case class Identifier(name: String) extends Expr {
@@ -237,7 +238,7 @@ object Scalafication {
   case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
   
   def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
-    case t@Script(stat, expr) => 
+    case t@Script(stats, expr) => 
       (if(t.comment != "") {
         "// "+t.comment + "\n"
       } else "") +
@@ -254,7 +255,7 @@ object Scalafication {
 	      case None => indent + "}"
 	    })
 	    ss
-    case While(cond, expr) => indent + "while("+fromScript(cond)+") " + fromScript(expr)
+    case While(cond, expr) => indent + "while("+fromScript(cond)+")" + fromScript(expr)
     case If(cond, thn, els) => indent + "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
     
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
@@ -349,7 +350,7 @@ if [[ $# -eq 0 ]];
 fi
 # Checks if the last element (index) is a number, else set the index to 0 and keep the whole array.
 args=( "$@" )
-index=${args[ ${#args[@]} - 1 ]}
+index=${args[ ${#args[@]} - 1 ] - 1}
 re='^[0-9]+$'
 if test `echo $index | grep -E -c $re` -ne 0; then
   args=(${args[@]:0:$$(${#args[@]}-1)})
@@ -415,7 +416,7 @@ fi
       val si = newVar()
       val s = si.name
       val offset = if(n > 0) "+"+off.toString else if(n < 0) "-" + n.toString else ""
-      fromScript(VarDecl(si, a)) + "\n" +
+      fromScript(VarDecl(si, ToInt(a))) + "\n" +
       indent + s"${ret_expr}" + "(printf \"%0" + n + "d\" ${"+s"$s" + offset+"})"
     case InputExpr(a) => 
       val i = fromScript(a, Options())
@@ -443,7 +444,8 @@ fi
       indent + s"local $s=" + fromScript(e) + "\n" +
       fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + " #Substring position left ("+pbr1.toString()+")\n" +
       fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + " #substring position right ("+pbr2.toString()+")\n" +
-      indent + s"""${ret_expr}$${if [[ $$$p1 -ge 0 && $$$p2 -ge 0 && $$$p1 -le $${#${s}[@]} && $$$p2 -le $${#${s}[@]} ]]; then echo $$s|tail -c +$$(($$$p1 + 1))|head -c $$(($$$p2 - $$$p1)); else echo $tq$tq; fi}"""
+      indent + s"""$si=$${if [[ $$$p1 -ge 0 && $$$p2 -ge 0 && $$$p1 -le $${#${s}[@]} && $$$p2 -le $${#${s}[@]} ]]; then echo $$s|tail -c +$$(($$$p1 + 1))|head -c $$(($$$p2 - $$$p1)); else echo $tq$tq; fi}""" +
+      indent + ret_expr + mm.replace("{:0}", "$"+s)
     case ToInt(e) => fromScript(e)
     case PositionBetweenRegex(r1, r2, i) => //TODO: The most important part in bash.
        val i1 = newVar().name
@@ -498,7 +500,148 @@ fi
 
 object Powershellification {
   import ImperativeProgram._
+  import ImperativeProgram._
   def apply(t: Script): String = {
-    null//fromScript(t)
+    fromScript(t)
+  }
+  
+  val DEBUG = false
+  def debug(s: String) = if(DEBUG) s else ""
+    
+  case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
+  
+  def prefixParams(b: Block) = b match {
+    case Block(l) =>
+      Block(CustomStat("param([string[]] $strings = @(\"\"), [int] $index = 0)") :: l)
+  }
+  def makeBlock(t: Stat): Block = t match {
+    case b: Block => b
+    case n => Block(n::Nil)
+  }
+  def prefixReturnExpr(s: String, id: Option[Identifier]): String = {
+    (if(id != None) (fromScript(id.get)("")+" = ") else "") + s
+  }
+  def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
+    case t@Script(stats, expr) => 
+      "#####################\n" + (if(t.comment != "") ("# "+t.comment + "\n") else "") + "#####################\n" +
+      """
+$index = 0
+if($args[-1] -match "^[0-9]+$") {
+  $index = [convert]::ToInt32($args[-1]) - 1
+  $args = $args[0..($args.length-1)]
+}
+      
+filter Get-Starts($Pattern) {
+$_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Index 
+}
+filter Get-Ends($Pattern) {
+$_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches | Select-Object @{Name="End";Expression={$_.Index + $_.Length}} | Select-Object -ExpandProperty End
+}
+""" +
+      fromScript(prefixParams(makeBlock(stats)), Options(ret_ident = Some(expr), declare_ret_ident=true))(indent) + " -strings $args -index $index\n"
+    case Block(s) => var ss = indent + (if(opt.ret_ident.nonEmpty) "& " else "")+"{\n"
+      ss +=  ((for(t <- s) yield {
+        var res = t
+        val tt = fromScript(t, opt)(indent = "  " + indent)
+        tt
+      }) mkString "\n")
+	    ss += "\n"
+	    ss += (opt.ret_ident match {
+	      case Some(r) => "  " + indent + fromScript(r)("") + ";\n" + indent + " }"
+	      case None => indent + " }"
+	    })
+	    ss
+    case While(cond, expr) => indent + "while ("+fromScript(cond)+")"+debug("<#"+expr+"#>")+"\n"+indent + fromScript(makeBlock(expr))
+    case If(cond, thn, els) => indent + "if ("+fromScript(cond)+") " + fromScript(makeBlock(thn), opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(makeBlock(a), opt)(indent + "  ") case None => ""});
+  //TODO
+    case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case Assign(i@Identifier(_), e) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
+    case VarDecl(i@Identifier(_), StringLit(s)) => indent + fromScript(i)("") + "<# "+t+" #>" + " = \"" + s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"") + "\"";
+    case VarDecl(i@Identifier(_), e) => indent + fromScript(i)("") + "<# "+t+" #>" + " = " + fromScript(e)("") + "  # "+e;
+    case Identifier(i) => prefixReturnExpr("$"+i, opt.ret_ident)
+    case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\"", opt.ret_ident)
+    case IntLit(i) => opt.ret_ident match {
+      case Some(Identifier(p1)) =>
+        if((opt.input ne null) && i < 0) {
+          indent + s"$$$p1 = " + s"$$${opt.input.name}.length" + (if(i != -1) " + " + (i+1).toString else "")
+        } else {
+          indent + s"$$$p1 = " + i.toString
+        }
+      case None => indent + i.toString
+    }
+    case BoolLit(i) => indent + prefixReturnExpr(if(i) "$true" else "$false", opt.ret_ident)
+    case Not(a) => indent + prefixReturnExpr("! (" + fromScript(a)+")", opt.ret_ident)
+    case NotEq(a, b) => "(" + fromScript(a) + " -cne " + fromScript(b) + ")"
+    case Plus(a, b) => indent + prefixReturnExpr("(" + fromScript(a) + " + " + fromScript(b) + ")", opt.ret_ident)
+    case Times(a, b) => indent + prefixReturnExpr("(" + fromScript(a) + " * " + fromScript(b) + ")", opt.ret_ident)
+    case Or(a, b) => "(" + fromScript(a) + " -or " + fromScript(b) + ")"
+    case And(a, b) => "(" + fromScript(a) + " -and " + fromScript(b) + ")"
+    case Concat(Identifier(s1), Identifier(s2)) => 
+      indent + (opt.ret_ident match {
+        case Some(ident) => fromScript(ident)("") + " = \"$"+s1+"$"+s2+"\"";
+        case None => "\"$"+s1+"$"+s2+"\"";
+      })
+    case Concat(Identifier(s1), b) => 
+      val s2 = newVar()
+      fromScript(b, opt.copy(ret_ident=Some(s2))) + s" # Concat $b with return $s2\n" +
+      fromScript(Concat(s1, s2), opt)
+    case Concat(a, b) => 
+      val s1 = newVar()
+      fromScript(a, opt.copy(ret_ident=Some(s1))) + s" # Concat $a with return $s1\n" + 
+      fromScript(Concat(s1, b), opt)
+    case FormatNumber(a, n, off) =>
+      val si = newVar()
+      val s = si.name
+      val offset = if(n > 0) "+"+off.toString else if(n < 0) "-" + n.toString else ""
+      fromScript(VarDecl(si, a)) + "\n" +
+      indent + prefixReturnExpr("(\"{0:D", opt.ret_ident) + n + "}\" -f ( "+ fromScript(ToInt(si))("") + offset +"))"
+    case InputExpr(a) => 
+      val i = fromScript(a, Options())("")
+      indent + prefixReturnExpr("$strings["+i+"]", opt.ret_ident)
+    case SubString(e, pbr1, pbr2, mode) => 
+      val si = newVar()
+      val s = si.name
+      val p1 = s+"Start"
+      val p2 = s+"End"
+      val i1 = s+"i"
+      val i2 = s+"j"
+      val tq = "\""
+      import Program.NORMAL
+      import Program.CONVERT_LOWERCASE
+      import Program.CONVERT_UPPERCASE
+      import Program.UPPERCASE_INITIAL
+      val mm = mode match {
+        case NORMAL => "{:0}"
+        case CONVERT_LOWERCASE =>  "{:0}.ToLower()"
+        case CONVERT_UPPERCASE =>  "{:0}.ToUpper()"
+        case UPPERCASE_INITIAL =>  "{:0} | % { $_.substring(0,1).ToUpper()+$_.substring(1) }"
+      }
+      fromScript(e,    opt.copy(ret_ident = Some(si))) + s" # Defining input string $e\n" +
+      fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + " #Substring position left ("+pbr1.toString()+")\n" +
+      fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + " #substring position right ("+pbr2.toString()+")\n" +
+      indent + s"""$$$s = & { if ($$$s -and $$$p1 -ge 0 -and $$$p2 -ge 0 -and $$$p1 -le $$${s}.length -and $$$p2 -le $$${s}.length) { $$$s.substring($$$p1, $$$p2 - $$$p1) } else {$tq$tq} }\n""" +
+      indent + prefixReturnExpr(mm.replace("{:0}", s"$$$s"), opt.ret_ident)
+    case ToInt(e) => "[convert]::ToInt32(" + fromScript(e)("") + ")"
+    case CustomStat(s) => indent + s
+    case PositionBetweenRegex(r1, r2, i) =>
+       val i1 = newVar().name
+       val p1 = opt.ret_ident.get.name
+       val tq = "\""
+       val s = opt.input.name
+       val matchingsStart = newVar()
+       val matchingsEnd = newVar()
+       val matchings = newVar()
+       indent + s"$$$i1=" + fromScript(i) + " #"+i+"\n" +
+       indent + s"$$${matchingsStart.name} = $$$s | Get-Starts $tq$r2$tq\n" +
+       indent + s"$$${matchingsEnd.name} = $$$s | Get-Ends $tq$r1$tq\n" +
+       indent + s"$$${matchings.name} = $$${matchingsStart.name} | ?{$$${matchingsEnd.name} -contains $$_}\n" +
+       indent + prefixReturnExpr(s"& { if ($$${matchings.name}.length -ge $$$i1 -and $$$i1 -ge 1) { $$${matchings.name}[$$$i1-1] } else { if ($$${matchings.name}.length + $$$i1 -ge 0 -and $$$i1 -le -1) { $$${matchings.name}[$$$i1 + $$${matchings.name}.length] } else { -1 } } }", opt.ret_ident)
+//      """ local $p1 = $$$mappings match { case l if (l.length >= $i1 && $i1 >= 1) => l($i1-1) case l if (l.length + $i1 >= 0 && $i1 <= -1) => l($i1 + l.length) case _ => -1 } \n"""
+    case _ => throw new Exception(s"Impossible to parse expression $t")
+      //i1 r1.r.findAllMatchIn(s).map(_.start(0)).toList
+      //
   }
 }

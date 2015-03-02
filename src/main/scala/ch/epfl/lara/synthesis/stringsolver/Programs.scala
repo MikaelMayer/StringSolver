@@ -38,7 +38,7 @@ object Program {
       case _ => false
     }
     def apply(args: IndexedSeq[String], position: Int): Value = {
-      evalProg(this)(Input_state(args, position))
+      evalProg(this)(Input_state(args, position-1))
     }
     def apply(args: String*): String = {
       apply(args.toIndexedSeq, 0).asString
