@@ -124,7 +124,7 @@ object ImperativeProgram {
     def :=(other: Expr) = Assign(this, other)
     def ::=(other: Expr) = VarDecl(this, other)
   }
-  case class StringLit(s: String) extends Expr ; implicit def toStringLit(i: String):StringLit = StringLit(i)
+  case class StringLit(s: String) extends Expr ; //implicit def toStringLit(i: String):StringLit = StringLit(i)
   case class IntLit(s: Int) extends Expr ; implicit def toIntLit(i: Int):IntLit = IntLit(i)
   case class NotEq(a: Expr, b: Expr) extends Expr
   case class BoolLit(b: Boolean) extends Expr ; implicit def toBoolLit(i: Boolean):BoolLit = BoolLit(i)
@@ -178,7 +178,7 @@ object ImperativeProgram {
       case Pos(r1, r2, i) =>
         PositionBetweenRegex(fromProgramExpr(r1)(opt.copy(starting = false)).asInstanceOf[StringLit].s, fromProgramExpr(r2)(opt.copy(starting = true)).asInstanceOf[StringLit].s, fromProgramExpr(i))
       case t @ TokenSeq(l) =>
-        ScalaRegExp.convertRegExp(t, starting = opt.starting).toString
+        StringLit(ScalaRegExp.convertRegExp(t, starting = opt.starting).toString)
         //StringLit(l map ScalaRegExp.convertToken mkString "")
       case t: Token => StringLit(ScalaRegExp.convertToken(t))
       case CPos(i) => i
@@ -199,13 +199,13 @@ object ImperativeProgram {
         val r = Identifier(w.value + "_ret")
         val first = Identifier(w.value + "_first")
         Block(
-        (if(initialize_return_identifier) s ::= "" else s := ""),
-        r ::= "",
+        (if(initialize_return_identifier) s ::= StringLit("") else s := StringLit("")),
+        r ::= StringLit(""),
         i ::= 0,
         first ::= true,
-        While(first || NotEq(r, ""))(
+        While(first || NotEq(r, StringLit("")))(
           fromProgram(c, r, false).asInstanceOf[Stat],
-          if(separator != None) If(!first && NotEq(r, ""))(s := Concat(s, StringLit(separator.get.s))) else Block(),
+          if(separator != None) If(!first && NotEq(r, StringLit("")))(s := Concat(s, StringLit(separator.get.s))) else Block(),
           s := Concat(s, r),
           first := false,
           i := i + 1
@@ -219,7 +219,7 @@ object ImperativeProgram {
           case st: Stat => List(st, s := Concat(s, ret))
           case _ => Nil
         }}
-        Block((if(initialize_return_identifier) s ::= "" else s := "")::(ret ::= "")::lfs : _*)
+        Block((if(initialize_return_identifier) s ::= StringLit("") else s := StringLit(""))::(ret ::= StringLit(""))::lfs : _*)
       case SpecialConversion(s, p) =>
         throw new Exception("Special conversion not supported yet for conversion")
       case e => Block(if(initialize_return_identifier) return_identifier ::= fromProgramExpr(e) else return_identifier := fromProgramExpr(e))
@@ -375,8 +375,8 @@ fi
 	      case None => indent + " }"
 	    })
 	    ss
-    case While(cond, expr) => indent + "while [["+fromScript(cond)+"]]\n"+indent+"do\n" + fromScript(expr) + "\n"+indent+"done"
-    case If(cond, thn, els) => indent + "if [["+fromScript(cond)+"]]; then\n" + fromScript(thn, opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(a, opt)(indent + "  ") case None => ""}) + "\n" + indent + "fi";
+    case While(cond, expr) => indent + "while [["+fromScript(cond)("")+"]]\n"+indent+"do\n" + fromScript(expr) + "\n"+indent+"done"
+    case If(cond, thn, els) => indent + "if [["+fromScript(cond)("")+"]]; then\n" + fromScript(thn, opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(a, opt)(indent + "  ") case None => ""}) + "\n" + indent + "fi";
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(Identifier(i), e) => indent + i + "=(" + fromScript(e) + ")"
@@ -551,8 +551,8 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
 	      case None => indent + " }"
 	    })
 	    ss
-    case While(cond, expr) => indent + "while ("+fromScript(cond)+")"+debug("<#"+expr+"#>")+"\n"+indent + fromScript(makeBlock(expr))
-    case If(cond, thn, els) => indent + "if ("+fromScript(cond)+") " + fromScript(makeBlock(thn), opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(makeBlock(a), opt)(indent + "  ") case None => ""});
+    case While(cond, expr) => indent + "while ("+fromScript(cond)("")+")"+debug("<#"+expr+"#>")+"\n"+indent + fromScript(makeBlock(expr))
+    case If(cond, thn, els) => indent + "if ("+fromScript(cond)("")+") " + fromScript(makeBlock(thn), opt) + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(makeBlock(a), opt) case None => ""});
   //TODO
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
@@ -584,10 +584,10 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
         case Some(ident) => fromScript(ident)("") + " = \"$"+s1+"$"+s2+"\"";
         case None => "\"$"+s1+"$"+s2+"\"";
       })
-    case Concat(Identifier(s1), b) => 
+    case Concat(i1@Identifier(s1), b) => 
       val s2 = newVar()
       fromScript(b, opt.copy(ret_ident=Some(s2))) + s" # Concat $b with return $s2\n" +
-      fromScript(Concat(s1, s2), opt)
+      fromScript(Concat(i1, s2), opt)
     case Concat(a, b) => 
       val s1 = newVar()
       fromScript(a, opt.copy(ret_ident=Some(s1))) + s" # Concat $a with return $s1\n" + 

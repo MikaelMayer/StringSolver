@@ -69,4 +69,4 @@ publishMavenStyle := true
 
 //publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
 
-initialCommands in console := "import ch.epfl.lara.synthesis.stringsolver._ ; import ImperativeProgram._"
+initialCommands in console := "import ch.epfl.lara.synthesis.stringsolver._ ; import ImperativeProgram._ ; import StringSolver._"

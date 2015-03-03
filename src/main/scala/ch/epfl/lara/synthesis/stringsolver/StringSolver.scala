@@ -53,9 +53,41 @@ object StringSolver {
   type End = Int
   type Index = Int
   
+  case class InputOutputExample(inputState: Input_state, output: Output_state, indexSet: Boolean)
+  
   //def debug(s: String) = if(debugActive) println(s)
   
+  case class PreExample(index: Int, output: String)
+  
+  implicit class Wrapper(index: Int) {
+    def ==>(output: String) = PreExample(index, output)
+  }
+  
+  implicit class Wrapper2(input: String) {
+    def index(remaining: PreExample) = InputOutputExample(Input_state(IndexedSeq(input), remaining.index-1), remaining.output, true)
+    def index(i: Int) = Input_state(IndexedSeq(input), i-1)
+    def ==>(output: String) = InputOutputExample(Input_state(IndexedSeq(input), 0), output, false)
+  }
+  
+  implicit class Wrapper3(inputs: List[String]) {
+    def index(remaining: PreExample) = InputOutputExample(Input_state(inputs.toIndexedSeq, remaining.index-1), remaining.output, true)
+    def index(i: Int) = Input_state(inputs.toIndexedSeq, i-1)
+    def ==>(output: String) = InputOutputExample(Input_state(inputs.toIndexedSeq, 0), output, false)
+  }
+  
   def apply(): StringSolver = new StringSolver()
+  
+  def apply(example: InputOutputExample, remaining: InputOutputExample*): Program = {
+    val examples = StringSolver()
+    for(e <- (example::remaining.toList)) {
+      if(e.indexSet) {
+        examples.add(e.inputState, e.output)
+      } else {
+        examples.add(e.inputState.inputs, e.output)
+      }
+    }
+    examples.solve().getOrElse(null)
+  }
   
   def apply(input: List[List[String]], output: List[String]): Option[Program] = {
     val solver = apply()
@@ -307,8 +339,18 @@ class StringSolver {
    * If the best program already matches the input/output example,
    * it is not recomputed.
    **/
+  def add(inputOutput: Input_state, output: Output_state ): STraceExpr = {
+    this.index_number = inputOutput.position
+    val res = add(inputOutput.inputs, IndexedSeq(output))
+    res(0)
+  }
+  
+  /**Adds a new input/output example.
+   * If the best program already matches the input/output example,
+   * it is not recomputed.
+   **/
   def add(input: String, output: String, index: Int): STraceExpr = {
-    this.index_number = index - 1
+    this.index_number = index
     val res = add(IndexedSeq(input), IndexedSeq(output))
     res(0)
   }

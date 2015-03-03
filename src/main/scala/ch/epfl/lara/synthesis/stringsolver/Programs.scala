@@ -56,6 +56,7 @@ object Program {
     def toScala = ImperativeProgram(this).toScala
     def toBash = ImperativeProgram(this).toBash
     def toPowerShell = ImperativeProgram(this).toPowerShell
+    def toPowershell = ImperativeProgram(this).toPowerShell
   }
 
   
