@@ -1027,7 +1027,7 @@ object Main {
     val nested_level: Int = examples.head match { case PartitionLog(dir, performed, nature, in, out, time) => in.count(_ == '/') + in.count(_ == '\\') }
 
     val examples_for_partition = examples.map { case PartitionLog(dir, performed, nature, in, out, time) => (in, out) }
-    val (c, c2, getCategory) = Service.getPartition(examples_for_partition, StringSolver().setTimeout(5), StringSolver(), opt) getOrElse {
+    val (c, c2, getCategory) = Service.getPartition(examples_for_partition.toList, StringSolver().setTimeout(5), StringSolver(), opt) getOrElse {
        println("# No partition found.")
        return None
     }

@@ -15,6 +15,7 @@ package ch.epfl.lara.synthesis.stringsolver
  
 import java.util.regex.Pattern
 
+import collection.mutable.ListBuffer
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.{HashMap => MMap}
 import scala.concurrent._
@@ -29,6 +30,217 @@ import ProgramSet._
  */
 trait Extension {
   def apply(s: String, output: String): Seq[(Int, Int, SSubStr => SSpecialConversion)]
+}
+
+/** Class to use StriSynth very easily
+ */
+object CurrentInstance {
+  def HELP = println("""
+NEW       Trigger learning of a new program. Automatic first time.
+
+          Map and Reduce
+"input" ==> "output"
+("input", index) ==> "output"
+(List("input1", ...), index) ==> "output"
+List("input1", ...) ==> "output"
+
+         Split examples.
+"input" ==> ("output1", "output2", ..., "...")
+
+         Partition examples.
+PARTITIONTYPE("example1-1", "example1-2", ...)
+
+         Filter examples.
+"input1" ==> YES
+List("input1", ...) ==> YES
+"input2" ==> NO
+List("input2", ...) ==> NO
+      
+         Exporting the program
+PROGRAM in Powershell to "script.ps1"
+PROGRAM in Scala to "script.scala"
+PROGRAM in Bash to "script.sh"
+        
+HELP     Displays this help
+  """)
+  private sealed trait LearningType
+  private object MAPTYPE extends LearningType { override def toString = "map/reduce" }
+  private object PARTITIONTYPE extends LearningType { override def toString = "partition" }
+  private object FILTERTYPE extends LearningType { override def toString = "filter" }
+  private object SPLITTYPE extends LearningType { override def toString = "split" }
+  private object ALL extends LearningType { override def toString = "split" }
+  
+  private var _currentSolver: StringSolver = null;
+  private var currentType: LearningType = ALL
+  
+  private var programToRecompute = true;
+  
+  private def createNew(): Unit = {
+    _currentSolver = StringSolver()
+  }
+  
+  def NEW = {
+    currentType = ALL
+    CurrentInstance.createNew()
+  }
+  import Program._
+  def PROGRAM: Program = _currentProgram
+  def MAP: Program = PROGRAM
+  def REDUCE: Program = PROGRAM
+  def PARTITION: PartitionProgram = _currentPartitionProgram
+  
+  def CANCEL = currentType match {
+    case ALL => println("Nothing to cancel")
+    case MAPTYPE => 
+      currentSolver.cancelLast()
+      solve()
+    case PARTITIONTYPE =>
+      partitionExamples.trimEnd(1)
+      solve()
+    case FILTERTYPE => // TODO
+    case SPLITTYPE =>
+      _currentSolver.cancelLast()
+      solve()
+  }
+  def SPLIT: SplitProgram = _currentSplitProgram
+  
+  def currentSolver = if(_currentSolver == null) {
+    NEW
+    _currentSolver
+  } else _currentSolver
+  
+  import StringSolver.{InputOutputExample, Input_state, SplitExample, PartitionExample}
+  
+  private var _currentProgram: Program = null
+  private var _currentSplitProgram: SplitProgram = null
+  private var _currentPartitionProgram: PartitionProgram = null
+  private var partitionExamples = ListBuffer[PartitionExample]()
+
+  def solve(): Unit = currentType match {
+    case ALL => println("No example given. Type DOC to get the documentation")
+    case MAPTYPE => _currentSolver.solve() match {
+      case Some(program) =>
+        _currentProgram = program
+        println(_currentProgram)
+      case None => 
+        println("No map/reduce program found. To cancel the last example, please type CANCEL. To reset, call NEW")
+    }
+    case PARTITIONTYPE =>
+      partitionExamples.length match {
+        case 0 => println("Please write two partition examples ==>(\"part1\", \"part2\") before continuing")
+        case 1 => println("Please write one more partition example ==>(\"part1\", \"part2\")")
+        case n =>
+          val input = partitionExamples.zipWithIndex.flatMap{case (p, i) => p.partition.map(e => (e, i.toString))};
+          Service.getPartition(input.toList) match {
+            case Some((c, c2, f)) =>
+              c.solve() match {
+                case Some(p) =>
+                  _currentPartitionProgram = PartitionProgram(p)
+                   println(_currentPartitionProgram)
+                case None =>
+                  println("No program found. CANCEL the last example or NEW to create a new program")
+              }
+            case None =>
+              println("No program found. CANCEL the last example or NEW to create a new program")
+          }
+      }
+      
+    case FILTERTYPE => //TODO
+    case SPLITTYPE =>
+      _currentSolver.solve() match {
+      case Some(program) =>
+        _currentSplitProgram = SplitProgram(program)
+        println(_currentSplitProgram)
+      case None => 
+        println("No split program found. To cancel the last example, please type CANCEL. To reset, call NEW")
+    }
+  }
+  
+  implicit class StringWrapper(input: String) {
+    def ==>(output: String): Unit = {
+      currentType match {
+        case ALL | MAPTYPE =>
+          if(currentType != MAPTYPE) println("Learning MAP")
+          currentType = MAPTYPE
+          currentSolver.add(InputOutputExample(Input_state(IndexedSeq(input), 0), output, false))
+          solve()
+        case _ => println("Impossible to add a map example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+      }
+    }
+  }
+  
+  implicit class StringIndexWrapper(inputIndex: (String, Int)) {
+    def ==>(output: String): Unit = {
+      currentType match {
+        case ALL | MAPTYPE =>
+          if(currentType != MAPTYPE) println("Learning MAP")
+          currentType = MAPTYPE
+          currentSolver.add(InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true))
+          solve()
+        case _ => println("Impossible to add a map example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+      }
+    }
+  }
+  
+  implicit class TupleListWrapper(inputsIndex: List[String]) {
+    def ==>(output: String): Unit = {
+      currentType match {
+        case ALL | MAPTYPE =>
+        if(currentType != MAPTYPE) println("Learning MAP")
+        currentType = MAPTYPE
+        currentSolver.add(InputOutputExample(Input_state(inputsIndex.toIndexedSeq, 0), output, false))
+        solve()
+        case _ => println("Impossible to add a map/reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+      }
+    }
+  }
+  
+  implicit class TupleListIndexWrapper(inputsIndex: (List[String], Int)) {
+    def ==>(output: String): Unit = {
+      currentType match {
+        case ALL | MAPTYPE =>
+        if(currentType != MAPTYPE) println("Learning MAP")
+        currentType = MAPTYPE
+        currentSolver.add(InputOutputExample(Input_state(inputsIndex._1.toIndexedSeq, inputsIndex._2-1), output, true))
+        solve()
+        case _ => println("Impossible to add a map/reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+      }
+    }
+  }
+  
+  implicit class SplitWrapper(input: String) {
+    def ==>(output1: String, output2: String, outputs: String*): Unit = ==>(output1::output2::outputs.toList)
+    def ==>(outputs: List[String]): Unit = {
+      currentType match {
+        case ALL | SPLITTYPE =>
+        if(currentType != SPLITTYPE) println("Learning SPLIT")
+        currentType = SPLITTYPE
+        currentSolver.add(SplitExample(input, outputs.takeWhile(s => s != "...")))
+        solve()
+        case _ => println("Impossible to add a split example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+      }
+    }
+  }
+  
+  def ==>(partition: String*) = currentType match {
+      case ALL | PARTITIONTYPE =>
+      if(currentType != PARTITIONTYPE) {
+        partitionExamples.clear()
+        println("Learning PARTITION")
+      }
+      currentType = PARTITIONTYPE
+      partitionExamples += PartitionExample(partition.toList)
+      solve()
+      case _ => println("Impossible to add a partition example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+  }
+}
+
+object FilterTokens {
+  sealed trait FilterToken
+  object YES extends FilterToken
+  object NO extends FilterToken
+  val OK, Ok, ok, Yes, yes = YES
+  val NotOk, Notok, notok, No, no = NO
 }
 
 /**StringSolver object
@@ -55,6 +267,7 @@ object StringSolver {
   
   case class InputOutputExample(inputState: Input_state, output: Output_state, indexSet: Boolean)
   
+  case class SplitExample(input: String, outputs: List[String])  
   //def debug(s: String) = if(debugActive) println(s)
   
   case class PreExample(index: Int, output: String)
@@ -69,11 +282,32 @@ object StringSolver {
     def ==>(output: String) = InputOutputExample(Input_state(IndexedSeq(input), 0), output, false)
   }
   
+  implicit class WrapperInputIndex(inputIndex: (String, Int)) {
+    def ==>(output: String) = InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true)
+  }
+  
   implicit class Wrapper3(inputs: List[String]) {
     def index(remaining: PreExample) = InputOutputExample(Input_state(inputs.toIndexedSeq, remaining.index-1), remaining.output, true)
     def index(i: Int) = Input_state(inputs.toIndexedSeq, i-1)
     def ==>(output: String) = InputOutputExample(Input_state(inputs.toIndexedSeq, 0), output, false)
   }
+  
+  implicit class WrapperSplit(input: String) {
+    def ==>(output1: String, outputs: String*): SplitExample = {
+      ==>(output1::outputs.toList);
+    }
+    def ==>(outputs: List[String]): SplitExample = {
+      SplitExample(input, outputs.takeWhile(s => s != "..."))
+    }
+  }
+  
+  case class PartitionExample(partition: List[String])
+  
+  implicit def toPartitionExample2(input: (String, String)) = PartitionExample(List(input._1, input._2))
+  implicit def toPartitionExample3(input: (String, String, String)) = PartitionExample(List(input._1, input._2, input._3))
+  implicit def toPartitionExample3(input: (String, String, String, String)) = PartitionExample(List(input._1, input._2, input._3, input._4))
+  
+
   
   def apply(): StringSolver = new StringSolver()
   
@@ -97,6 +331,18 @@ object StringSolver {
     solver.solve()
   }
   
+  def apply(example: SplitExample, remaining: SplitExample*): SplitProgram = {
+    val examples = StringSolver()
+    for(e <- (example::remaining.toList)) {
+      examples.add(e);
+    }
+    val res = examples.solve().getOrElse(null)
+    if(res != null) SplitProgram(res) else null
+  }
+  
+  //def apply(example: PartitionExample, remaining: PartitionExample*): PartitionProgram = {
+  //  null //Service.getPartition(examples, c, c2, opt)
+  //}
   
   //implicit def indexedSeqToInputState(arr: IndexedSeq[String]) = Input_state(arr, IndexedSeq[String]())
 }
@@ -167,7 +413,11 @@ class StringSolver {
   /**
    * Use numbering from previous input option
    */
-  def setUseNumbers(b: Boolean) = {ff.numbering = b; this}
+  def setUseNumbers(b: Boolean, undoBuffer: UndoBuffer = null) = {
+    if(undoBuffer != null) undoBuffer.add(((last: Boolean) => () => ff.numbering = last)(ff.numbering));
+    ff.numbering = b;
+    this
+  }
   
   /**
    * Loop level. 0 will not look for loops
@@ -205,7 +455,10 @@ class StringSolver {
    /**
    * Allows to use the example index for positions
    */
-  def setUseIndexForPosition(b: Boolean) = ff.useIndexForPosition = b
+  def setUseIndexForPosition(b: Boolean, undoBuffer: UndoBuffer = null) = {
+    if(undoBuffer != null) undoBuffer.add(((last: Boolean) => () => ff.useIndexForPosition = last)(ff.useIndexForPosition));
+    ff.useIndexForPosition = b
+  }
   
    /**
    * Retrieves statistics
@@ -222,27 +475,53 @@ class StringSolver {
    */
   def setExtraTimeToMerge(f: Float) = extra_time_to_merge = f
   
+  /* Undo redo mechanism
+   */
+  sealed trait Undo {
+    def undo()
+  }
+  case class UndoAction(f : () => Unit) extends Undo { def undo() = f() }
+  import collection.mutable.ListBuffer
+  case class UndoBuffer(l: ListBuffer[Undo] = ListBuffer[Undo]()) extends Undo {
+    UndoList = this::UndoList
+    def undo() = l.toList.reverse.foreach(el => el.undo())
+    def add(f: () => Unit) = l += UndoAction(f)
+  }
+  var UndoList = List[Undo]()
+  
+  def cancelLast(): Unit = UndoList match {
+    case head::tail => UndoList = tail
+      head.undo()
+    case Nil => println("Nothing to cancel")
+  }
+  
   /**Adds a new inputs/outputs example.
    **/
   def add(input: Seq[String], output: Seq[String]): Seq[STraceExpr] = {
+    val undo = UndoBuffer()
     if(!(output.exists(out => out.exists(_.isDigit)))) { // If not digit for output, we don't use numbers.
-      setUseNumbers(false)
+      setUseNumbers(false, undo)
     }
     if(inputList != Nil && input == inputList.last) { // Parsing case. We use index for position
-      setUseIndexForPosition(true)
+      setUseIndexForPosition(true, undo)
     }
-
+    undo.add(((last: List[List[String]]) => () => inputList = last)(inputList))
+    undo.add(((last: List[List[String]]) => () => outputList = last)(outputList))
+    undo.add(((last: Int) => () => index_number = last)(index_number))
+    
     inputList = inputList ++ List(input.toList)
     outputList = outputList ++ List(output.toList)
     
     val iv = input.toIndexedSeq
     val ov = output.toIndexedSeq
     val tmpIndexNumber = index_number
+    
     val fetchPrograms = future {
       for(out <- ov) yield
       ff.generateStr(Input_state(iv, tmpIndexNumber), out, ff.DEFAULT_REC_LOOP_LEVEL)
     }
     index_number += 1
+    
     var tmp = ff.DEFAULT_REC_LOOP_LEVEL
     val newProgramSets : IndexedSeq[STraceExpr] = try {
       Await.result(fetchPrograms, ff.TIMEOUT_SECONDS.seconds)
@@ -380,6 +659,25 @@ class StringSolver {
         val elems = inputoutput.split("\\|").map(_.trim()).toList
         add(elems.take(ninputs), elems.drop(ninputs))
       } else throw new Exception("No separator such as | or -> found")
+    }
+  }
+  
+  /**
+   * Adds a new input/output example using the InputOutputExample API.
+   */
+  def add(e: InputOutputExample) {
+    if(e.indexSet) {
+      add(e.inputState, e.output)
+    } else {
+      add(e.inputState.inputs, e.output)
+    }
+  }
+  
+  /** Adds a new input/output example
+   */
+  def add(e: SplitExample) {
+    for((output, i) <- e.outputs.zipWithIndex) {
+      add(e.input, e.outputs(i), i+1)
     }
   }
   

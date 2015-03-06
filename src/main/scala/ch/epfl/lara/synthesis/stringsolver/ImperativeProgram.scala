@@ -120,11 +120,13 @@ object ImperativeProgram {
   case class CustomStat(s: String) extends Stat
   
   case class VarDecl(i: Identifier, e: Expr) extends Stat
+  case class ArrayAdd(i: Identifier, e: Expr) extends Stat
   case class Identifier(name: String) extends Expr {
     def :=(other: Expr) = Assign(this, other)
     def ::=(other: Expr) = VarDecl(this, other)
   }
   case class StringLit(s: String) extends Expr ; //implicit def toStringLit(i: String):StringLit = StringLit(i)
+  case class EmptyArrayLit() extends Expr ; //implicit def toStringLit(i: String):StringLit = StringLit(i)
   case class IntLit(s: Int) extends Expr ; implicit def toIntLit(i: Int):IntLit = IntLit(i)
   case class NotEq(a: Expr, b: Expr) extends Expr
   case class BoolLit(b: Boolean) extends Expr ; implicit def toBoolLit(i: Boolean):BoolLit = BoolLit(i)
@@ -149,6 +151,11 @@ object ImperativeProgram {
   
   case class Options(starting: Boolean = true) {
     
+  }
+  
+  def apply(p: SplitProgram) = {
+    val ret = newVar()
+    Script(fromProgram(p, ret, true), ret).withComment(p.toString)
   }
   
   def apply(p: Program) = {
@@ -189,6 +196,24 @@ object ImperativeProgram {
         StringLit(s)
       case e => throw new Exception(s"Conversion not implemented for $e")
     }
+  }
+  
+  private def fromProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+    val s = return_identifier
+    val i = Identifier("index")
+    val r = Identifier(return_identifier.name + "_ret")
+    val first = Identifier(return_identifier.name + "_first")
+    Block(
+        (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
+        r ::= StringLit(""),
+        i ::= 1,
+        first ::= true,
+        While(first || NotEq(r, StringLit("")))(
+          fromProgram(p.p, r, false).asInstanceOf[Stat],
+          ArrayAdd(s, r),
+          first := false,
+          i := i + 1
+        ))
   }
   
   private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
@@ -236,13 +261,16 @@ object Scalafication {
     fromScript(t)
   }
   case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
+  def prefixReturnExpr(s: String, id: Option[Identifier]): String = {
+    (if(id != None) (fromScript(id.get)("")+" = ") else "") + s
+  }
   
   def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
     case t@Script(stats, expr) => 
       (if(t.comment != "") {
         "// "+t.comment + "\n"
       } else "") +
-      "def script(args: Array[String], index: Int = 0): String = " + fromScript(t.stats, Options(ret_ident = Some(expr), declare_ret_ident=true))
+      "import collection.mutable.ListBuffer; def script(args: Array[String], index: Int = 0) = " + fromScript(t.stats, Options(ret_ident = Some(expr), declare_ret_ident=true))
     case Block(s) => var ss = indent + "{\n"
       ss +=  ((for(t <- s) yield {
         var res = t
@@ -264,6 +292,10 @@ object Scalafication {
     case VarDecl(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e) => indent + "var " + fromScript(i) + " = " + fromScript(e)
+    case ArrayAdd(i, e) => var res = newVar()
+      fromScript(e, opt.copy(ret_ident = Some(res))) + " \n"
+      indent + s"$$${i.name} += $$${res.name}"
+    case EmptyArrayLit() => indent + prefixReturnExpr("ListBuffer[String]()", opt.ret_ident)
     case Identifier(i) => i
     case StringLit(s) => "\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\""
     case IntLit(i) => opt.ret_ident match {
@@ -561,6 +593,10 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
     case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i@Identifier(_), StringLit(s)) => indent + fromScript(i)("") + "<# "+t+" #>" + " = \"" + s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"") + "\"";
     case VarDecl(i@Identifier(_), e) => indent + fromScript(i)("") + "<# "+t+" #>" + " = " + fromScript(e)("") + "  # "+e;
+    case ArrayAdd(i, e) => var res = newVar()
+      fromScript(e, opt.copy(ret_ident = Some(res))) + "\n" +
+      indent + s"$$${i.name} += @($$${res.name})"
+    case EmptyArrayLit() => indent + prefixReturnExpr("@()", opt.ret_ident)
     case Identifier(i) => prefixReturnExpr("$"+i, opt.ret_ident)
     case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\"", opt.ret_ident)
     case IntLit(i) => opt.ret_ident match {

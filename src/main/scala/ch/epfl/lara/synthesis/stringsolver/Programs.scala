@@ -13,16 +13,40 @@
 
 package ch.epfl.lara.synthesis.stringsolver
 
+import scala.collection.mutable.ListBuffer
+
+object ProgramTypes {
+  sealed trait ProgramType
+  object Scala extends ProgramType
+  object Bash extends ProgramType
+  object PowerShell extends ProgramType
+  val Powershell = PowerShell
+  val scala = Scala
+  val bash = Bash
+}
+
 /**
  * Attribution to Sumit Gulwani for this particular piece of code.
  */
-
 object Program {
   import Evaluator._
   import ProgramSet._
   import StringSolver._
   
-  sealed trait Program {
+  sealed trait ExportableProgram {
+    def toScala: String
+    def toBash: String
+    def toPowerShell: String
+    def toPowershell = this.toPowerShell
+    import ProgramTypes._
+    def in(tpe: ProgramType) = tpe match {
+      case Scala => toScala
+      case Bash => println("/!\\ Bash is not fully supported yet.");toBash
+      case PowerShell => toPowerShell
+    }
+  }
+  
+  sealed trait Program extends ExportableProgram {
 
     /**
      * Returns true if the identifier is used in this program.
@@ -56,9 +80,40 @@ object Program {
     def toScala = ImperativeProgram(this).toScala
     def toBash = ImperativeProgram(this).toBash
     def toPowerShell = ImperativeProgram(this).toPowerShell
-    def toPowershell = ImperativeProgram(this).toPowerShell
   }
-
+  
+  case class SplitProgram(p: Program) extends ExportableProgram {
+    import Printer._
+    override def toString = t"'$p'. Vary the index from 1 to extract the list of such strings."
+    def apply(arg: String): List[String] = {
+      var res = ListBuffer[String]()
+      var i = 2
+      var tmp = ""
+      do {
+        try { tmp = p(arg, i) } catch { case e: Exception => tmp = "" }
+        if(tmp != "") res += tmp
+        i += 1
+      } while(tmp != "")
+      res.toList
+    }
+    
+    def toScala = ImperativeProgram(this).toScala
+    def toBash = ImperativeProgram(this).toBash
+    def toPowerShell = ImperativeProgram(this).toPowerShell
+  }
+  
+  case class PartitionProgram(determiningSubstring: Program) extends ExportableProgram {
+    import Printer._
+    override def toString = t"Groups inputs where '$determiningSubstring' is the same."
+    def apply(args: String*): List[List[String]] = apply(args.toList)
+    def apply(arg: List[String]): List[List[String]] = {
+      val run = arg.map(elem => (elem, try  { determiningSubstring(elem)} catch { case e: Exception => elem } ))
+      run.groupBy(_._2).map(_._2.map(_._1)).toList
+    }
+    def toScala = ???//ImperativeProgram(this).toScala
+    def toBash = ???//ImperativeProgram(this).toBash
+    def toPowerShell = ???//ImperativeProgram(this).toPowerShell
+  }
   
   object Switch { def apply(s: (Bool, TraceExpr)*): Switch = apply(s.toList) }
   case class Switch(s: List[(Bool, TraceExpr)]) extends Program

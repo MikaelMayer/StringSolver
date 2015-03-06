@@ -42,7 +42,7 @@ object Service {
           case (array, entryRaw) =>
             val entry = entryRaw.replaceAll("\\\\ ", " ")
             if(array.size == 0) (Array(entry)) else
-            if(array.size >= 1 && (array.last.startsWith(""""""") || array.last.startsWith("""'"""))) {
+            if(array.size >= 1 && (array.last.startsWith('"'.toString) || array.last.startsWith("'"))) {
               var newElem = array.last + " " + entry
               if(newElem.endsWith(array.last(0).toString)) {
                 array.init ++ List(newElem.substring(1, newElem.length - 1))
@@ -270,7 +270,7 @@ object Service {
      s(".pdf") should equal ("category-pdf")
      s(".png") should equal ("category-png")
    */
-  def getPartition(examples: Seq[(String, String)], c: StringSolver = StringSolver(), c2: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, Option[StringSolver], String => String)] = {
+  def getPartition(examples: List[(String, String)], c: StringSolver = StringSolver(), c2: StringSolver = StringSolver(), opt: Options = Options()): Option[(StringSolver, Option[StringSolver], String => String)] = {
     val debug = opt.debug || c.isVerbose
     c.setUseNumbers(false)
     c.setUseDots(false)
