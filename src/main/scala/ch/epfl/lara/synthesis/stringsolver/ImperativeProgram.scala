@@ -191,7 +191,7 @@ object ImperativeProgram {
             InputExpr(fromProgramExpr(v1))
         }
       case SubStr(is@InputString(v1), CPos(0), CPos(-1), NORMAL) =>
-        fromProgramExpr(v1)
+        fromProgramExpr(is)
       case SubStr(is@InputString(v1), p1, p2, mm) =>
         SubString(fromProgramExpr(is), fromProgramExpr(p1), fromProgramExpr(p2), mm)
       case Counter(digits, start, step) =>
