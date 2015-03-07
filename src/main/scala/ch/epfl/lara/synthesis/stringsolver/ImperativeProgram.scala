@@ -641,6 +641,9 @@ object Powershellification {
     case t@Script(stats, expr) => 
       "#####################\n" + (if(t.comment != "") ("# "+t.comment + "\n") else "") + "#####################\n" +
       """
+if($args[0] -is [system.array]) {
+  $args = $args[0]
+}
 $index = 0
 if($args[-1] -match "^[0-9]+$") {
   $index = [convert]::ToInt32($args[-1]) - 1
