@@ -88,6 +88,7 @@ HELP     Displays this help
   def MAP: Program = PROGRAM
   def REDUCE: Program = PROGRAM
   def PARTITION: PartitionProgram = _currentPartitionProgram
+  def FILTER: FilterProgram = _currentFilterProgram
   
   def CANCEL = currentType match {
     case ALL => println("Nothing to cancel")
@@ -95,9 +96,15 @@ HELP     Displays this help
       currentSolver.cancelLast()
       solve()
     case PARTITIONTYPE =>
-      partitionExamples.trimEnd(1)
-      solve()
-    case FILTERTYPE => // TODO
+      if(partitionExamples.nonEmpty) {
+        partitionExamples = partitionExamples.init
+        solve()
+      } else println("Nothing to cancel")
+    case FILTERTYPE => 
+      if(filterExamples.nonEmpty) {
+        filterExamples = filterExamples.init
+        solve()
+      } else println("Nothing to cancel")
     case SPLITTYPE =>
       _currentSolver.cancelLast()
       solve()
@@ -114,7 +121,8 @@ HELP     Displays this help
   private var _currentProgram: Program = null
   private var _currentSplitProgram: SplitProgram = null
   private var _currentPartitionProgram: PartitionProgram = null
-  private var partitionExamples = ListBuffer[PartitionExample]()
+  private var _currentFilterProgram: FilterProgram = null
+  private var partitionExamples = List[PartitionExample]()
 
   def solve(): Unit = currentType match {
     case ALL => println("No example given. Type DOC to get the documentation")
@@ -138,14 +146,29 @@ HELP     Displays this help
                   _currentPartitionProgram = PartitionProgram(p)
                    println(_currentPartitionProgram)
                 case None =>
-                  println("No program found. CANCEL the last example or NEW to create a new program")
+                  println("No PARTITION program found. CANCEL the last example or NEW to create a new program")
               }
             case None =>
-              println("No program found. CANCEL the last example or NEW to create a new program")
+              println("No PARTITION program found. CANCEL the last example or NEW to create a new program")
           }
       }
       
-    case FILTERTYPE => //TODO
+    case FILTERTYPE => 
+      if(filterExamples.length == 0) println("Need at least one OK==>(example) to learn FILTER. Type RESET to reset")
+      else {
+        Service.getFilter(filterExamples.flatten) match {
+          case Some((ss, m)) =>
+            ss.solve() match {
+              case Some(s) =>
+                _currentFilterProgram = FilterProgram(s, m)
+                println(_currentFilterProgram)
+              case None =>
+                println("No FILTER program found. CANCEL the last example or NEW to create a new program")
+            }
+          case None =>
+            println("No FILTER program found. CANCEL the last example or NEW to create a new program")
+        }
+      }
     case SPLITTYPE =>
       _currentSolver.solve() match {
       case Some(program) =>
@@ -224,23 +247,43 @@ HELP     Displays this help
   
   def ==>(partition: String*) = currentType match {
       case ALL | PARTITIONTYPE =>
-      if(currentType != PARTITIONTYPE) {
-        partitionExamples.clear()
+      if(currentType == ALL) {
+        partitionExamples = Nil
         println("Learning PARTITION")
       }
       currentType = PARTITIONTYPE
-      partitionExamples += PartitionExample(partition.toList)
+      partitionExamples = partitionExamples ++ List(PartitionExample(partition.toList))
       solve()
       case _ => println("Impossible to add a partition example. Learning a " + currentType + " program. To reset, please invoke NEW.")
   }
+  var filterExamples: List[List[(String, Boolean)]] = Nil
+  
+  sealed abstract class FilterToken(positive: Boolean) {
+    private def addExamples(strs: List[String]) {
+      filterExamples = filterExamples ++ List(strs.map(s => (s, positive)))
+      solve()
+    }
+    private def addAndCheck(accepted: List[String]) = currentType match {
+      case ALL | FILTERTYPE =>
+      if(currentType == ALL) {
+        filterExamples = Nil
+        println("Learning FILTER")
+      }
+      currentType = FILTERTYPE
+      addExamples(accepted)
+      case _ => println("Impossible to add a filter example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+    }
+    def ==>(accepted: String*): Unit = ==>(accepted.toList)
+    def ==>(accepted: List[String]): Unit = addAndCheck(accepted)
+  }
+  object YES extends FilterToken(true)
+  object NO extends FilterToken(false)
+  val OK, Ok, ok, Yes, yes = YES
+  val NOTOK, NotOk, Notok, notok, No, no = NO
 }
 
 object FilterTokens {
-  sealed trait FilterToken
-  object YES extends FilterToken
-  object NO extends FilterToken
-  val OK, Ok, ok, Yes, yes = YES
-  val NotOk, Notok, notok, No, no = NO
+
 }
 
 /**StringSolver object

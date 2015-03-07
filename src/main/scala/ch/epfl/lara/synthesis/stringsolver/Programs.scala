@@ -84,7 +84,7 @@ object Program {
   
   case class SplitProgram(p: Program) extends ExportableProgram {
     import Printer._
-    override def toString = t"'$p'. Vary the index from 1 to extract the list of such strings."
+    override def toString = t"'$p'. Vary the index from 1 to extract all sub-strings.".replaceAll("the first input", "the string")
     def apply(arg: String): List[String] = {
       var res = ListBuffer[String]()
       var i = 2
@@ -104,15 +104,28 @@ object Program {
   
   case class PartitionProgram(determiningSubstring: Program) extends ExportableProgram {
     import Printer._
-    override def toString = t"Groups inputs where '$determiningSubstring' is the same."
+    override def toString = t"Groups strings where '$determiningSubstring' is the same.".replaceAll("the first input", "the string")
     def apply(args: String*): List[List[String]] = apply(args.toList)
     def apply(arg: List[String]): List[List[String]] = {
       val run = arg.map(elem => (elem, try  { determiningSubstring(elem)} catch { case e: Exception => elem } ))
       run.groupBy(_._2).map(_._2.map(_._1)).toList
     }
-    def toScala = ???//ImperativeProgram(this).toScala
-    def toBash = ???//ImperativeProgram(this).toBash
-    def toPowerShell = ???//ImperativeProgram(this).toPowerShell
+    def toScala = ImperativeProgram(this).toScala
+    def toBash = ImperativeProgram(this).toBash
+    def toPowerShell = ImperativeProgram(this).toPowerShell
+  }
+  
+  case class FilterProgram(determiningSubstring: Program, shouldEqual: String) extends ExportableProgram {
+  import Printer._
+    override def toString = t"Filter strings where '$determiningSubstring' is '$shouldEqual'.".replaceAll("the first input", "the string")
+    def apply(args: String*): List[String] = apply(args.toList)
+    def apply(arg: List[String]): List[String] = {
+      val run = arg.filter(elem => try  { determiningSubstring(elem) == shouldEqual } catch { case e: Exception => false } )
+      run
+    }
+    def toScala = ImperativeProgram(this).toScala
+    def toBash = ImperativeProgram(this).toBash
+    def toPowerShell = ImperativeProgram(this).toPowerShell
   }
   
   object Switch { def apply(s: (Bool, TraceExpr)*): Switch = apply(s.toList) }

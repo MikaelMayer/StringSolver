@@ -120,15 +120,19 @@ object ImperativeProgram {
   case class CustomStat(s: String) extends Stat
   
   case class VarDecl(i: Identifier, e: Expr) extends Stat
-  case class ArrayAdd(i: Identifier, e: Expr) extends Stat
+  case class ArrayAdd(i: Expr, e: Expr) extends Stat
   case class Identifier(name: String) extends Expr {
     def :=(other: Expr) = Assign(this, other)
     def ::=(other: Expr) = VarDecl(this, other)
   }
-  case class StringLit(s: String) extends Expr ; //implicit def toStringLit(i: String):StringLit = StringLit(i)
-  case class EmptyArrayLit() extends Expr ; //implicit def toStringLit(i: String):StringLit = StringLit(i)
+  case class StringLit(s: String) extends Expr //implicit def toStringLit(i: String):StringLit = StringLit(i)
+  case class EmptyArrayLit() extends Expr //implicit def toStringLit(i: String):StringLit = StringLit(i)
+  case object InputsLength extends Expr
+  case class IndexOf(array: Identifier, value: Identifier) extends Expr
+  case class ArrayGet(array: Identifier, Index: Identifier) extends Expr
   case class IntLit(s: Int) extends Expr ; implicit def toIntLit(i: Int):IntLit = IntLit(i)
   case class NotEq(a: Expr, b: Expr) extends Expr
+  case class Eq(a: Expr, b: Expr) extends Expr
   case class BoolLit(b: Boolean) extends Expr ; implicit def toBoolLit(i: Boolean):BoolLit = BoolLit(i)
   case class Plus(a: Expr, b: Expr) extends Expr
   case class Times(a: Expr, b: Expr) extends Expr
@@ -149,18 +153,27 @@ object ImperativeProgram {
   def newVar(): Identifier = { i += 1; Identifier("res" + i) }
   val index = Identifier("index") // Special index which starts at 0.
   
-  case class Options(starting: Boolean = true) {
-    
+  case class Options(starting: Boolean = true, replaceInputStringByIdentifier: Option[Identifier] = None) {
   }
   
-  def apply(p: SplitProgram) = {
+  def apply(p: Program): Script = {
+    val ret = newVar()
+    Script(fromProgram(p, ret, true), ret).withComment(Printer(p))
+  }
+  
+  def apply(p: SplitProgram): Script = {
     val ret = newVar()
     Script(fromProgram(p, ret, true), ret).withComment(p.toString)
   }
   
-  def apply(p: Program) = {
+  def apply(p: PartitionProgram): Script = {
     val ret = newVar()
-    Script(fromProgram(p, ret, true), ret).withComment(Printer(p))
+    Script(fromProgram(p, ret, true), ret).withComment(p.toString)
+  }
+  
+  def apply(p: FilterProgram): Script = {
+    val ret = newVar()
+    Script(fromProgram(p, ret, true), ret).withComment(p.toString)
   }
   
   /**
@@ -170,8 +183,17 @@ object ImperativeProgram {
     p match {
       case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
         FormatNumber(fromProgramExpr(s), size, offset)
-      case SubStr(InputString(v1), p1, p2, mm) =>
-        SubString(InputExpr(fromProgramExpr(v1)), fromProgramExpr(p1), fromProgramExpr(p2), mm)
+      case InputString(v1) =>
+        opt.replaceInputStringByIdentifier match {
+          case Some(id) if v1 == IntLiteral(0) =>
+            id
+          case _ => 
+            InputExpr(fromProgramExpr(v1))
+        }
+      case SubStr(is@InputString(v1), CPos(0), CPos(-1), NORMAL) =>
+        fromProgramExpr(v1)
+      case SubStr(is@InputString(v1), p1, p2, mm) =>
+        SubString(fromProgramExpr(is), fromProgramExpr(p1), fromProgramExpr(p2), mm)
       case Counter(digits, start, step) =>
         FormatNumber(index*step, digits, start)
       case Linear(1, w, 0) =>
@@ -198,25 +220,7 @@ object ImperativeProgram {
     }
   }
   
-  private def fromProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
-    val s = return_identifier
-    val i = Identifier("index")
-    val r = Identifier(return_identifier.name + "_ret")
-    val first = Identifier(return_identifier.name + "_first")
-    Block(
-        (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
-        r ::= StringLit(""),
-        i ::= 1,
-        first ::= true,
-        While(first || NotEq(r, StringLit("")))(
-          fromProgram(p.p, r, false).asInstanceOf[Stat],
-          ArrayAdd(s, r),
-          first := false,
-          i := i + 1
-        ))
-  }
-  
-  private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+  private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     p match {
       case Loop(w, c, separator) =>
         val i = Identifier(w.value)
@@ -249,6 +253,73 @@ object ImperativeProgram {
         throw new Exception("Special conversion not supported yet for conversion")
       case e => Block(if(initialize_return_identifier) return_identifier ::= fromProgramExpr(e) else return_identifier := fromProgramExpr(e))
     }
+  }
+  
+  
+  private def fromProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+    val s = return_identifier
+    val i = Identifier("index")
+    val r = Identifier(return_identifier.name + "_ret")
+    val first = Identifier(return_identifier.name + "_first")
+    Block(
+        (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
+        r ::= StringLit(""),
+        i ::= 1,
+        first ::= true,
+        While(first || NotEq(r, StringLit("")))(
+          fromProgram(p.p, r, false).asInstanceOf[Stat],
+          ArrayAdd(s, r),
+          first := false,
+          i := i + 1
+        ))
+  }
+  
+  
+  private def fromProgram(p: FilterProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+    val s = return_identifier
+    val r = Identifier(return_identifier.name + "_ret")
+    val i = Identifier("index")
+    val tmp = newVar()
+    Block(
+      (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
+      i ::= 0,
+      While(NotEq(i, InputsLength))(
+        tmp := InputExpr(i),
+        fromProgram(p.determiningSubstring, r, false)(Options(replaceInputStringByIdentifier = Some(tmp))).asInstanceOf[Stat],
+        If(Eq(r, StringLit(p.shouldEqual)))(ArrayAdd(s, tmp)),
+        i := (i + 1)
+      )
+    )
+  }
+  
+  private def fromProgram(partitionProgram: PartitionProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+    val partitions = return_identifier
+    val equivalenceClasses = newVar()
+    val i = Identifier("indexInput")
+    val p = Identifier("partitionpos")
+    val n = Identifier("nclasses")
+    val r = Identifier(return_identifier.name + "_ret")
+    val tmp = newVar()
+    val res = Block(
+      (if(initialize_return_identifier) partitions ::= EmptyArrayLit() else partitions := EmptyArrayLit()),
+      equivalenceClasses ::= EmptyArrayLit(),
+      n ::= 0,
+      i ::= 0,
+      tmp ::= StringLit(""),
+      While(NotEq(i, InputsLength))(
+        tmp := InputExpr(i),
+        fromProgram(partitionProgram.determiningSubstring, r, false)(Options(replaceInputStringByIdentifier = Some(tmp))).asInstanceOf[Stat],
+        p := IndexOf(equivalenceClasses, r),
+        If(Eq(p, -1))(
+            ArrayAdd(equivalenceClasses, r),
+            ArrayAdd(partitions, EmptyArrayLit()),
+            p := n,
+            n := n + 1),
+        ArrayAdd(ArrayGet(partitions, p), tmp),
+        i ::= (i + 1)
+      )
+    )
+    res
   }
 }
 
@@ -285,16 +356,23 @@ object Scalafication {
 	    ss
     case While(cond, expr) => indent + "while("+fromScript(cond)+")" + fromScript(expr)
     case If(cond, thn, els) => indent + "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
-    
+    case InputsLength => "args.length"
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e) => indent + fromScript(i) + " = " + fromScript(e)
     case VarDecl(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e) => indent + "var " + fromScript(i) + " = " + fromScript(e)
-    case ArrayAdd(i, e) => var res = newVar()
-      fromScript(e, opt.copy(ret_ident = Some(res))) + " \n"
-      indent + s"$$${i.name} += $$${res.name}"
+    case IndexOf(array: Identifier, value: Identifier) => indent + prefixReturnExpr(array.name + ".indexOf(" + value.name + ")", opt.ret_ident)
+    case ArrayGet(array: Identifier, index: Identifier) => indent + prefixReturnExpr(array.name + "(" + index.name + ")", opt.ret_ident)
+    case ArrayAdd(i:Identifier, e: Identifier) =>
+      indent + s"${i.name} += ${e.name}"
+    case ArrayAdd(i:Identifier, e) => var res = newVar()
+      fromScript(e, opt.copy(ret_ident = Some(res))) + " \n"+
+      fromScript(ArrayAdd(i, res))
+    case ArrayAdd(expr, e) => var res = newVar()
+      fromScript(expr, opt.copy(ret_ident = Some(res)))+ "\n"+
+      fromScript(ArrayAdd(res, e))
     case EmptyArrayLit() => indent + prefixReturnExpr("ListBuffer[String]()", opt.ret_ident)
     case Identifier(i) => i
     case StringLit(s) => "\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\""
@@ -310,6 +388,7 @@ object Scalafication {
     case BoolLit(i) => i.toString
     case Not(a) => "!" + fromScript(a)
     case NotEq(a, b) => "(" + fromScript(a) + " != " + fromScript(b) + ")"
+    case Eq(a, b) => "(" + fromScript(a) + " == " + fromScript(b) + ")"
     case Plus(a, b) => "(" + fromScript(a) + " + " + fromScript(b) + ")"
     case Times(a, b) => "(" + fromScript(a) + " * " + fromScript(b) + ")"
     case Or(a, b) => "(" + fromScript(a) + " || " + fromScript(b) + ")"
@@ -407,6 +486,7 @@ fi
 	      case None => indent + " }"
 	    })
 	    ss
+	  case InputsLength => "${#args[@]}"
     case While(cond, expr) => indent + "while [["+fromScript(cond)("")+"]]\n"+indent+"do\n" + fromScript(expr) + "\n"+indent+"done"
     case If(cond, thn, els) => indent + "if [["+fromScript(cond)("")+"]]; then\n" + fromScript(thn, opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(a, opt)(indent + "  ") case None => ""}) + "\n" + indent + "fi";
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
@@ -430,6 +510,7 @@ fi
     case BoolLit(i) => i.toString
     case Not(a) => "! " + fromScript(a)
     case NotEq(a, b) => "(" + fromScript(a) + " != " + fromScript(b) + ")"
+    case Eq(a, b) => "(" + fromScript(a) + " == " + fromScript(b) + ")"
     case Plus(a, b) => "(" + fromScript(a) + " + " + fromScript(b) + ")"
     case Times(a, b) => "(" + fromScript(a) + " * " + fromScript(b) + ")"
     case Or(a, b) => "(" + fromScript(a) + " || " + fromScript(b) + ")"
@@ -538,7 +619,7 @@ object Powershellification {
   }
   
   val DEBUG = false
-  def debug(s: String) = if(DEBUG) s else ""
+  def debug(s: =>String) = if(DEBUG) s else ""
     
   case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
   
@@ -585,17 +666,26 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
 	    ss
     case While(cond, expr) => indent + "while ("+fromScript(cond)("")+")"+debug("<#"+expr+"#>")+"\n"+indent + fromScript(makeBlock(expr))
     case If(cond, thn, els) => indent + "if ("+fromScript(cond)("")+") " + fromScript(makeBlock(thn), opt) + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(makeBlock(a), opt) case None => ""});
-  //TODO
+    
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i@Identifier(_), e) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
-    case VarDecl(i@Identifier(_), StringLit(s)) => indent + fromScript(i)("") + "<# "+t+" #>" + " = \"" + s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"") + "\"";
-    case VarDecl(i@Identifier(_), e) => indent + fromScript(i)("") + "<# "+t+" #>" + " = " + fromScript(e)("") + "  # "+e;
-    case ArrayAdd(i, e) => var res = newVar()
-      fromScript(e, opt.copy(ret_ident = Some(res))) + "\n" +
-      indent + s"$$${i.name} += @($$${res.name})"
+    case VarDecl(i@Identifier(_), StringLit(s)) => indent + fromScript(i)("") + debug("<# "+t+" #>") + " = \"" + s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"") + "\"";
+    case VarDecl(i@Identifier(_), e) => indent + fromScript(i)("") + debug("<# "+t+" #>") + " = " + fromScript(e)("") + "  # "+e
+    case IndexOf(Identifier(array), Identifier(value)) => indent + prefixReturnExpr(s"[array]::indexof($$$array,$$$value)", opt.ret_ident)
+    case ArrayGet(Identifier(array), Identifier(index)) => indent + prefixReturnExpr(s"$$$array[$$$index] "+ debug("<# "+t+" #>") , opt.ret_ident)
+    case ArrayAdd(i:Identifier, e:Identifier) =>
+      indent + s"$$${i.name} += , $$${e.name}"
+    case ArrayAdd(i:Identifier, e) => var res = newVar()
+      fromScript(e, opt.copy(ret_ident = Some(res))) + debug("<# "+t+" #>")+"\n" +
+      fromScript(ArrayAdd(i, res))
+    case ArrayAdd(expr, e: Identifier) => 
+      indent + fromScript(expr)("") + s" += , $$${e.name}"
+    case ArrayAdd(expr, e) => var res = newVar()
+      fromScript(expr, opt.copy(ret_ident = Some(res)))("")+ debug("<# "+t+" #>") + "\n"
+      fromScript(ArrayAdd(res, e))
     case EmptyArrayLit() => indent + prefixReturnExpr("@()", opt.ret_ident)
     case Identifier(i) => prefixReturnExpr("$"+i, opt.ret_ident)
     case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\"", opt.ret_ident)
@@ -611,6 +701,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
     case BoolLit(i) => indent + prefixReturnExpr(if(i) "$true" else "$false", opt.ret_ident)
     case Not(a) => indent + prefixReturnExpr("! (" + fromScript(a)+")", opt.ret_ident)
     case NotEq(a, b) => "(" + fromScript(a) + " -cne " + fromScript(b) + ")"
+    case Eq(a, b) => "(" + fromScript(a) + " -ceq " + fromScript(b) + ")"
     case Plus(a, b) => indent + prefixReturnExpr("(" + fromScript(a) + " + " + fromScript(b) + ")", opt.ret_ident)
     case Times(a, b) => indent + prefixReturnExpr("(" + fromScript(a) + " * " + fromScript(b) + ")", opt.ret_ident)
     case Or(a, b) => "(" + fromScript(a) + " -or " + fromScript(b) + ")"
@@ -637,6 +728,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
     case InputExpr(a) => 
       val i = fromScript(a, Options())("")
       indent + prefixReturnExpr("$strings["+i+"]", opt.ret_ident)
+    case InputsLength => "$strings.length"
     case SubString(e, pbr1, pbr2, mode) => 
       val si = newVar()
       val s = si.name
