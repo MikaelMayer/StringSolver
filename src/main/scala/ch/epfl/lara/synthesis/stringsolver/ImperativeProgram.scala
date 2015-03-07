@@ -220,6 +220,8 @@ object ImperativeProgram {
     }
   }
   
+  private val error = Identifier("error")
+  
   private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     p match {
       case Loop(w, c, separator) =>
@@ -232,10 +234,11 @@ object ImperativeProgram {
         r ::= StringLit(""),
         i ::= 0,
         first ::= true,
-        While(first || NotEq(r, StringLit("")))(
+        error ::= false,
+        While(first || Not(error))(
           fromProgram(c, r, false).asInstanceOf[Stat],
-          if(separator != None) If(!first && NotEq(r, StringLit("")))(s := Concat(s, StringLit(separator.get.s))) else Block(),
-          s := Concat(s, r),
+          if(separator != None) If(!first && NotEq(r, StringLit("")) && Not(error))(s := Concat(s, StringLit(separator.get.s))) else Block(),
+          If(Not(error))(s := Concat(s, r)),
           first := false,
           i := i + 1
         ))
@@ -618,7 +621,7 @@ object Powershellification {
     fromScript(t)
   }
   
-  val DEBUG = false
+  var DEBUG = false
   def debug(s: =>String) = if(DEBUG) s else ""
     
   case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
@@ -745,12 +748,12 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
         case NORMAL => "{:0}"
         case CONVERT_LOWERCASE =>  "{:0}.ToLower()"
         case CONVERT_UPPERCASE =>  "{:0}.ToUpper()"
-        case UPPERCASE_INITIAL =>  "{:0} | % { $_.substring(0,1).ToUpper()+$_.substring(1) }"
+        case UPPERCASE_INITIAL =>  "{:0} | % { Try { $_.substring(0,1).ToUpper()+$_.substring(1) } catch { $error = $true; \"\" } }"
       }
       fromScript(e,    opt.copy(ret_ident = Some(si))) + s" # Defining input string $e\n" +
       fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + " #Substring position left ("+pbr1.toString()+")\n" +
       fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + " #substring position right ("+pbr2.toString()+")\n" +
-      indent + s"""$$$s = & { if ($$$s -and $$$p1 -ge 0 -and $$$p2 -ge 0 -and $$$p1 -le $$${s}.length -and $$$p2 -le $$${s}.length) { $$$s.substring($$$p1, $$$p2 - $$$p1) } else {$tq$tq} }\n""" +
+      indent + s"""$$$s = & { if ($$$s -and $$$p1 -ge 0 -and $$$p2 -ge 0 -and $$$p1 -le $$${s}.length -and $$$p2 -le $$${s}.length) { $$$s.substring($$$p1, $$$p2 - $$$p1) } else {$$error = $$true; $tq$tq} }\n""" +
       indent + prefixReturnExpr(mm.replace("{:0}", s"$$$s"), opt.ret_ident)
     case ToInt(e) => "[convert]::ToInt32(" + fromScript(e)("") + ")"
     case CustomStat(s) => indent + s
