@@ -12,16 +12,16 @@
  */
 package ch.epfl.lara.synthesis.stringsolver
 
- 
 import java.util.regex.Pattern
 
-import collection.mutable.ListBuffer
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.{HashMap => MMap}
+import scala.collection.mutable.ListBuffer
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
+
 import ProgramSet._
 
 /**
@@ -84,9 +84,10 @@ HELP     Displays this help
     CurrentInstance.createNew()
   }
   import Program._
-  def PROGRAM: Program = _currentProgram
-  def MAP: Program = PROGRAM
-  def REDUCE: Program = PROGRAM
+  def PROGRAM: ReduceProgram = ReduceProgram(_currentProgram)
+  def REDUCE: ReduceProgram = ReduceProgram(_currentProgram)
+  //def MAP: Mapper[List[String], String] = MapProgram(_currentProgram)
+  def MAP: TransformProgram = TransformProgram(_currentProgram)
   def PARTITION: PartitionProgram = _currentPartitionProgram
   def FILTER: FilterProgram = _currentFilterProgram
   
@@ -135,8 +136,8 @@ HELP     Displays this help
     }
     case PARTITIONTYPE =>
       partitionExamples.length match {
-        case 0 => println("Please write two partition examples ==>(\"part1\", \"part2\") before continuing")
-        case 1 => println("Please write one more partition example ==>(\"part1\", \"part2\")")
+        case 0 => println("Please write two partition examples like ==>(\"part1\", \"part2\") before continuing")
+        case 1 => println("Please write one more partition example like ==>(\"part1\", \"part2\")")
         case n =>
           val input = partitionExamples.zipWithIndex.flatMap{case (p, i) => p.partition.map(e => (e, i.toString))};
           Service.getPartition(input.toList) match {
@@ -163,10 +164,10 @@ HELP     Displays this help
                 _currentFilterProgram = FilterProgram(s, m)
                 println(_currentFilterProgram)
               case None =>
-                println("No FILTER program found. CANCEL the last example or NEW to create a new program")
+                println("No FILTER program found. Add a new example, CANCEL the last example or NEW to create a new program")
             }
           case None =>
-            println("No FILTER program found. CANCEL the last example or NEW to create a new program")
+            println("No FILTER program found. Add a new example, CANCEL the last example or NEW to create a new program")
         }
       }
     case SPLITTYPE =>
@@ -183,11 +184,11 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning MAP")
+          if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(input), 0), output, false))
           solve()
-        case _ => println("Impossible to add a map example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        case _ => println("Impossible to add a map or reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
   }
@@ -196,7 +197,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning MAP")
+          if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true))
           solve()
@@ -209,7 +210,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning MAP")
+        if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex.toIndexedSeq, 0), output, false))
         solve()
@@ -222,13 +223,32 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning MAP")
+        if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex._1.toIndexedSeq, inputsIndex._2-1), output, true))
         solve()
         case _ => println("Impossible to add a map/reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
+  }
+
+  implicit class TupleWrapper2(inputs: (String, String)) {
+    def ==>(output: String): Unit = List(inputs._1, inputs._2) ==> output
+  }
+  implicit class TupleWrapper3(inputs: (String, String, String)) {
+    def ==>(output: String): Unit = List(inputs._1, inputs._2, inputs._3) ==> output
+  }
+  implicit class TupleWrapper4(inputs: (String, String, String, String)) {
+    def ==>(output: String): Unit = List(inputs._1, inputs._2, inputs._3, inputs._4) ==> output
+  }
+  implicit class TupleWrapper2Index(inputs: ((String, String), Int)) {
+    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2), inputs._2) ==> output
+  }
+  implicit class TupleWrapper3Index(inputs: ((String, String, String), Int)) {
+    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2, inputs._1._3), inputs._2) ==> output
+  }
+  implicit class TupleWrapper4Index(inputs: ((String, String, String, String), Int)) {
+    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2, inputs._1._3, inputs._1._4), inputs._2) ==> output
   }
   
   implicit class SplitWrapper(input: String) {
@@ -280,10 +300,13 @@ HELP     Displays this help
   object NO extends FilterToken(false)
   val OK, Ok, ok, Yes, yes = YES
   val NOTOK, NotOk, Notok, notok, No, no = NO
-}
-
-object FilterTokens {
-
+  
+  sealed trait MapConstant
+  object map extends MapConstant
+	
+	implicit class MapWrapper[In, Out](e: ExportableWithType[In, Out]) {
+	  def as(dummy: MapConstant) = Mapper(e)
+	}
 }
 
 /**StringSolver object
@@ -315,7 +338,7 @@ object StringSolver {
   
   case class PreExample(index: Int, output: String)
   
-  implicit class Wrapper(index: Int) {
+  /*implicit class Wrapper(index: Int) {
     def ==>(output: String) = PreExample(index, output)
   }
   
@@ -342,7 +365,7 @@ object StringSolver {
     def ==>(outputs: List[String]): SplitExample = {
       SplitExample(input, outputs.takeWhile(s => s != "..."))
     }
-  }
+  }*/
   
   case class PartitionExample(partition: List[String])
   

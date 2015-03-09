@@ -33,6 +33,7 @@ object ImperativeProgram {
   implicit class StringExt(s: String) {
     def to(filename: String) {
       printToFile(new java.io.File(filename))(p => p.println(s))
+      println("Program exported to " + new java.io.File(filename).getAbsolutePath())
     }
   }
   
@@ -127,9 +128,12 @@ object ImperativeProgram {
   }
   case class StringLit(s: String) extends Expr //implicit def toStringLit(i: String):StringLit = StringLit(i)
   case class EmptyArrayLit() extends Expr //implicit def toStringLit(i: String):StringLit = StringLit(i)
-  case object InputsLength extends Expr
+  case class ArrayLength(array: Expr) extends Expr
   case class IndexOf(array: Identifier, value: Identifier) extends Expr
-  case class ArrayGet(array: Identifier, Index: Identifier) extends Expr
+  case class ArrayGet(array: Expr, Index: Expr) extends Expr{
+    var checked = false
+    def withCheck(b: Boolean) = { checked = b; this }
+  }
   case class IntLit(s: Int) extends Expr ; implicit def toIntLit(i: Int):IntLit = IntLit(i)
   case class NotEq(a: Expr, b: Expr) extends Expr
   case class Eq(a: Expr, b: Expr) extends Expr
@@ -140,7 +144,7 @@ object ImperativeProgram {
   case class And(a: Expr, b: Expr) extends Expr
   case class Concat(a: Expr, b: Expr) extends Expr // String Concatenation
   case class FormatNumber(a: Expr, nDigits: Int, offset: Int) extends Expr
-  case class InputExpr(e: Expr) extends Expr
+  case object InputIdentifier extends Expr
   case class SubString(e: Expr, start: Expr, end: Expr, mode: SubStrFlag) extends Expr
  // case class LowerCase(e: Expr) extends Expr
  // case class UpperCase(e: Expr) extends Expr
@@ -153,25 +157,15 @@ object ImperativeProgram {
   def newVar(): Identifier = { i += 1; Identifier("res" + i) }
   val index = Identifier("index") // Special index which starts at 0.
   
-  case class Options(starting: Boolean = true, replaceInputStringByIdentifier: Option[Identifier] = None) {
+  case class Options(starting: Boolean = true, replaceInputIdentifier: Option[Expr] = None) {
   }
   
   def apply(p: Program): Script = {
     val ret = newVar()
-    Script(fromProgram(p, ret, true), ret).withComment(Printer(p))
+    Script(fromSimpleProgram(p, ret, true), ret).withComment(Printer(p))
   }
   
-  def apply(p: SplitProgram): Script = {
-    val ret = newVar()
-    Script(fromProgram(p, ret, true), ret).withComment(p.toString)
-  }
-  
-  def apply(p: PartitionProgram): Script = {
-    val ret = newVar()
-    Script(fromProgram(p, ret, true), ret).withComment(p.toString)
-  }
-  
-  def apply(p: FilterProgram): Script = {
+  def apply(p: ExportableWithType[_, _]): Script = {
     val ret = newVar()
     Script(fromProgram(p, ret, true), ret).withComment(p.toString)
   }
@@ -184,12 +178,7 @@ object ImperativeProgram {
       case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
         FormatNumber(fromProgramExpr(s), size, offset)
       case InputString(v1) =>
-        opt.replaceInputStringByIdentifier match {
-          case Some(id) if v1 == IntLiteral(0) =>
-            id
-          case _ => 
-            InputExpr(fromProgramExpr(v1))
-        }
+        ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), fromProgramExpr(v1)).withCheck(true)
       case SubStr(is@InputString(v1), CPos(0), CPos(-1), NORMAL) =>
         fromProgramExpr(is)
       case SubStr(is@InputString(v1), p1, p2, mm) =>
@@ -220,9 +209,9 @@ object ImperativeProgram {
     }
   }
   
-  private val error = Identifier("error")
+  private[stringsolver] val error = Identifier("cerror")
   
-  private def fromProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
+  private[stringsolver] def fromSimpleProgram(p: Program, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     p match {
       case Loop(w, c, separator) =>
         val i = Identifier(w.value)
@@ -236,7 +225,7 @@ object ImperativeProgram {
         first ::= true,
         error ::= false,
         While(first || Not(error))(
-          fromProgram(c, r, false).asInstanceOf[Stat],
+          fromSimpleProgram(c, r, false).asInstanceOf[Stat],
           if(separator != None) If(!first && NotEq(r, StringLit("")) && Not(error))(s := Concat(s, StringLit(separator.get.s))) else Block(),
           If(Not(error))(s := Concat(s, r)),
           first := false,
@@ -247,7 +236,7 @@ object ImperativeProgram {
       case Concatenate(fs) =>
         val s = return_identifier
         val ret = newVar()
-        val lfs = fs flatMap { prog => fromProgram(prog, ret, false) match {
+        val lfs = fs flatMap { prog => fromSimpleProgram(prog, ret, false) match {
           case st: Stat => List(st, s := Concat(s, ret))
           case _ => Nil
         }}
@@ -258,8 +247,20 @@ object ImperativeProgram {
     }
   }
   
+  def fromProgram(p: ExportableWithType[_, _], return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit op: Options = Options()): Stat = p match {
+    case p: SplitProgram => fromSplitProgram(p, return_identifier, initialize_return_identifier)
+    case p: FilterProgram => fromFilterProgram(p, return_identifier, initialize_return_identifier)
+    case p: PartitionProgram => fromPartitionProgram(p, return_identifier, initialize_return_identifier)
+    case p: ReduceProgram => fromReduceProgram(p, return_identifier, initialize_return_identifier)
+    case p: Mapper[_, _] => fromMapperProgram(p, return_identifier, initialize_return_identifier)
+    case p: AndThen[_, _, _, _] => fromAndThenProgram(p, return_identifier, initialize_return_identifier)
+  }
   
-  private def fromProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+  private[stringsolver] def fromReduceProgram(p: ReduceProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
+    fromSimpleProgram(p.p, return_identifier, initialize_return_identifier)(opt)
+  }
+  
+  private[stringsolver] def fromSplitProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val s = return_identifier
     val i = Identifier("index")
     val r = Identifier(return_identifier.name + "_ret")
@@ -270,7 +271,7 @@ object ImperativeProgram {
         i ::= 1,
         first ::= true,
         While(first || NotEq(r, StringLit("")))(
-          fromProgram(p.p, r, false).asInstanceOf[Stat],
+          fromSimpleProgram(p.p, r, false).asInstanceOf[Stat],
           ArrayAdd(s, r),
           first := false,
           i := i + 1
@@ -278,24 +279,29 @@ object ImperativeProgram {
   }
   
   
-  private def fromProgram(p: FilterProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+  private[stringsolver] def fromFilterProgram(p: FilterProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val s = return_identifier
     val r = Identifier(return_identifier.name + "_ret")
     val i = Identifier("index")
+    val u = newVar()
+    
     val tmp = newVar()
     Block(
       (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
       i ::= 0,
-      While(NotEq(i, InputsLength))(
-        tmp := InputExpr(i),
-        fromProgram(p.determiningSubstring, r, false)(Options(replaceInputStringByIdentifier = Some(tmp))).asInstanceOf[Stat],
-        If(Eq(r, StringLit(p.shouldEqual)))(ArrayAdd(s, tmp)),
+      u ::= StringLit(""),
+      While(NotEq(i, ArrayLength((opt.replaceInputIdentifier.getOrElse(InputIdentifier)))))(
+        tmp ::= EmptyArrayLit(),
+        u := ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), i),
+        ArrayAdd(tmp, u),
+        fromSimpleProgram(p.determiningSubstring, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
+        If(Eq(r, StringLit(p.shouldEqual)))(ArrayAdd(s, u)),
         i := (i + 1)
       )
     )
   }
   
-  private def fromProgram(partitionProgram: PartitionProgram, return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+  private[stringsolver] def fromPartitionProgram(partitionProgram: PartitionProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val partitions = return_identifier
     val equivalenceClasses = newVar()
     val i = Identifier("indexInput")
@@ -303,26 +309,58 @@ object ImperativeProgram {
     val n = Identifier("nclasses")
     val r = Identifier(return_identifier.name + "_ret")
     val tmp = newVar()
+    val u = newVar()
     val res = Block(
       (if(initialize_return_identifier) partitions ::= EmptyArrayLit() else partitions := EmptyArrayLit()),
       equivalenceClasses ::= EmptyArrayLit(),
       n ::= 0,
       i ::= 0,
       tmp ::= StringLit(""),
-      While(NotEq(i, InputsLength))(
-        tmp := InputExpr(i),
-        fromProgram(partitionProgram.determiningSubstring, r, false)(Options(replaceInputStringByIdentifier = Some(tmp))).asInstanceOf[Stat],
+      While(NotEq(i, ArrayLength(opt.replaceInputIdentifier.getOrElse(InputIdentifier))))(
+        tmp := EmptyArrayLit(),
+        u := ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), i),
+        ArrayAdd(tmp, u),
+        fromSimpleProgram(partitionProgram.determiningSubstring, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
         p := IndexOf(equivalenceClasses, r),
         If(Eq(p, -1))(
             ArrayAdd(equivalenceClasses, r),
             ArrayAdd(partitions, EmptyArrayLit()),
             p := n,
             n := n + 1),
-        ArrayAdd(ArrayGet(partitions, p), tmp),
+        ArrayAdd(ArrayGet(partitions, p), u),
         i ::= (i + 1)
       )
     )
     res
+  }
+  
+  private[stringsolver] def fromMapperProgram(p: Mapper[_, _], return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
+    val s = return_identifier
+    val r = Identifier(return_identifier.name + "_ret")
+    val i = Identifier("index")
+    val tmp = newVar()
+    val tmp2 = newVar()
+    Block(
+      (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
+      i ::= 0,
+      While(NotEq(i, ArrayLength(opt.replaceInputIdentifier getOrElse InputIdentifier)))(
+        tmp := ArrayGet(opt.replaceInputIdentifier getOrElse InputIdentifier, i),
+        fromProgram(p.e, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
+        ArrayAdd(s, r),
+        i := (i + 1)
+      )
+    )
+  }
+  
+  private[stringsolver] def fromAndThenProgram(p: AndThen[_, _, _, _], return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+    val end = return_identifier
+    val mid = Identifier(end.name + "_" + newVar().name)
+    val i = Identifier("index")
+    val tmp = newVar()
+    Block(
+      fromProgram(p.p1, mid, true),
+      fromProgram(p.p2, end, true)(Options(replaceInputIdentifier = Some(mid)))
+    )
   }
 }
 
@@ -342,7 +380,7 @@ object Scalafication {
   def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
     case t@Script(stats, expr) => 
       (if(t.comment != "") {
-        "// "+t.comment + "\n"
+        "// "+t.comment.replaceAll("\n", "\n//") + "\n"
       } else "") +
       "import collection.mutable.ListBuffer; def script(args: Array[String], index: Int = 0) = " + fromScript(t.stats, Options(ret_ident = Some(expr), declare_ret_ident=true))
     case Block(s) => var ss = indent + "{\n"
@@ -359,7 +397,6 @@ object Scalafication {
 	    ss
     case While(cond, expr) => indent + "while("+fromScript(cond)+")" + fromScript(expr)
     case If(cond, thn, els) => indent + "if("+fromScript(cond)+") " + fromScript(thn) + (els match { case Some(a) => " else " + fromScript(a) case None => ""})
-    case InputsLength => "args.length"
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e:FormatNumber) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case Assign(i, e) => indent + fromScript(i) + " = " + fromScript(e)
@@ -367,7 +404,11 @@ object Scalafication {
     case VarDecl(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
     case VarDecl(i, e) => indent + "var " + fromScript(i) + " = " + fromScript(e)
     case IndexOf(array: Identifier, value: Identifier) => indent + prefixReturnExpr(array.name + ".indexOf(" + value.name + ")", opt.ret_ident)
-    case ArrayGet(array: Identifier, index: Identifier) => indent + prefixReturnExpr(array.name + "(" + index.name + ")", opt.ret_ident)
+    case InputIdentifier => indent + prefixReturnExpr("args", opt.ret_ident) //TODO: Throw error if out of bounds.
+    case ArrayLength(array: Identifier) => indent + array.name + ".length"
+    case ArrayLength(InputIdentifier) => indent + fromScript(InputIdentifier)("") + ".length"
+    case ArrayGet(array: Identifier, index: Identifier) => indent + prefixReturnExpr(array.name + "(" + index.name + ")", opt.ret_ident) //TODO: Throw error if out of bounds.
+    case ArrayGet(Identifier(array), IntLit(k)) => indent + prefixReturnExpr(array + "(" + k + ")", opt.ret_ident)
     case ArrayAdd(i:Identifier, e: Identifier) =>
       indent + s"${i.name} += ${e.name}"
     case ArrayAdd(i:Identifier, e) => var res = newVar()
@@ -404,11 +445,10 @@ object Scalafication {
       val offset = if(n > 0) ".toInt+"+off.toString else if(n < 0) ".toInt-" + n.toString else ""
       fromScript(VarDecl(si, a)) + "\n" +
       indent + s"${ret_expr}" + "f\"${" + s"$s" + offset + "}%0" + n + "d\""
-    case InputExpr(a) => 
-      val dropped = fromScript(a, Options())
+      /*val dropped = fromScript(a, Options())
       val dropped_string = if(dropped == "0") "" else s".drop($dropped)"
       val tq = "\""
-      s"args$dropped_string.headOption.getOrElse($tq$tq)"
+      s"args$dropped_string.headOption.getOrElse($tq$tq)"*/
     case SubString(e, pbr1, pbr2, mode) => 
       val ret_expr = if(opt.ret_ident != None) (if(opt.declare_ret_ident) "val " else "")+fromScript(opt.ret_ident.get)+" = " else ""
       val si = newVar()
@@ -474,7 +514,7 @@ fi
 """
   def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
     case t@Script(stats, expr) => 
-      "#!/bin/sh\n" + (if(t.comment != "") ("# "+t.comment + "\n") else "") + "\n" +
+      "#!/bin/sh\n" + (if(t.comment != "") ("# "+t.comment.replaceAll("\n", "\n#") + "\n") else "") + "\n" +
       stopBashAndExplainIfNecessary +
       "function script " + fromScript(stats match { case Block(_) => stats case e => Block(e::Nil) }, Options(ret_ident = Some(expr), declare_ret_ident=true)) + "\n\nscript $0 $1"
     case Block(s) => var ss = indent + "{\n"
@@ -489,7 +529,9 @@ fi
 	      case None => indent + " }"
 	    })
 	    ss
-	  case InputsLength => "${#args[@]}"
+	  case InputIdentifier => "args"
+	  case ArrayLength(array: Identifier) => indent + "${#" + array.name + "[@]}"
+    case ArrayLength(InputIdentifier) => indent + "${#" + fromScript(InputIdentifier)("") + "[@]}"
     case While(cond, expr) => indent + "while [["+fromScript(cond)("")+"]]\n"+indent+"do\n" + fromScript(expr) + "\n"+indent+"done"
     case If(cond, thn, els) => indent + "if [["+fromScript(cond)("")+"]]; then\n" + fromScript(thn, opt)(indent + "  ") + (els match { case Some(a) => "\n"+indent+"else\n" + fromScript(a, opt)(indent + "  ") case None => ""}) + "\n" + indent + "fi";
     case Assign(i, e:SubString) => fromScript(e, opt.copy(ret_ident = Some(i)))
@@ -534,10 +576,9 @@ fi
       val offset = if(n > 0) "+"+off.toString else if(n < 0) "-" + n.toString else ""
       fromScript(VarDecl(si, ToInt(a))) + "\n" +
       indent + s"${ret_expr}" + "(printf \"%0" + n + "d\" ${"+s"$s" + offset+"})"
-    case InputExpr(a) => 
-      val i = fromScript(a, Options())
+      /*val i = fromScript(a, Options())
       val tq = "\""
-      "args[$(( "+i+" ))]"
+      "args[$(( "+i+" ))]"*/
     case SubString(e, pbr1, pbr2, mode) => 
       val ret_expr = if(opt.ret_ident != None) (if(opt.declare_ret_ident) "local " else "")+opt.ret_ident.get.name+"=" else "echo "
       val si = newVar()
@@ -560,7 +601,7 @@ fi
       indent + s"local $s=" + fromScript(e) + "\n" +
       fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + " #Substring position left ("+pbr1.toString()+")\n" +
       fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + " #substring position right ("+pbr2.toString()+")\n" +
-      indent + s"""$si=$${if [[ $$$p1 -ge 0 && $$$p2 -ge 0 && $$$p1 -le $${#${s}[@]} && $$$p2 -le $${#${s}[@]} ]]; then echo $$s|tail -c +$$(($$$p1 + 1))|head -c $$(($$$p2 - $$$p1)); else echo $tq$tq; fi}""" +
+      indent + s"""$si=$${if [[ $$$p1 -ge 0 && $$$p2 -ge 0 && $$$p1 -le $${#${s}[@]} && $$$p2 -le $${#${s}[@]} ]]; then echo $$s|tail -c +$$(($$$p1 + 1))|head -c $$(($$$p2 - $$$p1)); else echo $tq$tq; fi}""" +"\n" +
       indent + ret_expr + mm.replace("{:0}", "$"+s)
     case ToInt(e) => fromScript(e)
     case PositionBetweenRegex(r1, r2, i) => //TODO: The most important part in bash.
@@ -625,6 +666,7 @@ object Powershellification {
   def debug(s: =>String) = if(DEBUG) s else ""
     
   case class Options(ret_ident: Option[Identifier] = None, declare_ret_ident: Boolean = false, input: Identifier = null)
+  val theInputIdentifier = Identifier("strings")
   
   def prefixParams(b: Block) = b match {
     case Block(l) =>
@@ -639,7 +681,7 @@ object Powershellification {
   }
   def fromScript(t: Tree, opt: Options = Options())(implicit indent: String = ""): String = t match {
     case t@Script(stats, expr) => 
-      "#####################\n" + (if(t.comment != "") ("# "+t.comment + "\n") else "") + "#####################\n" +
+      "#####################\n" + (if(t.comment != "") ("# "+t.comment.replaceAll("\n", "\n#") + "\n") else "") + "#####################\n" +
       """
 if($args[0] -is [system.array]) {
   $args = $args[0]
@@ -681,7 +723,16 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
     case VarDecl(i@Identifier(_), StringLit(s)) => indent + fromScript(i)("") + debug("<# "+t+" #>") + " = \"" + s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"") + "\"";
     case VarDecl(i@Identifier(_), e) => indent + fromScript(i)("") + debug("<# "+t+" #>") + " = " + fromScript(e)("") + "  # "+e
     case IndexOf(Identifier(array), Identifier(value)) => indent + prefixReturnExpr(s"[array]::indexof($$$array,$$$value)", opt.ret_ident)
-    case ArrayGet(Identifier(array), Identifier(index)) => indent + prefixReturnExpr(s"$$$array[$$$index] "+ debug("<# "+t+" #>") , opt.ret_ident)
+    case a@ArrayGet(InputIdentifier, e) => fromScript(ArrayGet(theInputIdentifier, e).withCheck(a.checked), opt)
+    case a@ArrayAdd(InputIdentifier, e) => fromScript(ArrayAdd(theInputIdentifier, e), opt)
+    
+    case a@ArrayGet(Identifier(array), Identifier(index)) =>
+      if(a.checked) {
+        indent + prefixReturnExpr("if($"+index+" -ge $"+array+".length) { $"+error.name+" = $true; \"\"} else { $"+array+"[$"+index+"]}", opt.ret_ident)
+      } else {
+        indent + prefixReturnExpr("$"+array+"[$"+index+"]", opt.ret_ident)
+      }
+    case ArrayGet(Identifier(array), IntLit(k)) => indent + prefixReturnExpr(s"$$$array[$k] "+ debug("<# "+t+" #>") , opt.ret_ident)
     case ArrayAdd(i:Identifier, e:Identifier) =>
       indent + s"$$${i.name} += , $$${e.name}"
     case ArrayAdd(i:Identifier, e) => var res = newVar()
@@ -731,10 +782,15 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
       val offset = if(n > 0) "+"+off.toString else if(n < 0) "-" + n.toString else ""
       fromScript(VarDecl(si, a)) + "\n" +
       indent + prefixReturnExpr("(\"{0:D", opt.ret_ident) + n + "}\" -f ( "+ fromScript(ToInt(si))("") + offset +"))"
-    case InputExpr(a) => 
-      val i = fromScript(a, Options())("")
-      indent + prefixReturnExpr("$strings["+i+"]", opt.ret_ident)
-    case InputsLength => "$strings.length"
+    //case InputExpr(i:Identifier) => 
+      //indent + prefixReturnExpr("if($"+i.name+" -ge $strings.length) { $"+error.name+" = $true; \"\"} else { $strings[$"+i.name+"]}", opt.ret_ident)
+    case InputIdentifier => 
+      indent + "$strings"
+      /*val s2 = newVar()
+      fromScript(a, opt.copy(ret_ident=Some(s2))) + "\n" +
+      fromScript(InputExpr(s2), opt)*/
+	  case ArrayLength(array: Identifier) => indent + "$" + array.name + ".length"
+    case ArrayLength(InputIdentifier) => indent + "" + fromScript(InputIdentifier)("") + ".length"
     case SubString(e, pbr1, pbr2, mode) => 
       val si = newVar()
       val s = si.name
@@ -751,12 +807,12 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
         case NORMAL => "{:0}"
         case CONVERT_LOWERCASE =>  "{:0}.ToLower()"
         case CONVERT_UPPERCASE =>  "{:0}.ToUpper()"
-        case UPPERCASE_INITIAL =>  "{:0} | % { Try { $_.substring(0,1).ToUpper()+$_.substring(1) } catch { $error = $true; \"\" } }"
+        case UPPERCASE_INITIAL =>  "{:0} | % { Try { $_.substring(0,1).ToUpper()+$_.substring(1) } catch { $"+error.name+" = $true; \"\" } }"
       }
       fromScript(e,    opt.copy(ret_ident = Some(si))) + s" # Defining input string $e\n" +
       fromScript(pbr1, opt.copy(ret_ident = Some(Identifier(p1)), input=si)) + " #Substring position left ("+pbr1.toString()+")\n" +
       fromScript(pbr2, opt.copy(ret_ident = Some(Identifier(p2)), input=si)) + " #substring position right ("+pbr2.toString()+")\n" +
-      indent + s"""$$$s = & { if ($$$s -and $$$p1 -ge 0 -and $$$p2 -ge 0 -and $$$p1 -le $$${s}.length -and $$$p2 -le $$${s}.length) { $$$s.substring($$$p1, $$$p2 - $$$p1) } else {$$error = $$true; $tq$tq} }\n""" +
+      indent + s"""$$$s = & { if ($$$s -and $$$p1 -ge 0 -and $$$p2 -ge 0 -and $$$p1 -le $$${s}.length -and $$$p2 -le $$${s}.length) { $$$s.substring($$$p1, $$$p2 - $$$p1) } else {$$"""+error.name+""" = $true; ""} }""" + "\n" +
       indent + prefixReturnExpr(mm.replace("{:0}", s"$$$s"), opt.ret_ident)
     case ToInt(e) => "[convert]::ToInt32(" + fromScript(e)("") + ")"
     case CustomStat(s) => indent + s
