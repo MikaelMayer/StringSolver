@@ -32,7 +32,12 @@ object ImperativeProgram {
   /** Allows the user to do something like program.toBash to "script.sh"*/
   implicit class StringExt(s: String) {
     def to(filename: String) {
-      printToFile(new java.io.File(filename))(p => p.println(s))
+      val file = new java.io.File(filename).getAbsoluteFile()
+      if(!file.getParentFile().exists()) {
+        file.getParentFile().mkdirs()
+        println("Directory " + file.getParentFile().getAbsolutePath() + " created")
+      }
+      printToFile(file)(p => p.println(s))
       println("Program exported to " + new java.io.File(filename).getAbsolutePath())
     }
   }
@@ -254,6 +259,16 @@ object ImperativeProgram {
     case p: ReduceProgram => fromReduceProgram(p, return_identifier, initialize_return_identifier)
     case p: Mapper[_, _] => fromMapperProgram(p, return_identifier, initialize_return_identifier)
     case p: AndThen[_, _, _, _] => fromAndThenProgram(p, return_identifier, initialize_return_identifier)
+    case p: TransformProgram => fromTransformProgram(p, return_identifier, initialize_return_identifier)
+  }
+  
+  private[stringsolver] def fromTransformProgram(p: TransformProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
+    val tmp = newVar()
+    Block(
+      tmp ::= EmptyArrayLit(),
+      ArrayAdd(tmp, opt.replaceInputIdentifier.getOrElse(ArrayGet(InputIdentifier, IntLit(0)))),
+      fromSimpleProgram(p.p, return_identifier, initialize_return_identifier)(Options(replaceInputIdentifier = Some(tmp)))
+    )
   }
   
   private[stringsolver] def fromReduceProgram(p: ReduceProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
@@ -698,7 +713,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
 filter Get-Ends($Pattern) {
 $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches | Select-Object @{Name="End";Expression={$_.Index + $_.Length}} | Select-Object -ExpandProperty End
 }
-""" +
+""" + debug("<#" + t + "#>") +
       fromScript(prefixParams(makeBlock(stats)), Options(ret_ident = Some(expr), declare_ret_ident=true))(indent) + " -strings $args -index $index\n"
     case Block(s) => var ss = indent + (if(opt.ret_ident.nonEmpty) "& " else "")+"{\n"
       ss +=  ((for(t <- s) yield {
@@ -785,7 +800,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
     //case InputExpr(i:Identifier) => 
       //indent + prefixReturnExpr("if($"+i.name+" -ge $strings.length) { $"+error.name+" = $true; \"\"} else { $strings[$"+i.name+"]}", opt.ret_ident)
     case InputIdentifier => 
-      indent + "$strings"
+      indent + prefixReturnExpr("$strings", opt.ret_ident)
       /*val s2 = newVar()
       fromScript(a, opt.copy(ret_ident=Some(s2))) + "\n" +
       fromScript(InputExpr(s2), opt)*/

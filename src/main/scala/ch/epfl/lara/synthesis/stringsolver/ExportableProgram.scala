@@ -3,7 +3,7 @@ package ch.epfl.lara.synthesis.stringsolver
 import scala.collection.mutable.ListBuffer
 
 import Program.{Identifier => PIdentifier, _}
-import ImperativeProgram.{Identifier, newVar, Stat, Script}
+import ImperativeProgram.{Identifier, newVar, Stat, Script, Block}
 import StringSolver.{Input_state}
 
 sealed trait TypeExpr
@@ -12,19 +12,10 @@ case class TList(tpe: TypeExpr) extends TypeExpr  { override def toString = s"Li
 case object TString extends TypeExpr  { override def toString = s"String" }
 
 trait ExportableProgram[-In, +Out] {
-  def toScript: Script
+  
+  
   def toStat(return_identifier: Identifier): Stat
-
-  def toScala = toScript.toScala
-  def toBash = toScript.toBash
-  def toPowerShell = toScript.toPowerShell
-  def toPowershell = this.toPowerShell
-  import ProgramTypes._
-  def in(tpe: ProgramType) = tpe match {
-    case Scala => toScala
-    case Bash => println("/!\\ Bash is not fully supported yet.");toBash
-    case PowerShell => toPowerShell
-  }
+  
   def apply(in: In, index: Option[Int] = None): Out
 }
 sealed trait HasTypeFunc[-In, +Out] { self: ExportableProgram[In, Out] =>
@@ -47,6 +38,25 @@ trait ExportableWithType[-In, +Out] extends ExportableProgram[In, Out] with HasT
     case _ => AndThen(this, h)// But should have thrown an error before.
   }
   def | [In2, Out2](h: ExportableWithType[In2, Out2]): ExportableWithType[In, Out2] = andThen(h)
+  
+  def toScript: Script = {
+    if(tpe.in != TString && tpe.in != TList(TString)) {
+      println("/!\\ Not possible to convert a script which takes a "+tpe.in+" as argument. Should be String or List[String].")
+      Script(Block(), newVar())
+    } else {
+      ImperativeProgram(this)
+    }
+  }
+  def toScala = toScript.toScala
+  def toBash = toScript.toBash
+  def toPowerShell = toScript.toPowerShell
+  def toPowershell = this.toPowerShell
+  import ProgramTypes._
+  def in(tpe: ProgramType) = tpe match {
+    case Scala => toScala
+    case Bash => println("/!\\ Bash is not fully supported yet.");toBash
+    case PowerShell => toPowerShell
+  }
 }
 
 //Useless?
@@ -60,22 +70,22 @@ trait ExportableWithType[-In, +Out] extends ExportableProgram[In, Out] with HasT
 
 case class TransformProgram(p: Program) extends ExportableWithType[String, String] {
   def name = "transform"
+  import Printer._
+  override def toString = t"'$p'. Vary the index from 1 to extract all sub-strings.".replaceAll("first input", "string")
   val tpe = TFunc(TString, TString)
   def apply(arg: String, index: Option[Int] = None): String = index match { case Some(i) => p(arg, i) case _ => p(arg) }
-  def toScript = ImperativeProgram(p)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
 case class ReduceProgram(p: Program) extends ExportableWithType[List[String], String] {
   def name = "reduce"
+  import Printer._
+  override def toString = t"'$p'. Vary the index from 1 to extract all sub-strings.".replaceAll(" input", " string")
   val tpe = TFunc( TList(TString), TString)
   def apply(arg: List[String], index: Option[Int] = None): String = index match {
     case Some(i) => p(Input_state(arg.toIndexedSeq, i))
     case None =>  p(arg: _*)
   }
-  override def toString = p.toString
-      
-  def toScript = ImperativeProgram(p)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
@@ -100,8 +110,6 @@ case class SplitProgram(p: Program) extends ExportableWithType[String, List[Stri
     } while(tmp != "")
     res.toList
   }
-  
-  def toScript = ImperativeProgram(this)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
@@ -130,7 +138,6 @@ case class PartitionProgram(determiningSubstring: Program) extends ExportableWit
     val run = arg.map(elem => (elem, try  { determiningSubstring(elem)} catch { case e: Exception => elem } ))
     run.groupByOrdered(_._2).map(_._2.map(_._1).toList).toList
   }
-  def toScript = ImperativeProgram(this)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
@@ -144,7 +151,6 @@ case class FilterProgram(determiningSubstring: Program, shouldEqual: String) ext
     val run = arg.filter(elem => try  { determiningSubstring(elem) == shouldEqual } catch { case e: Exception => false } )
     run
   }
-  def toScript = ImperativeProgram(this)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
@@ -157,7 +163,6 @@ case class Mapper[-In, +Out](e: ExportableWithType[In, Out] ) extends Exportable
     arg.zipWithIndex.map{ case (a, i) => e(a, Some(i + 1)) }
   }
   
-  def toScript = ImperativeProgram(this)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
@@ -170,8 +175,6 @@ case class AndThen[-In1, Out1, In2, +Out2](p1: ExportableWithType[In1, Out1] , p
   def apply(arg: In1, index: Option[Int] = None): Out2 = {
     p2(p1(arg).asInstanceOf[In2])
   }
-  
-  def toScript: Script = ImperativeProgram(this)
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 

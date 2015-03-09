@@ -84,12 +84,15 @@ HELP     Displays this help
     CurrentInstance.createNew()
   }
   import Program._
-  def PROGRAM: ReduceProgram = ReduceProgram(_currentProgram)
-  def REDUCE: ReduceProgram = ReduceProgram(_currentProgram)
-  //def MAP: Mapper[List[String], String] = MapProgram(_currentProgram)
-  def MAP: TransformProgram = TransformProgram(_currentProgram)
-  def PARTITION: PartitionProgram = _currentPartitionProgram
-  def FILTER: FilterProgram = _currentFilterProgram
+  def PROGRAM: ExportableWithType[List[String], String] = ReduceProgram(_currentProgram)
+  def REDUCE: ExportableWithType[List[String], String] = ReduceProgram(_currentProgram)
+  def MAP: ExportableWithType[String, String] = {
+    println("The use of MAP is deprecated. Use the synonym TRANSFORM");
+    TransformProgram(_currentProgram)
+  }
+  def TRANSFORM: ExportableWithType[String, String] = MAP
+  def PARTITION: ExportableWithType[List[String], List[List[String]]] = _currentPartitionProgram
+  def FILTER: ExportableWithType[List[String], List[String]] = _currentFilterProgram
   
   def CANCEL = currentType match {
     case ALL => println("Nothing to cancel")
@@ -184,7 +187,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
+          if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(input), 0), output, false))
           solve()
@@ -197,7 +200,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
+          if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true))
           solve()
@@ -210,7 +213,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
+        if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex.toIndexedSeq, 0), output, false))
         solve()
@@ -223,7 +226,7 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning MAP and/or REDUCE")
+        if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex._1.toIndexedSeq, inputsIndex._2-1), output, true))
         solve()
