@@ -26,6 +26,9 @@ class ComposeTests  extends FlatSpec with ShouldMatchers {
     import CurrentInstance._ 
     import ProgramTypes._
     NEW
+    "a.pdf b.pdf c.pdf"==>("a.pdf", "b.pdf", "...")
+    val split = SPLIT
+    NEW
 		yes ==> ("1.a.pdf", "2.b.pdf")
 		no ==> ("a.1.pdf", "b.pdf", "1.a.doc")
 		val filter = FILTER
@@ -40,8 +43,8 @@ class ComposeTests  extends FlatSpec with ShouldMatchers {
 		("convertA", "convertB") ==> "convertA;convertB;..."
 		val reduce2 = REDUCE
 		
-		val program = (filter | partition | (reduce as map) | reduce2 )
-		program(List("a.jpg", "b.doc", "1.a.pdf", "1.b.pdf", "2.a.pdf", "2.b.pdf")) should equal ("convert 1.a.pdf 2.a.pdf a.pdf;convert 1.b.pdf 2.b.pdf b.pdf;")
+		val program = (split | filter | partition | (reduce as map) | reduce2 )
+		program("a.jpg b.doc 1.a.pdf 1.b.pdf 2.a.pdf 2.b.pdf") should equal ("convert 1.a.pdf 2.a.pdf a.pdf;convert 1.b.pdf 2.b.pdf b.pdf;")
 		program in Powershell to "filterpartition.ps1"
 		// .\filterpartition "a.jpg", "b.doc", "1.a.pdf", "1.b.pdf", "2.a.pdf", "2.b.pdf"
   }
