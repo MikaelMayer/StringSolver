@@ -22,7 +22,7 @@ class ComposeTests  extends FlatSpec with ShouldMatchers {
   
   "Your test" should "work faster" in {
     import ch.epfl.lara.synthesis.stringsolver._ 
-    import ImperativeProgram._ 
+    import ImperativeProgram._
     import CurrentInstance._ 
     import ProgramTypes._
     NEW
@@ -47,5 +47,18 @@ class ComposeTests  extends FlatSpec with ShouldMatchers {
 		program("a.jpg b.doc 1.a.pdf 1.b.pdf 2.a.pdf 2.b.pdf") should equal ("convert 1.a.pdf 2.a.pdf a.pdf;convert 1.b.pdf 2.b.pdf b.pdf;")
 		program in Powershell to "filterpartition.ps1"
 		// .\filterpartition "a.jpg b.doc 1.a.pdf 1.b.pdf 1.c.pdf 2.a.pdf 2.b.pdf 3.a.pdf"
+  }
+  
+  "SPLIT and REDUCE as map" should "work" in {
+    import ch.epfl.lara.synthesis.stringsolver._ 
+    import ImperativeProgram._ 
+    import CurrentInstance._ 
+    import ProgramTypes._
+    NEW
+    "a b c" ==> ("a", "b", "...")
+    NEW
+    ("a", "b") ==> "ab...001"
+    ("b", "c", "d") ==> "bc...002"
+    ((SPLIT as map) | (REDUCE as map)) in Powershell to "script.ps1"
   }
 }

@@ -162,7 +162,7 @@ object ImperativeProgram {
   def newVar(): Identifier = { i += 1; Identifier("res" + i) }
   val index = Identifier("index") // Special index which starts at 0.
   
-  case class Options(starting: Boolean = true, replaceInputIdentifier: Option[Expr] = None) {
+  case class Options(starting: Boolean = true, replaceInputArray: Option[Expr] = None, replaceInputString: Option[Expr] = None) {
   }
   
   def apply(p: Program): Script = {
@@ -183,7 +183,13 @@ object ImperativeProgram {
       case NumberMap(s@SubStr(InputString(_), r1, r2, m), size, offset) =>
         FormatNumber(fromProgramExpr(s), size, offset)
       case InputString(v1) =>
-        ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), fromProgramExpr(v1)).withCheck(true)
+        opt.replaceInputArray match {
+          case Some(a) => ArrayGet(a, fromProgramExpr(v1)).withCheck(true)
+          case None => opt.replaceInputString match {
+            case Some(i) => i
+            case None => ArrayGet(InputIdentifier, fromProgramExpr(v1)).withCheck(true)
+          }
+        }
       case SubStr(is@InputString(v1), CPos(0), CPos(-1), NORMAL) =>
         fromProgramExpr(is)
       case SubStr(is@InputString(v1), p1, p2, mm) =>
@@ -266,8 +272,8 @@ object ImperativeProgram {
     val tmp = newVar()
     Block(
       tmp ::= EmptyArrayLit(),
-      ArrayAdd(tmp, opt.replaceInputIdentifier.getOrElse(ArrayGet(InputIdentifier, IntLit(0)))),
-      fromSimpleProgram(p.p, return_identifier, initialize_return_identifier)(Options(replaceInputIdentifier = Some(tmp)))
+      ArrayAdd(tmp, opt.replaceInputString.getOrElse(ArrayGet(opt.replaceInputArray getOrElse InputIdentifier, IntLit(0)))),
+      fromSimpleProgram(p.p, return_identifier, initialize_return_identifier)(Options(replaceInputArray = Some(tmp)))
     )
   }
   
@@ -277,42 +283,46 @@ object ImperativeProgram {
   
   private[stringsolver] def fromSplitProgram(p: SplitProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val s = return_identifier
-    val i = Identifier("index")
+    val si = newVar()
     val r = Identifier(return_identifier.name + "_ret")
     val first = Identifier(return_identifier.name + "_first")
     Block(
         (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
         r ::= StringLit(""),
-        i ::= 1,
+        si ::= index,
+        index ::= 1,
         first ::= true,
         While(first || NotEq(r, StringLit("")))(
           fromSimpleProgram(p.p, r, false).asInstanceOf[Stat],
           ArrayAdd(s, r),
           first := false,
-          i := i + 1
-        ))
+          index := index + 1
+        ),
+        index := si)
   }
   
   
   private[stringsolver] def fromFilterProgram(p: FilterProgram, return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val s = return_identifier
     val r = Identifier(return_identifier.name + "_ret")
-    val i = Identifier("index")
+    val si = newVar()
     val u = newVar()
     
     val tmp = newVar()
     Block(
       (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
-      i ::= 0,
+      si ::= index,
+      index ::= 0,
       u ::= StringLit(""),
-      While(NotEq(i, ArrayLength((opt.replaceInputIdentifier.getOrElse(InputIdentifier)))))(
+      While(NotEq(index, ArrayLength((opt.replaceInputArray.getOrElse(InputIdentifier)))))(
         tmp ::= EmptyArrayLit(),
-        u := ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), i),
+        u := ArrayGet(opt.replaceInputArray.getOrElse(InputIdentifier), index),
         ArrayAdd(tmp, u),
-        fromSimpleProgram(p.determiningSubstring, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
+        fromSimpleProgram(p.determiningSubstring, r, false)(Options(replaceInputArray = Some(tmp))).asInstanceOf[Stat],
         If(Eq(r, StringLit(p.shouldEqual)))(ArrayAdd(s, u)),
-        i := (i + 1)
-      )
+        index := (index + 1)
+      ),
+      index := si
     )
   }
   
@@ -331,11 +341,11 @@ object ImperativeProgram {
       n ::= 0,
       i ::= 0,
       tmp ::= StringLit(""),
-      While(NotEq(i, ArrayLength(opt.replaceInputIdentifier.getOrElse(InputIdentifier))))(
+      While(NotEq(i, ArrayLength(opt.replaceInputArray.getOrElse(InputIdentifier))))(
         tmp := EmptyArrayLit(),
-        u := ArrayGet(opt.replaceInputIdentifier.getOrElse(InputIdentifier), i),
+        u := ArrayGet(opt.replaceInputArray.getOrElse(InputIdentifier), i),
         ArrayAdd(tmp, u),
-        fromSimpleProgram(partitionProgram.determiningSubstring, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
+        fromSimpleProgram(partitionProgram.determiningSubstring, r, false)(Options(replaceInputArray = Some(tmp))).asInstanceOf[Stat],
         p := IndexOf(equivalenceClasses, r),
         If(Eq(p, -1))(
             ArrayAdd(equivalenceClasses, r),
@@ -352,30 +362,42 @@ object ImperativeProgram {
   private[stringsolver] def fromMapperProgram(p: Mapper[_, _], return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val s = return_identifier
     val r = Identifier(return_identifier.name + "_ret")
-    val i = Identifier("index")
+    val si = newVar()
     val tmp = newVar()
     val tmp2 = newVar()
+    val u = newVar()
+    println("p:"+p.e)
+    println("t:"+p.e.tpe)
     Block(
       (if(initialize_return_identifier) s ::= EmptyArrayLit() else s := EmptyArrayLit()),
-      i ::= 0,
-      While(NotEq(i, ArrayLength(opt.replaceInputIdentifier getOrElse InputIdentifier)))(
-        tmp := ArrayGet(opt.replaceInputIdentifier getOrElse InputIdentifier, i),
-        fromProgram(p.e, r, false)(Options(replaceInputIdentifier = Some(tmp))).asInstanceOf[Stat],
+      si ::= index,
+      index := 0,
+      While(NotEq(index, ArrayLength(opt.replaceInputArray getOrElse InputIdentifier)))(
+        tmp := ArrayGet(opt.replaceInputArray getOrElse InputIdentifier, index),
+        fromProgram(p.e, r, false)(p.e.tpe.in match { case TString => Options(replaceInputString = Some(tmp)) case TList(_) => Options(replaceInputArray = Some(tmp)) }).asInstanceOf[Stat],
         ArrayAdd(s, r),
-        i := (i + 1)
-      )
+        index := (index + 1)
+      ),
+      index := si
     )
   }
   
-  private[stringsolver] def fromAndThenProgram(p: AndThen[_, _, _, _], return_identifier: Identifier, initialize_return_identifier: Boolean): Stat = {
+  private[stringsolver] def fromAndThenProgram(p: AndThen[_, _, _, _], return_identifier: Identifier, initialize_return_identifier: Boolean)(implicit opt: Options = Options()): Stat = {
     val end = return_identifier
     val mid = Identifier(end.name + "_" + newVar().name)
-    val i = Identifier("index")
     val tmp = newVar()
-    Block(
-      fromProgram(p.p1, mid, true),
-      fromProgram(p.p2, end, true)(Options(replaceInputIdentifier = Some(mid)))
-    )
+    p.p1.tpe.out match {
+      case TList(_) =>
+		    Block(
+		      fromProgram(p.p1, mid, true),
+		      fromProgram(p.p2, end, true)(Options(replaceInputArray = Some(mid)))
+		    )
+      case TString =>
+        Block(
+		      fromProgram(p.p1, mid, true),
+		      fromProgram(p.p2, end, true)(Options(replaceInputString = Some(mid)))
+		    )
+    }
   }
 }
 
@@ -759,7 +781,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
       fromScript(expr, opt.copy(ret_ident = Some(res)))("")+ debug("<# "+t+" #>") + "\n"
       fromScript(ArrayAdd(res, e))
     case EmptyArrayLit() => indent + prefixReturnExpr("@()", opt.ret_ident)
-    case Identifier(i) => prefixReturnExpr("$"+i, opt.ret_ident)
+    case Identifier(i) => indent + prefixReturnExpr("$"+i, opt.ret_ident)
     case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\"", opt.ret_ident)
     case IntLit(i) => opt.ret_ident match {
       case Some(Identifier(p1)) =>

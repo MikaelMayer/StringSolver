@@ -41,7 +41,7 @@ trait ExportableWithType[-In, +Out] extends ExportableProgram[In, Out] with HasT
   
   def toScript: Script = {
     if(tpe.in != TString && tpe.in != TList(TString)) {
-      println("/!\\ Not possible to convert a script which takes a "+tpe.in+" as argument. Should be String or List[String].")
+      println("/!\\ Not possible to convert a script which takes a "+tpe.in+" as argument. Should be a List[String].")
       Script(Block(), newVar())
     } else {
       ImperativeProgram(this)
@@ -80,7 +80,7 @@ case class TransformProgram(p: Program) extends ExportableWithType[String, Strin
 case class ReduceProgram(p: Program) extends ExportableWithType[List[String], String] {
   def name = "reduce"
   import Printer._
-  override def toString = t"'$p'. Vary the index from 1 to extract all sub-strings.".replaceAll(" input", " string")
+  override def toString = t"'$p'.".replaceAll(" input", " string")
   val tpe = TFunc( TList(TString), TString)
   def apply(arg: List[String], index: Option[Int] = None): String = index match {
     case Some(i) => p(Input_state(arg.toIndexedSeq, i))
@@ -160,7 +160,7 @@ case class Mapper[-In, +Out](e: ExportableWithType[In, Out] ) extends Exportable
   val tpe: TFunc = TFunc(TList(e.tpe.in), TList(e.tpe.out))
   
   def apply(arg: List[In], index: Option[Int] = None): List[Out] = {
-    arg.zipWithIndex.map{ case (a, i) => e(a, Some(i + 1)) }
+    arg.zipWithIndex.map{ case (a, i) => e(a, Some(i)) }
   }
   
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
@@ -173,7 +173,7 @@ case class AndThen[-In1, Out1, In2, +Out2](p1: ExportableWithType[In1, Out1] , p
   def name = s"${p1.name} andThen ${p2.name}"
   override def toString = s"${p1} \nOnce done, take the output as the input for the following:\n ${p2}"
   def apply(arg: In1, index: Option[Int] = None): Out2 = {
-    p2(p1(arg).asInstanceOf[In2])
+    p2(p1(arg, index).asInstanceOf[In2], index)
   }
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }

@@ -308,7 +308,7 @@ HELP     Displays this help
   object map extends MapConstant
 	
 	implicit class MapWrapper[In, Out](e: ExportableWithType[In, Out]) {
-	  def as(dummy: MapConstant) = Mapper(e)
+	  def as(dummy: MapConstant): ExportableWithType[List[In], List[Out]] = Mapper(e)
 	}
 }
 
