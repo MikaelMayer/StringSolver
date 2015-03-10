@@ -36,31 +36,41 @@ trait Extension {
  */
 object CurrentInstance {
   def HELP = println("""
-NEW       Trigger learning of a new program. Automatic first time.
+NEW      Triggers learning of a new program. Automatic first time.
 
-          Map and Reduce
+         Transform
 "input" ==> "output"
 ("input", index) ==> "output"
+The variable TRANSFORM will contain the resulting program
+
+         Reduce
 (List("input1", ...), index) ==> "output"
 List("input1", ...) ==> "output"
+The variable REDUCE will contain the resulting program
 
-         Split examples.
+         Split examples (can provide several examples)
 "input" ==> ("output1", "output2", ..., "...")
+The variable SPLIT will contain the resulting program.
 
          Partition examples.
 PARTITIONTYPE("example1-1", "example1-2", ...)
+The variable PARTITION will contain the resulting program.
 
          Filter examples.
 "input1" ==> YES
 List("input1", ...) ==> YES
 "input2" ==> NO
 List("input2", ...) ==> NO
+The variable FILTER will contain the resulting program.
       
+         Program composition
+val split = SPLIT
+val reduce = REDUCE
+val program = (TRANSFORM as map) | REDUCE
+
          Exporting the program
 PROGRAM in Powershell to "script.ps1"
-PROGRAM in Scala to "script.scala"
-PROGRAM in Bash to "script.sh"
-        
+
 HELP     Displays this help
   """)
   private sealed trait LearningType
