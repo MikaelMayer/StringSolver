@@ -100,7 +100,7 @@ HELP     Displays this help
     println("The use of MAP is deprecated. Use the synonym TRANSFORM");
     TransformProgram(_currentProgram)
   }
-  def TRANSFORM: ExportableWithType[String, String] = MAP
+  def TRANSFORM: ExportableWithType[String, String] = TransformProgram(_currentProgram)
   def PARTITION: ExportableWithType[List[String], List[List[String]]] = _currentPartitionProgram
   def FILTER: ExportableWithType[List[String], List[String]] = _currentFilterProgram
   
