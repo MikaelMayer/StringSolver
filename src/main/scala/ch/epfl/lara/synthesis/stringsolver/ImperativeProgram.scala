@@ -782,7 +782,7 @@ $_ | Select-String -AllMatches $pattern | Select-Object -ExpandProperty Matches 
       fromScript(ArrayAdd(res, e))
     case EmptyArrayLit() => indent + prefixReturnExpr("@()", opt.ret_ident)
     case Identifier(i) => indent + prefixReturnExpr("$"+i, opt.ret_ident)
-    case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("\\", "\\\\").replaceAllLiterally("\"", "\\\"")+"\"", opt.ret_ident)
+    case StringLit(s) => indent + prefixReturnExpr("\""+s.replaceAllLiterally("`", "``").replaceAllLiterally("\"", "`\"")+"\"", opt.ret_ident)
     case IntLit(i) => opt.ret_ident match {
       case Some(Identifier(p1)) =>
         if((opt.input ne null) && i < 0) {

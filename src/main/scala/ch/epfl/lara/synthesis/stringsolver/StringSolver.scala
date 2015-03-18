@@ -74,11 +74,11 @@ PROGRAM in Powershell to "script.ps1"
 HELP     Displays this help
   """)
   private sealed trait LearningType
-  private object MAPTYPE extends LearningType { override def toString = "map/reduce" }
-  private object PARTITIONTYPE extends LearningType { override def toString = "partition" }
-  private object FILTERTYPE extends LearningType { override def toString = "filter" }
-  private object SPLITTYPE extends LearningType { override def toString = "split" }
-  private object ALL extends LearningType { override def toString = "split" }
+  private object MAPTYPE extends LearningType { override def toString = "TRANSFORM or REDUCE" }
+  private object PARTITIONTYPE extends LearningType { override def toString = "PARTITION" }
+  private object FILTERTYPE extends LearningType { override def toString = "FILTER" }
+  private object SPLITTYPE extends LearningType { override def toString = "SPLIT" }
+  private object ALL extends LearningType { override def toString = "all type" }
   
   private var _currentSolver: StringSolver = null;
   private var currentType: LearningType = ALL
@@ -197,11 +197,11 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
+          if(currentType != MAPTYPE) println("Learning TRANSFORM")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(input), 0), output, false))
           solve()
-        case _ => println("Impossible to add a map or reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        case _ => println("Impossible to add a transform example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
   }
@@ -210,11 +210,11 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-          if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
+          if(currentType != MAPTYPE) println("Learning TRANSFORM")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true))
           solve()
-        case _ => println("Impossible to add a map example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        case _ => println("Impossible to add a transform example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
   }
@@ -223,11 +223,11 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
+        if(currentType != MAPTYPE) println("Learning REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex.toIndexedSeq, 0), output, false))
         solve()
-        case _ => println("Impossible to add a map/reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        case _ => println("Impossible to add a reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
   }
@@ -236,11 +236,11 @@ HELP     Displays this help
     def ==>(output: String): Unit = {
       currentType match {
         case ALL | MAPTYPE =>
-        if(currentType != MAPTYPE) println("Learning TRANSFORM and/or REDUCE")
+        if(currentType != MAPTYPE) println("Learning REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex._1.toIndexedSeq, inputsIndex._2-1), output, true))
         solve()
-        case _ => println("Impossible to add a map/reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        case _ => println("Impossible to add a reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
       }
     }
   }
