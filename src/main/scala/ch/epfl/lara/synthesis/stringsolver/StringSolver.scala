@@ -152,7 +152,30 @@ HELP     Displays this help
         case 0 => println("Please write two partition examples like ==>(\"part1\", \"part2\") before continuing")
         case 1 => println("Please write one more partition example like ==>(\"part1\", \"part2\")")
         case n =>
-          val input = partitionExamples.zipWithIndex.flatMap{case (p, i) => p.partition.map(e => (e, i.toString))};
+          //First regroup partitions sharing similar elements.
+          val prepartitions = partitionExamples.toArray
+          var i = 0
+          for(p <- partitionExamples) {
+            p.next = null
+            p.prev = null
+            p.index = i
+            i += 1
+          }
+          i = 0
+          while(i < prepartitions.length) {
+            var j  = i + 1
+            val partition1 = prepartitions(i)
+            while(j < prepartitions.length) {
+              val partition2 = prepartitions(j)
+	            if(partition1.partition.intersect(partition2.partition).nonEmpty) {
+                partition1.mergeNextWith(partition2)
+              }
+	            j += 1
+	          }
+            i += 1
+          }
+          val partitions = partitionExamples.map(_.computeUnique).filter(_.nonEmpty)
+          val input = partitions.zipWithIndex.flatMap{case (p, i) => p.map(e => (e, i.toString))};
           Service.getPartition(input.toList) match {
             case Some((c, c2, f)) =>
               c.solve() match {
@@ -379,8 +402,68 @@ object StringSolver {
       SplitExample(input, outputs.takeWhile(s => s != "..."))
     }
   }*/
-  
-  case class PartitionExample(partition: List[String])
+  object PartitionExample {
+    // Inserts sequence p2 into sequence p1. Needs that p2.prev == null
+    def mergeSequences(p1: PartitionExample, p2: PartitionExample): Unit = {
+      if(p1 == null || p2 == null) return;
+      if(p1.index == p2.index || p1 == p2) return mergeSequences(p1.next, p2.next);
+      if(p1.index < p2.index) {
+        if(p1.next != null) {
+          if(p1.next.index > p2.index) {
+            val p2next = p2.next
+            p2next.prev = null
+            p1.next.prev = p2
+            p2.next = p1.next
+            p2.prev = p1
+            p1.next = p2
+            mergeSequences(p2, p2next)
+          } else if(p1.next.index == p2.index) {
+            return; // It's ok !!
+          } else {  // p1.next.index < p2.index
+            mergeSequences(p1.next, p2)
+          }
+        } else { // p1.next == null
+          if(p2.prev == null) {
+            p1.next = p2
+            p2.prev = p1
+          } else {
+            mergeSequences(p1, p2.computeFirst())
+          }
+        }
+      } else {
+        mergeSequences(p2, p1)
+      }
+    }
+  }
+  case class PartitionExample(partition: List[String]) {
+    var index: Int = 0
+    var next: PartitionExample = null // index of next is greater than index
+    var prev: PartitionExample = null // index of prev is less than index
+    def computeUnique(): List[String] = if(prev != null) List() else computeNext()
+    def computeNext(): List[String] = if(next != null) partition.union(next.computeNext()) else partition
+    def isConnectedWith(p: PartitionExample): Boolean = {
+      this == p || (p != null && (
+        (p.index > index && next != null && next.isConnectedWith(p)) ||
+        (p.index < index && prev != null && prev.isConnectedWith(p))))
+    }
+    def computeFirst(): PartitionExample = if(prev == null) this else prev.computeFirst()
+    def mergeNextWith(p: PartitionExample): PartitionExample = {
+      // assumes that this.next is always null.
+      if(isConnectedWith(p)) return this;
+      if(p.index == index) return this;
+      if(p.index < index) {
+        p.mergeNextWith(this)
+        return this
+      }
+      if(this.next == null && p.prev == null) { // Simple merge: just concatenate.
+        this.next = p
+        p.prev = this
+        return this
+      }
+      PartitionExample.mergeSequences(this.computeFirst(), p.computeFirst())
+      return this
+    }
+  }
   
   implicit def toPartitionExample2(input: (String, String)) = PartitionExample(List(input._1, input._2))
   implicit def toPartitionExample3(input: (String, String, String)) = PartitionExample(List(input._1, input._2, input._3))
