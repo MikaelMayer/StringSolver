@@ -448,7 +448,6 @@ object StringSolver {
     }
     def computeFirst(): PartitionExample = if(prev == null) this else prev.computeFirst()
     def mergeNextWith(p: PartitionExample): PartitionExample = {
-      // assumes that this.next is always null.
       if(isConnectedWith(p)) return this;
       if(p.index == index) return this;
       if(p.index < index) {

@@ -31,6 +31,7 @@ object ImperativeProgram {
   
   /** Allows the user to do something like program.toBash to "script.sh"*/
   implicit class StringExt(s: String) {
+    def in(filename: String) = to(filename)
     def to(filename: String) {
       val file = new java.io.File(filename).getAbsoluteFile()
       if(!file.getParentFile().exists()) {

@@ -57,6 +57,7 @@ trait ExportableWithType[-In, +Out] extends ExportableProgram[In, Out] with HasT
     case Bash => println("/!\\ Bash is not fully supported yet.");toBash
     case PowerShell => toPowerShell
   }
+  def to(tpe: ProgramType) = in(tpe)
 }
 
 //Useless?
@@ -160,7 +161,7 @@ case class Mapper[-In, +Out](e: ExportableWithType[In, Out] ) extends Exportable
   val tpe: TFunc = TFunc(TList(e.tpe.in), TList(e.tpe.out))
   
   def apply(arg: List[In], index: Option[Int] = None): List[Out] = {
-    arg.zipWithIndex.map{ case (a, i) => e(a, Some(i)) }
+    arg.zipWithIndex.map{ case (a, i) => e(a, Some(i+1)) }
   }
   
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
