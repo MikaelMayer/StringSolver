@@ -708,13 +708,16 @@ class StringSolver {
     }
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
     ff.timeout = false
-    add(newProgramSets)
+    add(newProgramSets, undo)
   }
   
   /**Adds a new program set
    **/
-  def add(newProgramSets: IndexedSeq[STraceExpr]): IndexedSeq[STraceExpr] = {
+  def add(newProgramSets: IndexedSeq[STraceExpr], undo: UndoBuffer): IndexedSeq[STraceExpr] = {
     if(currentPrograms == null) {
+      if(undo != null) {
+        undo.add(() => currentPrograms = null)
+      }
       currentPrograms = newProgramSets
     } else {
       val waiting_seconds =  (ff.TIMEOUT_SECONDS * extra_time_to_merge).toInt
@@ -744,8 +747,11 @@ class StringSolver {
           }
           //throw e
       }
+      
+      if(undo != null) undo.add(((last: IndexedSeq[STraceExpr]) => () => currentPrograms = last)(currentPrograms))
       currentPrograms = intersections
     }
+    if(undo != null) undo.add(((last: ArrayBuffer[IndexedSeq[STraceExpr]]) => () => singlePrograms = last)(singlePrograms))
     singlePrograms += newProgramSets
     if(debugActive) verifyCurrentState()
     newProgramSets
@@ -754,7 +760,7 @@ class StringSolver {
   /**Adds a new program set
    **/
   def add(newProgramSets: STraceExpr): STraceExpr = {
-    add(IndexedSeq(newProgramSets))(0)
+    add(IndexedSeq(newProgramSets), null)(0)
   }
  
   /**Adds a new input/output example.

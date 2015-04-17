@@ -616,7 +616,7 @@ object Main {
           val position = if(index == -1) Math.max(0, files.indexWhere(s => s.head + s.tail.head == out)) else index
           if(debug) println(s"Adding $in, $out at position $position")
           m.getPrograms match {
-            case Some(p)=>c.add(p.toIndexedSeq)
+            case Some(p)=>c.add(p.toIndexedSeq, null)
             case None =>
               c.setPosition(position)
               val p = c.add(in, List(out))(0)
@@ -857,7 +857,7 @@ object Main {
               read_content_file = None
           }
           a.getPrograms match {
-            case Some(p) => c.add(p.toIndexedSeq)
+            case Some(p) => c.add(p.toIndexedSeq, null)
             case None =>
             // Retrieving the input, either the name of the file or the lines of it if the contentFlag is set.
             // Takes only maximum NUM_INPUT_EXAMPLES_WHEN_UNBOUNDED files or lines.
@@ -1422,7 +1422,7 @@ object Main {
           val position = index
           if(debug) println(s"Adding $in, $out at position $position")
           m.getPrograms match {
-            case Some(p)=>c.add(p.toIndexedSeq)
+            case Some(p)=>c.add(p.toIndexedSeq, null)
             case None =>
               c.setPosition(position)
               val p = c.add(List(in), List(out))(0)
