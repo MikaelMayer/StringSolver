@@ -216,8 +216,15 @@ HELP     Displays this help
     }
   }
   
+  def timed(block: => Unit): Unit = {
+    val start = System.currentTimeMillis()
+    block
+    val end = System.currentTimeMillis()
+    println((end-start)+"ms to complete")
+  }
+  
   implicit class StringWrapper(input: String) {
-    def ==>(output: String): Unit = {
+    def ==>(output: String): Unit = timed {
       currentType match {
         case ALL | MAPTYPE =>
           if(currentType != MAPTYPE) println("Learning TRANSFORM")
@@ -230,7 +237,7 @@ HELP     Displays this help
   }
   
   implicit class StringIndexWrapper(inputIndex: (String, Int)) {
-    def ==>(output: String): Unit = {
+    def ==>(output: String): Unit = timed {
       currentType match {
         case ALL | MAPTYPE =>
           if(currentType != MAPTYPE) println("Learning TRANSFORM")
@@ -243,7 +250,7 @@ HELP     Displays this help
   }
   
   implicit class TupleListWrapper(inputsIndex: List[String]) {
-    def ==>(output: String): Unit = {
+    def ==>(output: String): Unit = timed {
       currentType match {
         case ALL | MAPTYPE =>
         if(currentType != MAPTYPE) println("Learning REDUCE")
@@ -256,7 +263,7 @@ HELP     Displays this help
   }
   
   implicit class TupleListIndexWrapper(inputsIndex: (List[String], Int)) {
-    def ==>(output: String): Unit = {
+    def ==>(output: String): Unit = timed {
       currentType match {
         case ALL | MAPTYPE =>
         if(currentType != MAPTYPE) println("Learning REDUCE")
@@ -289,7 +296,7 @@ HELP     Displays this help
   
   implicit class SplitWrapper(input: String) {
     def ==>(output1: String, output2: String, outputs: String*): Unit = ==>(output1::output2::outputs.toList)
-    def ==>(outputs: List[String]): Unit = {
+    def ==>(outputs: List[String]): Unit = timed {
       currentType match {
         case ALL | SPLITTYPE =>
         if(currentType != SPLITTYPE) println("Learning SPLIT")
@@ -301,7 +308,7 @@ HELP     Displays this help
     }
   }
   
-  def ==>(partition: String*) = currentType match {
+  def ==>(partition: String*) = timed (currentType match {
       case ALL | PARTITIONTYPE =>
       if(currentType == ALL) {
         partitionExamples = Nil
@@ -311,7 +318,7 @@ HELP     Displays this help
       partitionExamples = partitionExamples ++ List(PartitionExample(partition.toList))
       solve()
       case _ => println("Impossible to add a partition example. Learning a " + currentType + " program. To reset, please invoke NEW.")
-  }
+  })
   var filterExamples: List[List[(String, Boolean)]] = Nil
   
   sealed abstract class FilterToken(positive: Boolean) {
@@ -319,7 +326,7 @@ HELP     Displays this help
       filterExamples = filterExamples ++ List(strs.map(s => (s, positive)))
       solve()
     }
-    private def addAndCheck(accepted: List[String]) = currentType match {
+    private def addAndCheck(accepted: List[String]) = timed (currentType match {
       case ALL | FILTERTYPE =>
       if(currentType == ALL) {
         filterExamples = Nil
@@ -328,7 +335,7 @@ HELP     Displays this help
       currentType = FILTERTYPE
       addExamples(accepted)
       case _ => println("Impossible to add a filter example. Learning a " + currentType + " program. To reset, please invoke NEW.")
-    }
+    })
     def ==>(accepted: String*): Unit = ==>(accepted.toList)
     def ==>(accepted: List[String]): Unit = addAndCheck(accepted)
   }
@@ -676,7 +683,8 @@ class StringSolver {
     val iv = input.toIndexedSeq
     val ov = output.toIndexedSeq
     val tmpIndexNumber = index_number
-    
+    if(Main.debug) Service.debug(input.mkString(",")+" ("+index_number+")==>"+output.mkString(","))
+    if(Main.debug) Service.debug("Looking for programs for this new entry...")
     val fetchPrograms = future {
       for(out <- ov) yield
       ff.generateStr(Input_state(iv, tmpIndexNumber), out, ff.DEFAULT_REC_LOOP_LEVEL)
@@ -706,9 +714,13 @@ class StringSolver {
         }
       case e: Throwable => throw e
     }
+    if(Main.debug) Service.debug("Adding the resulting program sets...")
+
     ff.DEFAULT_REC_LOOP_LEVEL = tmp
     ff.timeout = false
-    add(newProgramSets, undo)
+    val res = add(newProgramSets, undo)
+    if(Main.debug) Service.debug("Computation done.")
+    res
   }
   
   /**Adds a new program set
