@@ -52,6 +52,17 @@ object Service {
             } else array ++ List(entry)
    }
   }
+  
+  var thisConsole: java.io.PrintStream = null
+  
+  def debug(message: String): Unit = {
+    val t = thisConsole
+    if(t == null) {
+      println(message)
+    } else {
+      t.println(message)
+    }
+  }
 
   /**
    * Starts a server
@@ -69,7 +80,7 @@ object Service {
       case ex: Exception => ex.printStackTrace()
     }
     val b = Array.ofDim[Byte](512)
-    var tmp = Console.out
+    thisConsole = Console.out
     while (running) {
       try {
         println("Listening for clients on IP Address " + InetAddress.getLocalHost.getHostAddress + 
@@ -82,14 +93,14 @@ object Service {
         val out = new PrintStream(client.getOutputStream())
         //System.setOut(out)
         Console.setOut(out)
-        tmp.println("Parsing arguments:")
-        Main.debug = false
+        thisConsole.println("Parsing arguments:")
+        //Main.debug = false
         val newCmdArray = convertStringToStringArray(in.next())
         if(newCmdArray.mkString == "stop") stop(newCmdArray) else {
-          tmp.println("Parsing the command line '"+ newCmdArray.mkString(" ")+"'")
-          tmp.flush()
+          thisConsole.println("Parsing the command line '"+ newCmdArray.mkString(" ")+"'")
+          thisConsole.flush()
           Main.main(newCmdArray)
-          tmp.println("Finished handling")
+          thisConsole.println("Finished handling")
         }
         print("END")
         //out.println(in.next())
@@ -98,7 +109,7 @@ object Service {
          } catch {
         case ex: Exception => ex.printStackTrace()
       } finally {
-        Console.setOut(tmp)
+        Console.setOut(thisConsole)
       }
     }
   }    
