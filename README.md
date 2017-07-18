@@ -1,14 +1,16 @@
 # String-Solver
 Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun.com/QuickCode/dates
 
+It is the tool used in the paper [*StriSynth: Synthesis for Live Programming*](http://dl.acm.org/citation.cfm?id=2819142)
+
 ## Table of contents
 
-- [Table of contents](#table-of-contents)
 - [Key features](#key-features)
 - [Usage](#usage)
+    - [Include StringSolver in your own project](#include-stringSolver-in-your-own-project)
     - [Compile it yourself](#compile-it-yourself)
-    - [Link library for SBT](#link-library-for-sbt)
-    - [Link library for Maven](#link-library-for-maven)
+- [StringSolver command line Quickstart](#stringsolver-command-line-Quickstart)
+    - [Creating commands to rename files](#creating-commands-to-rename-files)
 - [Automated Bash commands](#automated-bash-commands)
     - [Bash and Cygwin](#bash-and-cygwin)
     - [Semi-automated Renaming](#semi-automated-renaming)
@@ -23,98 +25,83 @@ Scala version of Flash-Fill for Excel 2013 by Gulwani et Al. See http://rise4fun
     - [Providing input/output examples](#providing-inputoutput-examples)
     - [Solving new input](#solving-new-input)
     - [Options](#options)
+- [Test, export and import](#test-export-and-import)
+    - [Test and export JAR](#test-and-export-jar)
+    - [Link library for SBT](#link-library-for-sbt)
+    - [Link library for Maven](#link-library-for-maven)
 
 Build using sbt 0.13 and scala 2.10.3.
 
 ## Key features:
 
-- Supports incremental numbering.
+- Supports counters in files.
 - "..." continues an expression if there is a loop.
-- Semi-automated file renaming commands
-- Semi-automated file processing commands
-- Semi-automated file filter and partition commands
+- Semi-automated file renaming commands, file processing, filter and partition
+- Command-line to create programs by example and export them to Powershell Scripts.
 
 ## Usage
 
-You can either compile this project and link to the compiled JAR file, or link to the existing online repository for sbt and maven projects.
+### Include StringSolver in your own project
+
+Add the following to your `build.sbt` file:
+
+    libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.2"
 
 ### Compile it yourself
 
-If you want to test this project, run the benchmarks, inspect source files, or compile with different optimizations, you can recompile the code from the source repository.
-
-- Install SBT http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html
-- Make sure to have PATH making sbt accessible
+- Install [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html)
 - `git clone https://github.com/MikaelMayer/StringSolver.git`
-- `sbt compile`
+- `cd StringSolver`
+- `sbt publish-local`
 
-Now it should work. To test it, run `sbt test' but this might take a while.
+## StringSolver command line Quickstart
 
-To create a usable jar file containing everything, including scala, run:
+You can use the StringSolver command line to
 
-- `sbt one-jar`
+- create transformations functions from examples
+- create reduction functions from examples
+- create partition functions from example
+- Create filter functions from examples
+- Compose these functions with any other scala function
+- Export transformations to powershell scripts.
 
-The jar file will be somewhere in the `target/` repository
+If you use [Ammnonite](http://ammonite.io/), just enter the following one-liner to get started:
 
-### Link library for SBT
+    import $ivy.`ch.epfl.lara::stringsolver:1.2`, ch.epfl.lara.synthesis.stringsolver._, ImperativeProgram._ , import CurrentInstance._, import ProgramTypes._ ; HELP; NEW
 
-When you want to include `StringSolver` in your own scala or java project, follow these steps:
+If you use standard consoles, download StringSolver, enter its folder in command line and write:
 
-1. Add the following lines separated by blank lines in your `build.sbt` at the root of your project
+    sbt console
 
-    name := "MyProject"
+### Creating commands to rename files
+    
+Note that before the scala console pops out, the command line displays the main commands that you can use.
+Let's create a script which rename all javascript files to typescript files. Enter the lines one by one to understand the interaction:
+    
+    val rename = ("myfile.js" ==> "mv myfile.js myfile.ts")
+    val filter = {YES ==> ("index.js", "aux.js"; NO ==> "index.html" }
+    val filter = YES ==> "reporting.js"
+    val t = filter andThen rename
+    t in PowerShell to "script.ps1"
+    
+Now move the newly created script to a folder where you have some files like `main.js`, `a.js`, `x.doc`, and run it in PowerShell:
 
-    version := "1.0"
+    PS> .\script.ps1
+    mv main.js main.ts
+    mv a.js a.ts
+    
+### Creating commands to combine files into one PDF
 
-    organization := "com.example"
+Go back to the StringSolver console, and try out the following (it might take a little longer)
 
-    scalaVersion := "2.10.3"
+    val combine = ("report1.pdf", "report2.pdf") ==> "convert report1.pdf report2.pdf... report.pdf"
+    val filter = { YES ==> ("report.pdf", "index.pdf"); NO ==> "report.js"}
+    filter andThen combine in PowerShell to "script.ps1"
 
-    mainClass in (Compile, run) := Some("com.example.Custom")
+Executing the script in a folder containing among others `a1.pdf`, `a2.pdf` and `a3.pdf` would give:
 
-    resolvers += "Sonatype.org" at "https://oss.sonatype.org/service/local/repositories/releases/content"
-
-    libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.1"
-
-2. import the various declarations in your source file.
-
-If for example your project contains a file named `src/main/scala/com/example/Custom.scala`:
-
-```Scala
-package com.example
-import ch.epfl.lara.synthesis.stringsolver._
-object Custom {
-  val c = StringSolver()
-  def main(a: Array[String]): Unit = {
-    c.add(a(0).split("\\|").toList, a(1))
-	c.solve() match {
-	  case Some(a) => println(Printer(a))
-	  case None => println("No program found")
-    }
-  }
-}
-```
-
-3. Then you can run in command line
-
-  sbt
-	run "tEsT|inPuT1" TESTinput001
-
-and it should output:
-
-    the first input uppercase + the lowercase second input until the end of the first word
-	+ a 3-digit number from the second input starting at the first number
-
-### Link library for Maven
-
-Not sure how it works, but a colleague of mine used the following in the maven build file:
-
-    <dependency>
-      <groupId>ch.epfl.lara</groupId>
-      <artifactId>stringsolver_2.10</artifactId>
-      <version>1.1</version>
-    </dependency>
-
-The remaining steps are similar to the previous paragraph.
+    PS> .\script.ps1
+    convert a1.pdf a2.pdf a3.pdf a.pdf
 
 ## Automated Bash commands
 
@@ -490,3 +477,80 @@ c.setAdvancedStats(b: Boolean) = ff.advanced_stats = b
  */
 c.setExtraTimeToMerge(f: Float) = extra_time_to_merge = f
 ```
+
+## Test, export and import
+
+
+### Test and export JAR
+
+To test StringSolver, run `sbt test' but this might take a while.
+
+To create a usable jar file containing everything, including scala, run:
+
+- `sbt one-jar`
+
+The jar file will be in the `target/` repository
+
+### Link library for SBT
+
+When you want to include `StringSolver` in your own scala or java project, follow these steps:
+
+1. Add the following lines separated by blank lines in your `build.sbt` at the root of your project
+
+```scala
+name := "MyProject"
+
+version := "1.0"
+
+organization := "com.example"
+
+scalaVersion := "2.10.3"
+
+mainClass in (Compile, run) := Some("com.example.Custom")
+
+resolvers += "Sonatype.org" at "https://oss.sonatype.org/service/local/repositories/releases/content"
+
+libraryDependencies += "ch.epfl.lara" %% "stringsolver" % "1.1"
+ ```
+
+2. import the various declarations in your source file.
+
+If for example your project contains a file named `src/main/scala/com/example/Custom.scala`:
+
+```Scala
+package com.example
+import ch.epfl.lara.synthesis.stringsolver._
+object Custom {
+  val c = StringSolver()
+  def main(a: Array[String]): Unit = {
+    c.add(a(0).split("\\|").toList, a(1))
+	c.solve() match {
+	  case Some(a) => println(Printer(a))
+	  case None => println("No program found")
+    }
+  }
+}
+```
+
+3. Then you can run in command line
+
+  sbt
+	run "tEsT|inPuT1" TESTinput001
+
+and it should output:
+
+    the first input uppercase + the lowercase second input until the end of the first word
+	+ a 3-digit number from the second input starting at the first number
+
+### Link library for Maven
+
+Not sure how it works, but a colleague of mine used the following in the maven build file:
+
+    <dependency>
+      <groupId>ch.epfl.lara</groupId>
+      <artifactId>stringsolver_2.10</artifactId>
+      <version>1.1</version>
+    </dependency>
+
+The remaining steps are similar to the previous paragraph.
+

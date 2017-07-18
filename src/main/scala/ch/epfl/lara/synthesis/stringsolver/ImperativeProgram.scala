@@ -721,8 +721,13 @@ object Powershellification {
     case t@Script(stats, expr) => 
       "#####################\n" + (if(t.comment != "") ("# "+t.comment.replaceAll("\n", "\n#") + "\n") else "") + "#####################\n" +
       """
-if($args[0] -is [system.array]) {
-  $args = $args[0]
+if($args.count -eq 0) { # If no arguments are provided, takes all the files in the folder
+  $command = $MyInvocation.MyCommand.Name
+  $args =  ls | select -ExpandProperty Name |  ? {$_ -ne $command}
+} else {
+  if($args[0] -is [system.array]) {
+    $args = $args[0]
+  }
 }
 $index = 0
 if($args[-1] -match "^[0-9]+$") {
