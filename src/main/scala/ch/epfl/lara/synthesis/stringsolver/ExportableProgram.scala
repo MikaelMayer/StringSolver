@@ -31,13 +31,23 @@ sealed trait HasTypeFunc[-In, +Out] { self: ExportableProgram[In, Out] =>
   }
 }
 
-trait ExportableWithType[-In, +Out] extends ExportableProgram[In, Out] with HasTypeFunc[In, Out] {
-  def andThen[In2, Out2](h: ExportableWithType[In2, Out2]): ExportableWithType[In, Out2] = (tpe, h.tpe) match {
+trait ExportableWithType[-In, Out] extends ExportableProgram[In, Out] with HasTypeFunc[In, Out] {
+  implicit object $Dummy
+  
+  def andThen[Out2](h: ExportableWithType[Out, Out2]): ExportableWithType[In, Out2] = (tpe, h.tpe) match {
     case (TFunc(i, o), TFunc(i2, o2)) if o == i2 => AndThen(this, h)
    // case (TFunc(i, o), TFunc(i2@List(li2), o2)) if o == li2 => AndThen(ListWrapper(this), h)
     case _ => AndThen(this, h)// But should have thrown an error before.
   }
-  def | [In2, Out2](h: ExportableWithType[In2, Out2]): ExportableWithType[In, Out2] = andThen(h)
+  def | [Out2](h: ExportableWithType[Out, Out2]): ExportableWithType[In, Out2] = andThen(h)
+  
+  def andThen[In2, Out2](h: ExportableWithType[In2, Out2], dummy: Int = 0): ExportableWithType[In, Out2] = (tpe, h.tpe) match {
+    case (TFunc(i, TList(o)), TFunc(i2, o2)) if o == i2 => AndThen(this, Mapper(h).asInstanceOf[ExportableWithType[Out,Out2]])
+   // case (TFunc(i, o), TFunc(i2@List(li2), o2)) if o == li2 => AndThen(ListWrapper(this), h)
+    case _ => AndThen(this, h)// But should have thrown an error before.
+  }
+
+  def | [In2, Out2](h: ExportableWithType[In2, Out2], dummy: Int = 0): ExportableWithType[In, Out2] = andThen[In2, Out2](h)
   
   def toScript: Script = {
     if(tpe.in != TString && tpe.in != TList(TString)) {
@@ -155,7 +165,7 @@ case class FilterProgram(determiningSubstring: Program, shouldEqual: String) ext
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
-case class Mapper[-In, +Out](e: ExportableWithType[In, Out] ) extends ExportableWithType[List[In], List[Out]]  {
+case class Mapper[-In, Out](e: ExportableWithType[In, Out] ) extends ExportableWithType[List[In], List[Out]]  {
   def name = s"${e.name} as map"
   override def toString = s"Mapped version of $e"
   val tpe: TFunc = TFunc(TList(e.tpe.in), TList(e.tpe.out))
@@ -167,7 +177,7 @@ case class Mapper[-In, +Out](e: ExportableWithType[In, Out] ) extends Exportable
   def toStat(return_identifier: Identifier): Stat = ImperativeProgram.fromProgram(this, return_identifier, true)
 }
 
-case class AndThen[-In1, Out1, In2, +Out2](p1: ExportableWithType[In1, Out1] , p2: ExportableWithType[In2, Out2] ) extends ExportableWithType[In1, Out2]  {
+case class AndThen[-In1, Out1, In2, Out2](p1: ExportableWithType[In1, Out1] , p2: ExportableWithType[In2, Out2] ) extends ExportableWithType[In1, Out2]  {
   val (res, c) = p1 andThenPossible p2
   if(!res) println(c)
   def tpe = TFunc(p1.tpe.in, p2.tpe.out)

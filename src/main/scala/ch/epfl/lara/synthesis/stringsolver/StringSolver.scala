@@ -57,10 +57,10 @@ PARTITIONTYPE("example1-1", "example1-2", ...)
 The variable PARTITION will contain the resulting program.
 
          Filter examples.
-"input1" ==> YES
-List("input1", ...) ==> YES
-"input2" ==> NO
-List("input2", ...) ==> NO
+YES ==> "input1"
+YES ==> ("input1", ...) 
+NO ==> "input2"
+NO ==> List("input2", ...)
 The variable FILTER will contain the resulting program.
       
          Program composition
@@ -216,99 +216,115 @@ HELP     Displays this help
     }
   }
   
-  def timed(block: => Unit): Unit = {
+  def timed[A](block: => A): A = {
     val start = System.currentTimeMillis()
-    block
+    val result = block
     val end = System.currentTimeMillis()
     println((end-start)+"ms to complete")
+    result
   }
   
   implicit class StringWrapper(input: String) {
-    def ==>(output: String): Unit = timed {
+    def ==>(output: String): ExportableWithType[String, String] = timed {
       currentType match {
         case ALL | MAPTYPE =>
           if(currentType != MAPTYPE) println("Learning TRANSFORM")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(input), 0), output, false))
           solve()
-        case _ => println("Impossible to add a transform example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+          TRANSFORM
+        case _ => println("Stopped learning a " + currentType + " program.\n")
+          NEW
+          ==>(output)
       }
     }
   }
   
   implicit class StringIndexWrapper(inputIndex: (String, Int)) {
-    def ==>(output: String): Unit = timed {
+    def ==>(output: String): ExportableWithType[String, String] = timed {
       currentType match {
         case ALL | MAPTYPE =>
           if(currentType != MAPTYPE) println("Learning TRANSFORM")
           currentType = MAPTYPE
           currentSolver.add(InputOutputExample(Input_state(IndexedSeq(inputIndex._1), inputIndex._2-1), output, true))
           solve()
-        case _ => println("Impossible to add a transform example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+          TRANSFORM
+        case _ => println("Stopped learning a " + currentType + " program.\n")
+          NEW
+          ==>(output)
       }
     }
   }
   
   implicit class TupleListWrapper(inputsIndex: List[String]) {
-    def ==>(output: String): Unit = timed {
+    def ==>(output: String): ExportableWithType[List[String], String] = timed {
       currentType match {
         case ALL | MAPTYPE =>
         if(currentType != MAPTYPE) println("Learning REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex.toIndexedSeq, 0), output, false))
         solve()
-        case _ => println("Impossible to add a reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        REDUCE
+        case _ => println("Stopped learning a " + currentType + " program.\n")
+          NEW
+          ==>(output)
       }
     }
   }
   
   implicit class TupleListIndexWrapper(inputsIndex: (List[String], Int)) {
-    def ==>(output: String): Unit = timed {
+    def ==>(output: String): ExportableWithType[List[String], String] = timed {
       currentType match {
         case ALL | MAPTYPE =>
         if(currentType != MAPTYPE) println("Learning REDUCE")
         currentType = MAPTYPE
         currentSolver.add(InputOutputExample(Input_state(inputsIndex._1.toIndexedSeq, inputsIndex._2-1), output, true))
         solve()
-        case _ => println("Impossible to add a reduce example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        REDUCE
+        case _ => println("Stopped learning a " + currentType + " program.\n")
+        NEW
+        ==>(output)
       }
     }
   }
 
   implicit class TupleWrapper2(inputs: (String, String)) {
-    def ==>(output: String): Unit = List(inputs._1, inputs._2) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = List(inputs._1, inputs._2) ==> output
   }
   implicit class TupleWrapper3(inputs: (String, String, String)) {
-    def ==>(output: String): Unit = List(inputs._1, inputs._2, inputs._3) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = List(inputs._1, inputs._2, inputs._3) ==> output
   }
   implicit class TupleWrapper4(inputs: (String, String, String, String)) {
-    def ==>(output: String): Unit = List(inputs._1, inputs._2, inputs._3, inputs._4) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = List(inputs._1, inputs._2, inputs._3, inputs._4) ==> output
   }
   implicit class TupleWrapper2Index(inputs: ((String, String), Int)) {
-    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2), inputs._2) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = (List(inputs._1._1, inputs._1._2), inputs._2) ==> output
   }
   implicit class TupleWrapper3Index(inputs: ((String, String, String), Int)) {
-    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2, inputs._1._3), inputs._2) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = (List(inputs._1._1, inputs._1._2, inputs._1._3), inputs._2) ==> output
   }
   implicit class TupleWrapper4Index(inputs: ((String, String, String, String), Int)) {
-    def ==>(output: String): Unit = (List(inputs._1._1, inputs._1._2, inputs._1._3, inputs._1._4), inputs._2) ==> output
+    def ==>(output: String): ExportableWithType[List[String], String] = (List(inputs._1._1, inputs._1._2, inputs._1._3, inputs._1._4), inputs._2) ==> output
   }
   
   implicit class SplitWrapper(input: String) {
-    def ==>(output1: String, output2: String, outputs: String*): Unit = ==>(output1::output2::outputs.toList)
-    def ==>(outputs: List[String]): Unit = timed {
+    def ==>(output1: String, output2: String, outputs: String*): SplitProgram = ==>(output1::output2::outputs.toList)
+    def ==>(outputs: List[String]): SplitProgram = timed {
       currentType match {
         case ALL | SPLITTYPE =>
         if(currentType != SPLITTYPE) println("Learning SPLIT")
         currentType = SPLITTYPE
         currentSolver.add(SplitExample(input, outputs.takeWhile(s => s != "...")))
         solve()
-        case _ => println("Impossible to add a split example. Learning a " + currentType + " program. To reset, please invoke NEW.")
+        SPLIT
+        case _ => println("Stopped learning a " + currentType + " program.\n")
+        NEW
+        this.==>(outputs)
       }
     }
   }
   
-  def ==>(partition: String*) = timed (currentType match {
+  def ==>(partition: String*): ExportableWithType[List[String], List[List[String]]] = timed {currentType match {
       case ALL | PARTITIONTYPE =>
       if(currentType == ALL) {
         partitionExamples = Nil
@@ -317,27 +333,39 @@ HELP     Displays this help
       currentType = PARTITIONTYPE
       partitionExamples = partitionExamples ++ List(PartitionExample(partition.toList))
       solve()
-      case _ => println("Impossible to add a partition example. Learning a " + currentType + " program. To reset, please invoke NEW.")
-  })
+      PARTITION
+      case _ => println("Stopped learning a " + currentType + " program.\n")
+      NEW
+      ==>(partition: _*)
+    }
+  }
   var filterExamples: List[List[(String, Boolean)]] = Nil
   
   sealed abstract class FilterToken(positive: Boolean) {
-    private def addExamples(strs: List[String]) {
+    private def addExamples(strs: List[String]) = {
       filterExamples = filterExamples ++ List(strs.map(s => (s, positive)))
       solve()
     }
-    private def addAndCheck(accepted: List[String]) = timed (currentType match {
-      case ALL | FILTERTYPE =>
-      if(currentType == ALL) {
-        filterExamples = Nil
-        println("Learning FILTER")
+    private def addAndCheck(accepted: List[String]): ExportableWithType[List[String], List[String]] = timed {currentType match {
+        case ALL | FILTERTYPE =>
+        if(currentType == ALL) {
+          filterExamples = Nil
+          println("Learning FILTER")
+        }
+        currentType = FILTERTYPE
+        addExamples(accepted)
+        FILTER
+        case _ => 
+        println("Stopped learning a " + currentType + " program.\n")
+        NEW
+        addAndCheck(accepted)
       }
-      currentType = FILTERTYPE
-      addExamples(accepted)
-      case _ => println("Impossible to add a filter example. Learning a " + currentType + " program. To reset, please invoke NEW.")
-    })
-    def ==>(accepted: String*): Unit = ==>(accepted.toList)
-    def ==>(accepted: List[String]): Unit = addAndCheck(accepted)
+    }
+    def ==>(accepted: String*):ExportableWithType[List[String], List[String]] = {
+      ==>(accepted.toList)
+      FILTER
+    }
+    def ==>(accepted: List[String]):ExportableWithType[List[String], List[String]] = addAndCheck(accepted)
   }
   object YES extends FilterToken(true)
   object NO extends FilterToken(false)
