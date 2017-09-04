@@ -21,8 +21,8 @@ import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
-
 import ProgramSet._
+import org.apache.commons.lang.StringEscapeUtils
 
 /**
  * An extension delivers start and end position to which it applies,
@@ -42,6 +42,9 @@ NEW      Triggers learning of a new program. Automatic first time.
 "input" ==> "output"
 ("input", index) ==> "output"
 The variable TRANSFORM will contain the resulting program
+
+After one or multiple TRANSFORM examples, you can invoke disambiguate(input1, input2...) to check for ambiguities.
+For example: "MikaelM" ==> "MM"; disambiguate("MarionM", "LeonP")
 
          Reduce
 (List("input1", ...), index) ==> "output"
@@ -137,6 +140,56 @@ HELP     Displays this help
   private var _currentPartitionProgram: PartitionProgram = null
   private var _currentFilterProgram: FilterProgram = null
   private var partitionExamples = List[PartitionExample]()
+
+  private def _disambiguate(programs: Seq[Program], inputs: Seq[String]): Unit = {
+    if(programs.isEmpty) return;
+    if(currentSolver.isVerbose) println("Found several programs to disambiguate, the first one is :")
+    if(currentSolver.isVerbose) println(programs.head)
+    object Ambiguous {
+      def unapply(i: (String, Int)): Option[Stream[(String, String)]] = {
+        val originalOutput = try { programs.head.apply(i._1, i._2) } catch { case e: Exception => "" }
+        val alternativeOutputs = programs.tail.toStream.flatMap{
+          (p: Program) =>
+            //println(s"Evaluating $p on $i")
+            try {
+              Some((p, p(i._1, i._2)))
+            } catch {
+              case e: Exception => None
+            }
+        }
+        val ambiguities = alternativeOutputs.filter(pp => pp._2 != originalOutput)
+        if(ambiguities.isEmpty) None else {
+          var seen: Set[String] = Set(originalOutput)
+          Some((i._1, originalOutput) #:: (ambiguities flatMap {
+            case (prog, output) if(!seen(output)) =>
+              seen += output
+              Some((i._1, output))
+            case _ => None
+          }))
+        }
+      }
+    }
+    inputs.zipWithIndex.collectFirst { case input@Ambiguous(originalAlternative)  =>
+        println("Ambiguity found. What is the right output? First is current")
+        originalAlternative.foreach {
+          case (original, alternative) => println("\"" + StringEscapeUtils.escapeJava(original) + "\" ==> \"" + StringEscapeUtils.escapeJava(alternative) + "\"")
+        }
+    }.getOrElse(println("No ambiguity found. Try to increase currentSolver.numBestPrograms = 10"))
+  }
+
+
+  def disambiguate(inputs: String*): Unit = disambiguate(inputs.toList)
+  def disambiguate(inputs: List[String]): Unit = {
+    currentType match {
+      case ALL => println("No example given. Type DOC to get the documentation")
+      case MAPTYPE => _currentSolver.solveNBest() match {
+        case Some(programs) => _disambiguate(programs, inputs)
+        case None =>
+          println("No map/reduce program found. To cancel the last example, please type CANCEL. To reset, call NEW")
+      }
+      case _ => println("Disambiguation currently works  only for TRANSFORM")
+    }
+  }
 
   def solve(): Unit = currentType match {
     case ALL => println("No example given. Type DOC to get the documentation")
@@ -556,6 +609,7 @@ class StringSolver {
   private var ff = new StringSolverAlgorithms()
   private var currentPrograms: IndexedSeq[STraceExpr] = null
   private var singlePrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
+  private var multiPrograms  = ArrayBuffer[IndexedSeq[STraceExpr]]()
   //private var previousOutputs: IndexedSeq[String] = Array[String]()
 
   private var inputList = List[List[String]]()
@@ -566,6 +620,8 @@ class StringSolver {
   private var extra_time_to_resolve = 2f
   
   private var index_number = 0
+
+  var numBestPrograms = 5
   
   def copy(): StringSolver= { // TODO: better copy method
     val d = new StringSolver()
@@ -932,6 +988,8 @@ class StringSolver {
   def solveLasts(): List[Option[Program]] = for(i <- (0 until currentPrograms.length).toList) yield solveLast(i)
   
   def solve(): Option[Program] = solve(0)
+
+  def solveNBest(): Option[Seq[Program]] = solveNBest(0)
   
   /** Returns the best solution to the problem for the whole output */
   def solve(nth: Int): Option[Program] = if(currentPrograms != null) try {
@@ -951,12 +1009,41 @@ class StringSolver {
       }
     None
   } else None
+
+  /** Returns the best solution to the problem for the whole output */
+  def solveNBest(nth: Int): Option[Seq[Program]] = if(currentPrograms != null) try {
+    val res = Some(currentPrograms(nth).takeNBest(numBestPrograms))
+    if(debugActive) verifyCurrentState()
+    res.map(_.map(_._2))
+  } catch {
+    case e: java.lang.Error =>
+      if(isVerbose) {
+        println(e.getMessage())
+        println(e.getStackTrace().mkString("\n"))
+      }
+      None
+    case e: Exception => if(isVerbose) {
+      println(e.getMessage())
+      println(e.getStackTrace().mkString("\n"))
+    }
+      None
+  } else None
   
   /** Returns the best solution to the problem for the whole output */
   def solveLast(nth: Int = 0): Option[Program] = if(singlePrograms != null) try {
     val res = Some(singlePrograms(singlePrograms.length - 1)(nth).takeBest)
     if(debugActive) verifyCurrentState()
     res
+  } catch {
+    case _: java.lang.Error => None
+    case _: Exception => None
+  } else None
+
+  /** Returns the best solution to the problem for the whole output */
+  def solveNBestLast(nth: Int = 0): Option[Seq[Program]] = if(singlePrograms != null) try {
+    val res = Some(singlePrograms(singlePrograms.length - 1)(nth).takeNBest(numBestPrograms))
+    if(debugActive) verifyCurrentState()
+    res.map(_.map(_._2))
   } catch {
     case _: java.lang.Error => None
     case _: Exception => None
